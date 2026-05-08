@@ -14,7 +14,9 @@
     "test": "turbo run test",
     "format": "prettier --write .",
     "prepare": "husky || true",
-    "test:skills": "pnpm -F @apogee/skills-core test:integration"
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "test:skills": "pnpm -F @apogee/skills-core test:integration",
+    "test:e2e:billing": "pnpm -F @apogee/edge test:e2e:billing"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
@@ -23,6 +25,7 @@
     "husky": "9.1.7",
     "lint-staged": "15.5.2",
     "prettier": "3.6.2",
+    "prisma": "5.22.0",
     "turbo": "2.9.10",
     "typescript": "5.5.4",
     "typescript-eslint": "8.46.3",
@@ -32,5 +35,8 @@
     "*.{ts,tsx,js,jsx,json,md,sol}": [
       "prettier --write"
     ]
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0"
   }
 }

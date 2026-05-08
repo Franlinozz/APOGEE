@@ -7,19 +7,26 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "dev": "APOGEE_EDGE_AUTOSTART=1 node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json --noEmit && vitest run"
+    "test": "tsc -p tsconfig.json --noEmit && vitest run",
+    "test:e2e:billing": "vitest run src/billing.e2e.test.ts"
   },
   "dependencies": {
     "@apogee/billing": "workspace:*",
     "@apogee/chain-client": "workspace:*",
     "@apogee/storage-client": "workspace:*",
     "@fastify/cors": "11.1.0",
+    "@fastify/helmet": "13.0.2",
+    "@fastify/jwt": "9.1.0",
+    "@fastify/rate-limit": "10.3.0",
+    "@fastify/swagger": "9.6.1",
+    "@fastify/swagger-ui": "5.2.3",
     "@fastify/websocket": "11.2.0",
-    "ethers": "6.13.1",
     "fastify": "5.6.2",
-    "pino": "10.3.1",
+    "fastify-type-provider-zod": "6.1.0",
+    "openapi-types": "12.1.3",
     "zod": "4.4.3"
   }
 }

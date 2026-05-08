@@ -43,3 +43,12 @@
 - Extended `PaymentRouter` with payee-signed off-chain quote settlement via `paySignedQuote(...)` so an external quote returned by the Edge API can be paid directly on-chain, while preserving the existing on-chain quote `pay(...)` path.
 - Added `PaymentRouter.refund(...)` receipt recording with payee/owner/timeout authorization and refund receipt emission. Note: because the current router distributes payments immediately, this records/refund-attests rather than escrowing prior funds.
 - Verification gates passed locally under Node 22 with expected Node 20 engine warnings: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`, plus targeted billing, edge, and contracts tests. Disk remained below threshold at 78%.
+
+## 2026-05-08 — Prompt 4C/4D Edge hardening and PostgreSQL schema
+
+- Expanded `@apogee/edge` into a Fastify 5 service with Helmet, configurable CORS, global and route-specific rate limits, JWT auth, SIWE nonce/verify flow, Swagger/OpenAPI 3.1 UI at `/docs/api`, WebSocket streaming at `/v1/stream/:agentId`, RFC 7807 problem errors, and SIGTERM graceful shutdown.
+- Implemented the requested Edge route surface: SIWE auth, agents, policies, skills, runs, services, quote/settle/refund, memory CRUD/search, receipts, and health endpoints. Public routes remain `/v1/quote` and `GET /v1/services`; owner-scoped routes require Bearer JWT.
+- Kept Edge free of direct ethers imports; SIWE signature recovery is exposed through `@apogee/chain-client.verifyMessage(...)`, and Edge uses `EDGE_SERVICE_PRIVATE_KEY` rather than deployer key for service-account operations.
+- Added Fastify/Zod OpenAPI generation via `fastify-type-provider-zod`; all route inputs are parsed by Zod before handler logic.
+- Added Prisma PostgreSQL schema and migration for agents, policies, services, receipts, payments, subscriptions, memory_index, skill_installs, runs, run_steps, sessions, and webhook_events with query indexes.
+- Verification gates passed locally under Node 22 with expected Node 20 engine warnings: Prisma schema validation, `pnpm -F @apogee/edge build`, local Edge server curl health/docs checks on port 8080, `pnpm -F @apogee/billing test`, `pnpm test:e2e:billing` in env-gated skip mode, `pnpm build`, `pnpm typecheck`, `pnpm test`, and `pnpm lint`. Disk remained below threshold at 78%.

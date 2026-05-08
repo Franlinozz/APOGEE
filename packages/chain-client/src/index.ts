@@ -8,6 +8,7 @@ import {
   type TransactionRequest,
   Wallet,
   getBytes,
+  verifyMessage,
 } from 'ethers';
 import pino, { type Logger } from 'pino';
 import { z } from 'zod';
@@ -167,6 +168,10 @@ export class ChainClient {
     const value = typeof parsed.value === 'string' ? BigInt(parsed.value) : parsed.value ?? 0n;
     const response = await account.execute(parsed.target, value, getBytes(parsed.data ?? '0x'));
     return this.waitForReceipt(response.hash);
+  }
+
+  verifyMessage(message: string, signature: string): string {
+    return verifyMessage(message, signature);
   }
 
   async waitForReceipt(

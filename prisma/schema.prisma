@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RunStatus {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
+}
+
+enum PaymentStatus {
+  quoted
+  pending
+  settled
+  refunded
+  expired
+  failed
+}
+
+model Agent {
+  id             String         @id @default(cuid())
+  ownerAddress   String         @map("owner_address")
+  accountAddress String?        @unique @map("account_address")
+  tokenId        String?        @map("token_id")
+  metadataRoot   String?        @map("metadata_root")
+  policyId       String?        @map("policy_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  policy         Policy?        @relation(fields: [policyId], references: [id])
+  services       Service[]
+  memory         MemoryIndex[]
+  skills         SkillInstall[]
+  runs           Run[]
+  sessions       Session[]
+
+  @@index([ownerAddress])
+  @@index([policyId])
+  @@map("agents")
+}
+
+model Policy {
+  id              String   @id @default(cuid())
+  ownerAddress    String   @map("owner_address")
+  maxPerTxWei     Decimal? @db.Decimal(78, 0) @map("max_per_tx_wei")
+  maxPerDayWei    Decimal? @db.Decimal(78, 0) @map("max_per_day_wei")
+  allowlistRoot   String?  @map("allowlist_root")
+  denylistRoot    String?  @map("denylist_root")
+  allowedSelectors String[] @default([]) @map("allowed_selectors")
+  active          Boolean  @default(true)
+  summary         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  agents          Agent[]
+
+  @@index([ownerAddress])
+  @@index([active])
+  @@map("policies")
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  agentId     String    @map("agent_id")
+  serviceId   String    @map("service_id")
+  tags        String[]  @default([])
+  priceWei    Decimal   @db.Decimal(78, 0) @map("price_wei")
+  description String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  payments    Payment[]
+
+  @@unique([agentId, serviceId])
+  @@index([serviceId])
+  @@index([tags], type: Gin)
+  @@index([active])
+  @@map("services")
+}
+
+model Receipt {
+  id              String   @id
+  clientReceiptId String?  @unique @map("client_receipt_id")
+  agentId         String   @map("agent_id")
+  actionTag       String   @map("action_tag")
+  payloadHash     String   @map("payload_hash")
+  storageRoot     String   @map("storage_root")
+  valueWei        Decimal  @db.Decimal(78, 0) @map("value_wei")
+  txHash          String?  @map("tx_hash")
+  status          String   @default("pending")
+  createdAt       DateTime @default(now()) @map("created_at")
+  runId           String?  @map("run_id")
+  paymentId       String?  @map("payment_id")
+  run             Run?     @relation(fields: [runId], references: [id])
+  payment         Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([agentId, createdAt])
+  @@index([txHash])
+  @@index([status])
+  @@index([runId])
+  @@index([paymentId])
+  @@map("receipts")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  quoteHash       String        @unique @map("quote_hash")
+  payerAgentId    String        @map("payer_agent_id")
+  payeeAgentId    String        @map("payee_agent_id")
+  serviceDbId     String?       @map("service_db_id")
+  serviceId       String        @map("service_id")
+  amountWei       Decimal       @db.Decimal(78, 0) @map("amount_wei")
+  status          PaymentStatus @default(quoted)
+  txHash          String?       @map("tx_hash")
+  refundReason    String?       @map("refund_reason")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  settledAt       DateTime?     @map("settled_at")
+  refundedAt      DateTime?     @map("refunded_at")
+  service         Service?      @relation(fields: [serviceDbId], references: [id])
+  receipts        Receipt[]
+
+  @@index([payerAgentId, createdAt])
+  @@index([payeeAgentId, createdAt])
+  @@index([status])
+  @@index([txHash])
+  @@map("payments")
+}
+
+model Subscription {
+  id            String   @id @default(cuid())
+  payerAgentId  String   @map("payer_agent_id")
+  payeeAgentId  String   @map("payee_agent_id")
+  serviceId     String   @map("service_id")
+  amountWei     Decimal  @db.Decimal(78, 0) @map("amount_wei")
+  everyMs       Int      @map("every_ms")
+  dailyCapWei   Decimal? @db.Decimal(78, 0) @map("daily_cap_wei")
+  active        Boolean  @default(true)
+  nextRunAt     DateTime @map("next_run_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([payerAgentId])
+  @@index([active, nextRunAt])
+  @@map("subscriptions")
+}
+
+model MemoryIndex {
+  id          String   @id @default(cuid())
+  agentId     String   @map("agent_id")
+  key         String
+  storageRoot String?  @map("storage_root")
+  payloadHash String?  @map("payload_hash")
+  embedding   Json?
+  tags        String[] @default([])
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, key])
+  @@index([agentId, updatedAt])
+  @@index([tags], type: Gin)
+  @@map("memory_index")
+}
+
+model SkillInstall {
+  id          String   @id @default(cuid())
+  agentId     String   @map("agent_id")
+  skillId     String   @map("skill_id")
+  version     String?
+  config      Json?
+  installedAt DateTime @default(now()) @map("installed_at")
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, skillId])
+  @@index([skillId])
+  @@map("skill_installs")
+}
+
+model Run {
+  id        String    @id @default(cuid())
+  agentId   String    @map("agent_id")
+  status    RunStatus @default(queued)
+  input     Json?
+  output    Json?
+  error     Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  agent     Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  steps     RunStep[]
+  receipts  Receipt[]
+
+  @@index([agentId, createdAt])
+  @@index([status, createdAt])
+  @@map("runs")
+}
+
+model RunStep {
+  id        String   @id @default(cuid())
+  runId     String   @map("run_id")
+  name      String
+  status    String
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@map("run_steps")
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  ownerAddress String  @map("owner_address")
+  agentId     String?  @map("agent_id")
+  jwtId       String?  @unique @map("jwt_id")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  agent       Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([ownerAddress])
+  @@index([agentId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  source      String
+  eventType   String   @map("event_type")
+  idempotencyKey String? @unique @map("idempotency_key")
+  payload     Json
+  processedAt DateTime? @map("processed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([source, eventType])
+  @@index([processedAt])
+  @@map("webhook_events")
+}
