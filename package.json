@@ -13,7 +13,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write .",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "test:skills": "pnpm -F @apogee/skills-core test:integration"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",

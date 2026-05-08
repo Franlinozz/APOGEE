@@ -1,5 +1,22 @@
 {
   "name": "@apogee/skills-runtime",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json --noEmit && vitest run"
+  },
+  "dependencies": {
+    "isolated-vm": "5.0.4",
+    "pino": "10.3.1",
+    "semver": "7.7.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": { "@types/semver": "7.7.1" }
 }

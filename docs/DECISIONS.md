@@ -25,3 +25,12 @@
 - Added package-level Vitest `.integration.test.ts` suites for chain, storage, compute, and memory with at least six real-testnet tests each; default `pnpm test` excludes them and package `pnpm test:integration` runs them explicitly.
 - Integration tests require dedicated testnet environment variables (`ZERO_G_GALILEO_RPC_URL`, `DEPLOYER_PRIVATE_KEY`, plus provider/indexer variables where needed) and intentionally skip when those secrets are absent from the shell.
 - Verification gates run locally under Node 22 with expected Node 20 engine warnings: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`, and package integration commands in skip mode because testnet secrets were not present in the environment.
+
+## 2026-05-08 — Prompt 3 skills runtime and core skills
+
+- Implemented `@apogee/skills-runtime` with Zod skill manifests, semver/dot-case validation, `SkillRegistry`, isolated-vm-backed `SkillRunner`, UI-safe typed `SkillError` taxonomy, timeout enforcement, input/output validation, egress checks, context-only capability calls, and provenance capture for chat IDs, storage roots, tx hashes, and attestations.
+- Added isolated-vm install/runtime notes in `packages/skills-runtime/README.md`; every run creates a fresh 128 MB isolate and skills only access capabilities through `ctx.call`.
+- Added the 12 free built-in core skill folders under `skills/core`: `chat.completion`, `chat.embed`, `image.generate`, `audio.transcribe`, `web.search`, `web.fetch`, `memory.write`, `memory.read`, `memory.search`, `chain.query`, `chain.send`, and `storage.upload`, each with `manifest.ts`, `handler.ts`, marketplace README, and integration test placeholder.
+- Added `registerCoreSkills()` loader export for built-ins and runtime `loadSkills()` support for build-time scanned `skills/core` and `skills/premium` manifests.
+- Extended `@apogee/chain-client` with `query()` and `sendViaAgentAccount()` so `chain.query` and `chain.send` have a typed boundary method instead of direct ethers usage inside skills.
+- Verification gates passed locally under Node 22 with expected Node 20 engine warnings: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm -F @apogee/skills-runtime test`, and `pnpm test:skills`.

@@ -7,6 +7,7 @@ import {
   type TransactionReceipt,
   type TransactionRequest,
   Wallet,
+  getBytes,
 } from 'ethers';
 import pino, { type Logger } from 'pino';
 import { z } from 'zod';
@@ -31,6 +32,20 @@ export class ChainError extends Error {
   }
 }
 
+export interface ChainQueryInput {
+  to: string;
+  abi: string[];
+  functionName: string;
+  args?: unknown[] | undefined;
+}
+
+export interface AgentAccountSendInput {
+  agentAccount: string;
+  target: string;
+  value?: bigint | string | undefined;
+  data?: string | undefined;
+}
+
 export interface DecodedError {
   code: string;
   name: string;
@@ -47,6 +62,20 @@ const constructorSchema = z.object({
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 const txSchema = z.custom<TransactionRequest>((value) => typeof value === 'object' && value !== null);
 const hashSchema = z.string().regex(/^0x[a-fA-F0-9]{64}$/);
+const hexDataSchema = z.string().regex(/^0x(?:[a-fA-F0-9]{2})*$/);
+const querySchema = z.object({
+  to: addressSchema,
+  abi: z.array(z.string()).min(1),
+  functionName: z.string().min(1),
+  args: z.array(z.unknown()).optional(),
+});
+const agentAccountSendSchema = z.object({
+  agentAccount: addressSchema,
+  target: addressSchema,
+  value: z.union([z.bigint(), z.string()]).optional(),
+  data: hexDataSchema.optional(),
+});
+const AGENT_ACCOUNT_EXECUTE_ABI = ['function execute(address target,uint256 value,bytes data) returns (bytes)'];
 const SEND_BACKOFF_MS = [250, 750, 2_000] as const;
 const DEFAULT_RECEIPT_TIMEOUT_MS = 60_000;
 
@@ -120,6 +149,24 @@ export class ChainClient {
       receipts.push(await this.send(tx));
     }
     return receipts;
+  }
+
+  async query(input: ChainQueryInput): Promise<{ result: unknown }> {
+    const parsed = querySchema.parse(input);
+    const contract = new Contract(parsed.to, parsed.abi, this.provider) as unknown as Record<string, unknown>;
+    const fn = contract[parsed.functionName];
+    if (typeof fn !== 'function') throw new ChainError('QUERY_FUNCTION_MISSING', `Function ${parsed.functionName} is not available`);
+    return { result: await fn(...(parsed.args ?? [])) };
+  }
+
+  async sendViaAgentAccount(input: AgentAccountSendInput): Promise<TxReceipt> {
+    const parsed = agentAccountSendSchema.parse(input);
+    const account = this.contract(parsed.agentAccount, AGENT_ACCOUNT_EXECUTE_ABI) as unknown as {
+      execute(target: string, value: bigint, data: Uint8Array): Promise<{ hash: string }>;
+    };
+    const value = typeof parsed.value === 'string' ? BigInt(parsed.value) : parsed.value ?? 0n;
+    const response = await account.execute(parsed.target, value, getBytes(parsed.data ?? '0x'));
+    return this.waitForReceipt(response.hash);
   }
 
   async waitForReceipt(
