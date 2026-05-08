@@ -152,6 +152,60 @@ describe('Prompt 1 contract layer', function () {
     await expect(router.pay(quoteHash, signature, { value: 10n })).to.emit(router, 'PaymentSettled');
   });
 
+  it('PaymentRouter settles payee-signed off-chain quotes and records refunds', async function () {
+    const { owner, payee, receipt, policy, router } = await deployCore();
+    const Account = await ethers.getContractFactory('AgentAccount');
+    const payerAccount = await Account.deploy(owner.address, await policy.getAddress(), await receipt.getAddress(), 1, [owner.address, owner.address, owner.address]);
+    const payeeAccount = await Account.deploy(payee.address, await policy.getAddress(), await receipt.getAddress(), 2, [payee.address, payee.address, payee.address]);
+    await router.setAgentAccount(1, await payerAccount.getAddress());
+    await router.setAgentAccount(2, await payeeAccount.getAddress());
+
+    const chainId = (await ethers.provider.getNetwork()).chainId;
+    const quoteBase = {
+      amount: 11n,
+      nonce: 999n,
+      deadline: BigInt((await ethers.provider.getBlock('latest'))!.timestamp + 3600),
+      payeeReceiver: payee.address,
+      payerAgent: 1n,
+      payeeAgent: 2n,
+      serviceId: ethers.id('svc'),
+    };
+    const quoteHash = ethers.TypedDataEncoder.hash(
+      { name: 'ApogeePaymentRouter', version: '1', chainId, verifyingContract: await router.getAddress() },
+      {
+        Quote: [
+          { name: 'amount', type: 'uint256' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint64' },
+          { name: 'payeeReceiver', type: 'address' },
+          { name: 'payerAgent', type: 'uint256' },
+          { name: 'payeeAgent', type: 'uint256' },
+          { name: 'serviceId', type: 'bytes32' },
+        ],
+      },
+      quoteBase,
+    );
+    const signature = await payee.signTypedData(
+      { name: 'ApogeePaymentRouter', version: '1', chainId, verifyingContract: await router.getAddress() },
+      {
+        Quote: [
+          { name: 'amount', type: 'uint256' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint64' },
+          { name: 'payeeReceiver', type: 'address' },
+          { name: 'payerAgent', type: 'uint256' },
+          { name: 'payeeAgent', type: 'uint256' },
+          { name: 'serviceId', type: 'bytes32' },
+        ],
+      },
+      quoteBase,
+    );
+    const quote = { ...quoteBase, quoteHash };
+    await expect(router.paySignedQuote(quote, signature, { value: 11n })).to.emit(router, 'PaymentSettled');
+    await expect(router.connect(payee).refund(quoteHash, 'customer request')).to.emit(router, 'PaymentRefunded');
+    await expect(router.connect(payee).refund(quoteHash, 'again')).to.be.revertedWithCustomError(router, 'RefundAlreadyIssued');
+  });
+
   it('captures gas estimate snapshots', async function () {
     const { owner, receipt } = await deployCore();
     const gas = await receipt.emitReceipt.estimateGas(1, tag('GASS'), ethers.id('payload'), ethers.ZeroHash, 1n);

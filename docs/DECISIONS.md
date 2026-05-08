@@ -34,3 +34,12 @@
 - Added `registerCoreSkills()` loader export for built-ins and runtime `loadSkills()` support for build-time scanned `skills/core` and `skills/premium` manifests.
 - Extended `@apogee/chain-client` with `query()` and `sendViaAgentAccount()` so `chain.query` and `chain.send` have a typed boundary method instead of direct ethers usage inside skills.
 - Verification gates passed locally under Node 22 with expected Node 20 engine warnings: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm -F @apogee/skills-runtime test`, and `pnpm test:skills`.
+
+## 2026-05-08 — Prompt 4 billing, receipts, Edge API, and WS
+
+- Added `@apogee/billing` with EIP-712 `QuoteIssuer`, Redis-compatible `QuoteStore`, `SettlementHandler`, `RefundManager`, and BullMQ `SubscriptionScheduler` queue named `subscriptions`.
+- Added `ReceiptMinter` with canonical JSON hashing, 0G Storage upload retries, local pending fallback, 60s background reconciler hook, chain submission retries, idempotency via `clientReceiptId`, receipt index abstraction, and WS event-bus publishing.
+- Added `@apogee/edge` Fastify API with `POST /v1/quote`, `POST /v1/settle`, `POST /v1/refund`, `/health`, and WebSocket `/v1/ws` receipt events.
+- Extended `PaymentRouter` with payee-signed off-chain quote settlement via `paySignedQuote(...)` so an external quote returned by the Edge API can be paid directly on-chain, while preserving the existing on-chain quote `pay(...)` path.
+- Added `PaymentRouter.refund(...)` receipt recording with payee/owner/timeout authorization and refund receipt emission. Note: because the current router distributes payments immediately, this records/refund-attests rather than escrowing prior funds.
+- Verification gates passed locally under Node 22 with expected Node 20 engine warnings: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`, plus targeted billing, edge, and contracts tests. Disk remained below threshold at 78%.
