@@ -10,18 +10,34 @@ Architecture diagram: _placeholder — to be added in `/docs/architecture.md`._
 
 ## Quick Start
 
-_Quick Start placeholder — Prompt 2 will add the runtime and API boot flow._
+```bash
+pnpm install
+pnpm build
+pnpm typecheck
+pnpm test
+```
+
+## Foundational Clients
+
+Prompt 2 establishes the integration boundary for 0G SDKs:
+
+- `@apogee/chain-client` — ethers v6 provider/signer reuse, gas estimation, fee-history pricing, retries, receipts, batches, and custom error decoding.
+- `@apogee/storage-client` — 0G Indexer/ZgFile upload/download, SDK Merkle verification, AES-256-GCM encrypted payloads, temp-file cleanup, and 64 MB LRU caching.
+- `@apogee/compute-client` — 0G serving broker lifecycle, provider listing, acknowledgement, request headers, chat calls, and required `processResponse` settlement.
+- `@apogee/memory` — encrypted versioned memory index/blobs/vectors over storage-client with semantic search and ReceiptBook state anchoring.
+
+No application package should import 0G SDKs directly; consume these clients instead.
 
 ## Contracts
 
-| Contract | Address | Purpose |
-| --- | --- | --- |
-| PolicyEngine | `0xa8933d96A27BDfFac07C0d7467f3213cb340f550` | Spending and execution policy checks |
-| ReceiptBook | `0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53` | On-chain audit log |
-| AgentIdentity | `0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3` | ERC-7857 / ERC-8004-style agent identity |
-| ServiceRegistry | `0x47438d9169FD5dCC0C5DA06511b7F61Fb6BdD5Ad` | Agent service marketplace registry |
-| PaymentRouter | `0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c` | Quote settlement |
-| EscrowVault | `0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767` | Verifiable task escrow |
-| AccountFactory | `0xABc44aF98e6d873C0700c9B687fbf3Be560cba90` | CREATE2 account deployer |
-| AgentAccount | `0xc18eD4e075a23A66505744A353eeFE91340F924d` | Minimal smart account implementation |
-| RevenueSplitter | `0x1E32A89B6815a492Ad30f71a5E35280EF7399b74` | Per-agent revenue distribution |
+| Contract        | Address                                      | Purpose                                  |
+| --------------- | -------------------------------------------- | ---------------------------------------- |
+| PolicyEngine    | `0xa8933d96A27BDfFac07C0d7467f3213cb340f550` | Spending and execution policy checks     |
+| ReceiptBook     | `0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53` | On-chain audit log                       |
+| AgentIdentity   | `0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3` | ERC-7857 / ERC-8004-style agent identity |
+| ServiceRegistry | `0x47438d9169FD5dCC0C5DA06511b7F61Fb6BdD5Ad` | Agent service marketplace registry       |
+| PaymentRouter   | `0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c` | Quote settlement                         |
+| EscrowVault     | `0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767` | Verifiable task escrow                   |
+| AccountFactory  | `0xABc44aF98e6d873C0700c9B687fbf3Be560cba90` | CREATE2 account deployer                 |
+| AgentAccount    | `0xc18eD4e075a23A66505744A353eeFE91340F924d` | Minimal smart account implementation     |
+| RevenueSplitter | `0x1E32A89B6815a492Ad30f71a5E35280EF7399b74` | Per-agent revenue distribution           |
