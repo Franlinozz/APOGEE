@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { Interface, Wallet, getBytes, id, keccak256, toUtf8Bytes, zeroPadValue } from 'ethers';
 import { Mutex } from 'async-mutex';
-import type { ZodSchema } from 'zod';
+import { z, type ZodSchema } from 'zod';
 import type { ChainClient, TxReceipt } from '@apogee/chain-client';
 import type { ComputeClient } from '@apogee/compute-client';
 import type { StorageClient, UploadResult } from '@apogee/storage-client';
@@ -22,6 +22,17 @@ export interface MemoryEngineOptions {
   embedFn?: ((text: string) => Promise<number[]>) | undefined;
   computeClient?: ComputeClient | undefined;
   receiptBookAddress?: string | undefined;
+}
+
+export class MemoryError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public override readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = 'MemoryError';
+  }
 }
 
 export interface MemoryKey {
@@ -59,6 +70,10 @@ interface MemoryIndex {
   keys: IndexEntry[];
 }
 
+const keySchema = z.string().min(1).max(512);
+const prefixSchema = z.string();
+const searchSchema = z.object({ query: z.string().min(1), k: z.number().int().positive().max(100) });
+const stateRootSchema = z.string().min(1);
 const GALILEO_RECEIPT_BOOK = '0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53';
 const MEMORY_COMMIT_TAG = id('memory.commit').slice(0, 10);
 const RECEIPT_BOOK_ABI = [
@@ -92,6 +107,7 @@ export class MemoryEngine {
   }
 
   async set(key: string, value: JsonValue): Promise<{ rootHash: string; version: number }> {
+    const parsedKey = keySchema.parse(key);
     return this.withLock(async () => {
       const encoded = new TextEncoder().encode(JSON.stringify(value));
       const blob = await this.storageClient.uploadBytes(encoded, {
@@ -100,7 +116,7 @@ export class MemoryEngine {
       });
       const embedding = await this.embedText(JSON.stringify(value));
       const embeddingRef = await this.storeEmbedding(embedding);
-      const existing = this.index.keys.find((entry) => entry.key === key);
+      const existing = this.index.keys.find((entry) => entry.key === parsedKey);
       const version = (existing?.version ?? 0) + 1;
       const now = new Date().toISOString();
       const versions = [
@@ -109,7 +125,7 @@ export class MemoryEngine {
       ].slice(0, MAX_VERSIONS_PER_KEY);
 
       const entry: IndexEntry = {
-        key,
+        key: parsedKey,
         blobRoot: blob.rootHash,
         version,
         embeddingRef,
@@ -122,7 +138,8 @@ export class MemoryEngine {
   }
 
   async get<T>(key: string, schema?: ZodSchema<T>): Promise<T | JsonValue | null> {
-    const entry = this.index.keys.find((item) => item.key === key && !item.deleted);
+    const parsedKey = keySchema.parse(key);
+    const entry = this.index.keys.find((item) => item.key === parsedKey && !item.deleted);
     if (!entry) return null;
     const bytes = await this.storageClient.downloadBytes(entry.blobRoot, {
       decryptKey: this.agentId,
@@ -132,8 +149,9 @@ export class MemoryEngine {
   }
 
   async delete(key: string): Promise<void> {
+    const parsedKey = keySchema.parse(key);
     await this.withLock(async () => {
-      const entry = this.index.keys.find((item) => item.key === key);
+      const entry = this.index.keys.find((item) => item.key === parsedKey);
       if (entry) {
         entry.deleted = true;
         this.touch();
@@ -142,13 +160,15 @@ export class MemoryEngine {
   }
 
   async list(prefix = ''): Promise<MemoryKey[]> {
+    const parsedPrefix = prefixSchema.parse(prefix);
     return this.index.keys
-      .filter((entry) => !entry.deleted && entry.key.startsWith(prefix))
+      .filter((entry) => !entry.deleted && entry.key.startsWith(parsedPrefix))
       .map((entry) => ({ key: entry.key, version: entry.version, blobRoot: entry.blobRoot }));
   }
 
   async search(query: string, k = 5): Promise<MemoryHit[]> {
-    const queryVector = await this.embedText(query);
+    const parsed = searchSchema.parse({ query, k });
+    const queryVector = await this.embedText(parsed.query);
     const candidates = this.index.keys.filter((entry) => !entry.deleted && entry.embeddingRef);
     const scored: MemoryHit[] = [];
 
@@ -164,7 +184,7 @@ export class MemoryEngine {
       });
     }
 
-    return scored.sort((a, b) => b.score - a.score).slice(0, k);
+    return scored.sort((a, b) => b.score - a.score).slice(0, parsed.k);
   }
 
   async commitState(): Promise<{ stateRoot: string; txHash: string }> {
@@ -182,10 +202,11 @@ export class MemoryEngine {
   }
 
   async restore(stateRoot: string): Promise<void> {
-    const bytes = await this.storageClient.downloadBytes(stateRoot);
+    const parsedStateRoot = stateRootSchema.parse(stateRoot);
+    const bytes = await this.storageClient.downloadBytes(parsedStateRoot);
     const state = JSON.parse(new TextDecoder().decode(bytes)) as { index?: MemoryIndex };
     if (!state.index || state.index.agentId !== this.agentId) {
-      throw new Error('Stored memory state is missing or belongs to a different agent');
+      throw new MemoryError('RESTORE_AGENT_MISMATCH', 'Stored memory state is missing or belongs to a different agent');
     }
     this.index = state.index;
   }
@@ -216,7 +237,10 @@ export class MemoryEngine {
 
   private async embedText(text: string): Promise<number[]> {
     if (this.embedFn) return this.normaliseEmbedding(await this.embedFn(text));
-    if (this.computeClient) return this.normaliseEmbedding(await this.computeClient.embed(text));
+    if (this.computeClient) {
+      const [embedding] = await this.computeClient.embed(text);
+      return this.normaliseEmbedding(embedding ?? []);
+    }
     return this.localEmbedding(text);
   }
 

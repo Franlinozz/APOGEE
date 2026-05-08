@@ -17,3 +17,11 @@
 - `MemoryEngine` sits on storage/chain clients with per-agent mutexed writes, encrypted blobs, index/version tracking, semantic search vectors, and ReceiptBook anchoring with `bytes4(keccak256("memory.commit"))`.
 - Deviation: Prompt 2 text did not include a detailed D section for compute-client, so the implementation follows the project’s stored 0G compute constraints and local 0G compute skill patterns.
 - Verification gates passed locally under Node 22 with expected Node 20 engine warnings: `pnpm build`, `pnpm typecheck`, `pnpm test`, and `pnpm lint`.
+
+## 2026-05-08 — Prompt 2 compute-client completion and integration harness
+
+- Reworked `@apogee/compute-client` to match the full D spec from the 0G compute pattern: provider discovery/acknowledgement, ledger deposit/balance/refund/withdraw, chat streaming and non-streaming, embeddings, image generation, transcription, request-header signing, response processing, sealed-mode TEE attestation digests, and receipt-ready metadata without minting receipts.
+- Tightened all four foundational clients around `src/index.ts` exports only, Pino logger injection/defaults, Zod validation on public method inputs, typed error classes with `.code`, and no top-level network calls.
+- Added package-level Vitest `.integration.test.ts` suites for chain, storage, compute, and memory with at least six real-testnet tests each; default `pnpm test` excludes them and package `pnpm test:integration` runs them explicitly.
+- Integration tests require dedicated testnet environment variables (`ZERO_G_GALILEO_RPC_URL`, `DEPLOYER_PRIVATE_KEY`, plus provider/indexer variables where needed) and intentionally skip when those secrets are absent from the shell.
+- Verification gates run locally under Node 22 with expected Node 20 engine warnings: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`, and package integration commands in skip mode because testnet secrets were not present in the environment.

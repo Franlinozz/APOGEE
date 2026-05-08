@@ -15,10 +15,12 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json --noEmit"
+    "test": "tsc -p tsconfig.json --noEmit && vitest run --passWithNoTests --exclude \"**/*.integration.test.ts\"",
+    "test:integration": "vitest run --passWithNoTests src/*.integration.test.ts"
   },
   "dependencies": {
     "ethers": "6.13.1",
-    "pino": "10.3.1"
+    "pino": "10.3.1",
+    "zod": "4.4.3"
   }
 }

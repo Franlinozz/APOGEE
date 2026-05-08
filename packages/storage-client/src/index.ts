@@ -5,22 +5,24 @@ import { join } from 'node:path';
 import { Indexer, ZgFile } from '@0glabs/0g-ts-sdk';
 import { Wallet, JsonRpcProvider } from 'ethers';
 import { LRUCache } from 'lru-cache';
-import type { ZodSchema } from 'zod';
+import pino, { type Logger } from 'pino';
+import { z, type ZodSchema } from 'zod';
 
 export interface StorageClientOptions {
   rpcUrl: string;
   indexerUrl: string;
   signerKey: string;
-  agentId?: string;
+  agentId?: string | undefined;
+  logger?: Logger | undefined;
 }
 
 export interface UploadOptions {
-  encrypt?: boolean;
-  agentPubKey?: string;
+  encrypt?: boolean | undefined;
+  agentPubKey?: string | undefined;
 }
 
 export interface DownloadOptions {
-  decryptKey?: string;
+  decryptKey?: string | undefined;
 }
 
 export interface UploadResult {
@@ -34,6 +36,28 @@ interface CachedBlob {
   encrypted: boolean;
 }
 
+export class StorageError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public override readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = 'StorageError';
+  }
+}
+
+const constructorSchema = z.object({
+  rpcUrl: z.string().url(),
+  indexerUrl: z.string().url(),
+  signerKey: z.string().min(32),
+  agentId: z.string().optional(),
+  logger: z.custom<Logger>().optional(),
+});
+const bytesSchema = z.instanceof(Uint8Array);
+const rootHashSchema = z.string().min(1);
+const uploadOptionsSchema = z.object({ encrypt: z.boolean().optional(), agentPubKey: z.string().optional() });
+const downloadOptionsSchema = z.object({ decryptKey: z.string().optional() });
 const CACHE_BYTES = 64 * 1024 * 1024;
 const CHUNK_HELPER_THRESHOLD_BYTES = 256 * 1024;
 const MEM_KEY_PREFIX = 'apogee-mem-key-v1';
@@ -43,25 +67,31 @@ export class StorageClient {
   private readonly signer: Wallet;
   private readonly indexer: Indexer;
   private readonly agentId: string;
+  private readonly logger: Logger;
   private readonly cache = new LRUCache<string, CachedBlob>({
     maxSize: CACHE_BYTES,
     sizeCalculation: (value) => value.bytes.byteLength,
   });
 
   constructor(options: StorageClientOptions) {
-    this.rpcUrl = options.rpcUrl;
-    this.signer = new Wallet(options.signerKey, new JsonRpcProvider(options.rpcUrl));
-    this.indexer = new Indexer(options.indexerUrl);
-    this.agentId = options.agentId ?? this.signer.address;
+    const parsed = constructorSchema.parse(options);
+    this.rpcUrl = parsed.rpcUrl;
+    this.signer = new Wallet(parsed.signerKey, new JsonRpcProvider(parsed.rpcUrl));
+    this.indexer = new Indexer(parsed.indexerUrl);
+    this.agentId = parsed.agentId ?? this.signer.address;
+    this.logger = parsed.logger ?? pino({ name: 'apogee-storage-client' });
   }
 
   async uploadBytes(data: Uint8Array, opts: UploadOptions = {}): Promise<UploadResult> {
-    const payload = opts.encrypt
-      ? await this.encrypt(data, opts.agentPubKey ?? this.agentId)
-      : data;
+    const parsedData = bytesSchema.parse(data);
+    const parsedOpts = uploadOptionsSchema.parse(opts);
+    const payload = parsedOpts.encrypt
+      ? await this.encrypt(parsedData, parsedOpts.agentPubKey ?? this.agentId)
+      : parsedData;
     const result = await this.uploadPayload(payload);
-    this.cache.set(result.rootHash, { bytes: payload, encrypted: Boolean(opts.encrypt) });
-    return { ...result, size: data.byteLength };
+    this.logger.info({ rootHash: result.rootHash, txHash: result.txHash, size: parsedData.byteLength }, '0G storage upload');
+    this.cache.set(result.rootHash, { bytes: payload, encrypted: Boolean(parsedOpts.encrypt) });
+    return { ...result, size: parsedData.byteLength };
   }
 
   async uploadJson(value: unknown, opts: UploadOptions = {}): Promise<UploadResult> {
@@ -69,21 +99,23 @@ export class StorageClient {
   }
 
   async downloadBytes(rootHash: string, opts: DownloadOptions = {}): Promise<Uint8Array> {
-    const cached = this.cache.get(rootHash);
+    const parsedRootHash = rootHashSchema.parse(rootHash);
+    const parsedOpts = downloadOptionsSchema.parse(opts);
+    const cached = this.cache.get(parsedRootHash);
     if (cached) {
       return cached.encrypted
-        ? await this.decrypt(cached.bytes, opts.decryptKey ?? this.agentId)
+        ? await this.decrypt(cached.bytes, parsedOpts.decryptKey ?? this.agentId)
         : cached.bytes;
     }
 
     const dir = await mkdtemp(join(tmpdir(), 'apogee-0g-download-'));
     const outputPath = join(dir, 'blob');
     try {
-      const err = await this.indexer.download(rootHash, outputPath, true);
+      const err = await this.indexer.download(parsedRootHash, outputPath, true);
       if (err) throw err;
       const downloaded = new Uint8Array(await readFile(outputPath));
-      this.cache.set(rootHash, { bytes: downloaded, encrypted: Boolean(opts.decryptKey) });
-      return opts.decryptKey ? await this.decrypt(downloaded, opts.decryptKey) : downloaded;
+      this.cache.set(parsedRootHash, { bytes: downloaded, encrypted: Boolean(parsedOpts.decryptKey) });
+      return parsedOpts.decryptKey ? await this.decrypt(downloaded, parsedOpts.decryptKey) : downloaded;
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -96,7 +128,7 @@ export class StorageClient {
   }
 
   existsLocally(rootHash: string): boolean {
-    return this.cache.has(rootHash);
+    return this.cache.has(rootHashSchema.parse(rootHash));
   }
 
   private async uploadPayload(payload: Uint8Array): Promise<UploadResult> {
