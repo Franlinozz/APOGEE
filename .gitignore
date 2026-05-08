@@ -3,6 +3,7 @@ node_modules
 .next
 dist
 coverage
+coverage.json
 .env
 .env.*
 !.env.example
@@ -12,5 +13,5 @@ coverage
 cache
 artifacts
 typechain-types
-
 *.tsbuildinfo
+packages/contracts/deployments/*.local.json

@@ -1,34 +1,27 @@
 # APOGEE Protocol
 
-Autonomous-agent runtime for 0G: self-custodial smart wallets, programmable spending policies, identity, encrypted persistent memory on 0G Storage, agent-to-agent payment rails with on-chain receipts, a paid skills marketplace, and 0G Compute-backed inference.
+> The autonomous-agent runtime layer for 0G: smart accounts, programmable policy, identity, payments, receipts, encrypted memory, and paid skills.
 
-## Why APOGEE
+APOGEE gives developers building autonomous agents on 0G a Stripe + AWS + Linear-quality runtime for money, memory, identity, billing, and proof.
 
-Developers building autonomous agents need billing, identity, memory, payments, policy, and proof in one production runtime. APOGEE packages those primitives into a Stripe + AWS + Linear style developer experience for the 0G ecosystem.
+## Architecture
 
-## 0G integrations
+Architecture diagram: _placeholder — to be added in `/docs/architecture.md`._
 
-- **0G Chain:** on-chain receipts for every billable agent action.
-- **0G Storage:** encrypted persistent memory, addressed by verifiable root hashes.
-- **0G Compute:** inference backbone via the 0G serving broker.
-- **0G Testnet Galileo:** default development network.
+## Quick Start
 
-## Monorepo
+_Quick Start placeholder — Prompt 2 will add the runtime and API boot flow._
 
-- `apps/web` — Next.js 14 App Router dashboard and proofs UX.
-- `apps/api` — Fastify API for receipts, proofs, and health checks.
-- `packages/contracts` — Solidity 0.8.24 receipt contract and Hardhat tests.
-- `packages/0g` — 0G Storage/Compute integration adapters.
-- `packages/config` — shared network constants and validated env loading.
-- `packages/db` — Prisma schema/client package.
+## Contracts
 
-## Quickstart
-
-```bash
-corepack enable
-corepack prepare pnpm@9.12.3 --activate
-pnpm install
-pnpm verify
-```
-
-Copy `.env.example` to `.env` for local services and 0G credentials. Never commit secrets.
+| Contract | Address | Purpose |
+| --- | --- | --- |
+| PolicyEngine | `0xa8933d96A27BDfFac07C0d7467f3213cb340f550` | Spending and execution policy checks |
+| ReceiptBook | `0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53` | On-chain audit log |
+| AgentIdentity | `0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3` | ERC-7857 / ERC-8004-style agent identity |
+| ServiceRegistry | `0x47438d9169FD5dCC0C5DA06511b7F61Fb6BdD5Ad` | Agent service marketplace registry |
+| PaymentRouter | `0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c` | Quote settlement |
+| EscrowVault | `0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767` | Verifiable task escrow |
+| AccountFactory | `0xABc44aF98e6d873C0700c9B687fbf3Be560cba90` | CREATE2 account deployer |
+| AgentAccount | `0xc18eD4e075a23A66505744A353eeFE91340F924d` | Minimal smart account implementation |
+| RevenueSplitter | `0x1E32A89B6815a492Ad30f71a5E35280EF7399b74` | Per-agent revenue distribution |

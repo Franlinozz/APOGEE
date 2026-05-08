@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@apogee/sdk": ["packages/sdk/src"],
+      "@apogee/contracts": ["packages/contracts/src"],
+      "@apogee/core": ["packages/core/src"],
+      "@apogee/chain-client": ["packages/chain-client/src"],
+      "@apogee/storage-client": ["packages/storage-client/src"],
+      "@apogee/compute-client": ["packages/compute-client/src"],
+      "@apogee/memory": ["packages/memory/src"],
+      "@apogee/billing": ["packages/billing/src"],
+      "@apogee/skills-runtime": ["packages/skills-runtime/src"],
+      "@apogee/ui": ["packages/ui/src"]
+    }
+  }
+}
