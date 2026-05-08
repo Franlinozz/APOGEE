@@ -1,0 +1,25 @@
+{
+  "name": "apogee-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": "20.18.x",
+    "pnpm": "9.12.x"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev --parallel",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write .",
+    "verify": "turbo run lint typecheck test build"
+  },
+  "devDependencies": {
+    "@apogee/typescript-config": "workspace:*",
+    "prettier": "3.6.2",
+    "turbo": "2.9.10",
+    "typescript": "5.5.4"
+  }
+}

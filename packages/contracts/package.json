@@ -1,0 +1,23 @@
+{
+  "name": "@apogee/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "hardhat compile",
+    "lint": "hardhat compile",
+    "typecheck": "hardhat compile",
+    "test": "hardhat test"
+  },
+  "dependencies": {
+    "ethers": "6.13.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "2.0.8",
+    "@nomicfoundation/hardhat-ethers": "3.0.8",
+    "@types/chai": "4.3.20",
+    "@types/mocha": "10.0.10",
+    "chai": "4.5.0",
+    "hardhat": "2.26.5",
+    "typescript": "5.5.4"
+  }
+}
