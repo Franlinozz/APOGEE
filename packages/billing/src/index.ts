@@ -340,12 +340,13 @@ export function createBillingStack(options: {
   chainClient: BillingChainClient;
   storageClient: StorageBoundary;
   quoteStore?: QuoteStore | undefined;
+  payeeResolver?: QuoteIssuerOptions['payeeResolver'] | undefined;
   receiptIndex?: ReceiptIndex | undefined;
   eventBus?: ReceiptEventBus | undefined;
 }): { quoteIssuer: QuoteIssuer; settlementHandler: SettlementHandler; refundManager: RefundManager; receiptMinter: ReceiptMinter; eventBus: ReceiptEventBus } {
   const eventBus = options.eventBus ?? new LocalReceiptEventBus();
   const receiptMinter = new ReceiptMinter({ storageClient: options.storageClient, chainClient: options.chainClient, receiptBookAddress: options.receiptBookAddress, index: options.receiptIndex, eventBus });
-  const quoteIssuer = new QuoteIssuer({ signerKey: options.signerKey, chainId: options.chainId, paymentRouterAddress: options.paymentRouterAddress, quoteStore: options.quoteStore });
+  const quoteIssuer = new QuoteIssuer({ signerKey: options.signerKey, chainId: options.chainId, paymentRouterAddress: options.paymentRouterAddress, quoteStore: options.quoteStore, payeeResolver: options.payeeResolver });
   const settlementHandler = new SettlementHandler({ chainClient: options.chainClient, paymentRouterAddress: options.paymentRouterAddress, receiptMinter, quoteStore: quoteIssuer.quoteStore, chainId: options.chainId });
   const refundManager = new RefundManager({ chainClient: options.chainClient, paymentRouterAddress: options.paymentRouterAddress, receiptMinter });
   return { quoteIssuer, settlementHandler, refundManager, receiptMinter, eventBus };

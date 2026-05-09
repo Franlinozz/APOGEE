@@ -1,4 +1,5 @@
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import { createHash } from 'node:crypto';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
@@ -46,6 +47,10 @@ type ServiceRecord = z.infer<typeof serviceSchema>;
 type SkillInstall = { agentId: string; skillId: string; version?: string | undefined; config?: JsonValue | undefined; installedAt: string };
 type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
+type TxResponse = { hash: string; wait(): Promise<unknown> };
+type AccountFactoryContract = { predict(owner: string, salt: string): Promise<string>; createAccount(owner: string, salt: string): Promise<TxResponse> };
+type AgentIdentityContract = { nextTokenId(): Promise<bigint>; mint(to: string, metadataRoot: string, publicKey: string, controller: string): Promise<TxResponse> };
+type PaymentRouterAdminContract = { setAgentAccount(agentId: bigint, account: string): Promise<TxResponse> };
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -61,12 +66,15 @@ export interface EdgeServerOptions {
   chainId: number;
   paymentRouterAddress: string;
   receiptBookAddress: string;
+  accountFactoryAddress?: string | undefined;
+  agentIdentityAddress?: string | undefined;
   jwtSecret?: string | undefined;
   corsOrigin?: boolean | string | RegExp | Array<string | RegExp> | undefined;
   logger?: FastifyBaseLogger | undefined;
 }
 
 class InMemoryEdgeStore {
+  nextAgentId = 1;
   readonly nonces = new Map<string, { nonce: string; message: string; expiresAt: number }>();
   readonly agents = new Map<string, AgentRecord>();
   readonly runs = new Map<string, RunRecord>();
@@ -96,8 +104,10 @@ const nowIso = (): string => new Date().toISOString();
 const newId = (prefix: string): string => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 const bigintFrom = (value: string | number | bigint | undefined): bigint | undefined => value === undefined ? undefined : typeof value === 'bigint' ? value : BigInt(value);
 const json = (value: unknown): JsonValue => JSON.parse(JSON.stringify(value)) as JsonValue;
+const bytes32From = (value: string): string => /^0x[a-fA-F0-9]{64}$/.test(value) ? value : `0x${createHash('sha256').update(value).digest('hex')}`;
 
 const problem = (reply: FastifyReply, status: number, title: string, detail: string): FastifyReply => reply.status(status).type('application/problem+json').send({ type: 'about:blank', title, status, detail });
+const sameAddress = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 async function requireAuth(request: FastifyRequest): Promise<AuthUser> {
   await request.jwtVerify();
@@ -148,7 +158,29 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   void app.register(swaggerUi, { routePrefix: '/docs/api' });
   void app.register(websocket);
 
-  const stack = createBillingStack({ ...options, quoteStore: new InMemoryQuoteStore(), eventBus: {
+  const ownedAgent = (reply: FastifyReply, user: AuthUser, agentId: string): AgentRecord | FastifyReply => {
+    const agent = store.agents.get(agentId);
+    if (!agent) return problem(reply, 404, 'Agent not found', agentId);
+    if (!sameAddress(agent.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Agent is not owned by the caller');
+    return agent;
+  };
+
+  const ownedRun = (reply: FastifyReply, user: AuthUser, runId: string): RunRecord | FastifyReply => {
+    const run = store.runs.get(runId);
+    if (!run) return problem(reply, 404, 'Run not found', runId);
+    const agent = store.agents.get(run.agentId);
+    if (!agent || !sameAddress(agent.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Run is not owned by the caller');
+    return run;
+  };
+
+  const stack = createBillingStack({ ...options, quoteStore: new InMemoryQuoteStore(), payeeResolver: async (payeeAgentId, serviceId) => {
+    const service = [...store.services.values()].find((entry) => entry.agentId === payeeAgentId && entry.serviceId === serviceId);
+    if (!service) throw new Error(`Service ${serviceId} for payee agent ${payeeAgentId} was not found`);
+    const agent = store.agents.get(payeeAgentId);
+    const receiver = agent?.accountAddress ?? service.agentId;
+    if (!addressSchema.safeParse(receiver).success) throw new Error(`Payee agent ${payeeAgentId} has no settlement receiver address`);
+    return { receiver, amount: BigInt(service.priceWei) };
+  }, eventBus: {
     publish: (_event, payload) => {
       store.receipts.set(payload.receiptId, payload);
       broadcast(payload.agentId, { event: 'receipt', payload: json(payload) });
@@ -160,6 +192,30 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const clients = streamClients.get(agentId);
     if (!clients) return;
     for (const client of clients) client.send(JSON.stringify(event));
+  };
+
+  const provisionAgentOnChain = async (owner: string, metadataRoot?: string): Promise<{ id: string; accountAddress: string; metadataRoot: string } | null> => {
+    if (!options.accountFactoryAddress || !options.agentIdentityAddress) return null;
+    const salt = bytes32From(`${owner}:${metadataRoot ?? ''}:${Date.now()}:${Math.random()}`);
+    const metadataRootBytes = bytes32From(metadataRoot ?? `${owner}:${salt}`);
+    const publicKey = bytes32From(`${owner}:apogee-agent-public-key`);
+    const factory = options.chainClient.contract<AccountFactoryContract>(options.accountFactoryAddress, [
+      'function predict(address owner,bytes32 salt) view returns (address)',
+      'function createAccount(address owner,bytes32 salt) returns (address)',
+    ]);
+    const identity = options.chainClient.contract<AgentIdentityContract>(options.agentIdentityAddress, [
+      'function nextTokenId() view returns (uint256)',
+      'function mint(address to,bytes32 metadataRoot,bytes32 publicKey,address controller) returns (uint256)',
+    ]);
+    const tokenId = await identity.nextTokenId();
+    const accountAddress = await factory.predict(owner, salt);
+    await (await factory.createAccount(owner, salt)).wait();
+    await (await identity.mint(owner, metadataRootBytes, publicKey, accountAddress)).wait();
+    const router = options.chainClient.contract<PaymentRouterAdminContract>(options.paymentRouterAddress, [
+      'function setAgentAccount(uint256 agentId,address account)',
+    ]);
+    await (await router.setAgentAccount(tokenId, accountAddress)).wait();
+    return { id: tokenId.toString(), accountAddress, metadataRoot: metadataRootBytes };
   };
 
   app.post('/v1/auth/siwe/nonce', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } }, schema: { tags: ['auth'], body: siweNonceBodySchema, response: { 200: nonceResponseSchema } } }, async (request) => {
@@ -187,11 +243,13 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.get('/v1/health', { schema: { tags: ['system'], response: { 200: healthSchema } } }, async () => ({ ok: true, uptimeSec: process.uptime(), version: '0.4.0' }));
   app.get('/health', async () => ({ ok: true, uptimeSec: process.uptime(), version: '0.4.0' }));
 
-  app.post('/v1/agents', { schema: { tags: ['agents'], body: agentCreateSchema, response: { 200: agentSchema } } }, async (request) => {
+  app.post('/v1/agents', { schema: { tags: ['agents'], body: agentCreateSchema, response: { 200: agentSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
     const body = agentCreateSchema.parse(request.body);
-    const agent: AgentRecord = { id: newId('agent'), owner: body.owner ?? user.address, balanceWei: '0', kpis: { runs: 0, receipts: 0 } };
-    if (body.metadataRoot) agent.metadataRoot = body.metadataRoot;
+    if (body.owner && !sameAddress(body.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Cannot provision an agent for a different owner');
+    const provisioned = await provisionAgentOnChain(user.address, body.metadataRoot);
+    const agent: AgentRecord = { id: provisioned?.id ?? String(store.nextAgentId++), owner: user.address, accountAddress: provisioned?.accountAddress ?? user.address, balanceWei: '0', kpis: { runs: 0, receipts: 0 } };
+    if (provisioned?.metadataRoot ?? body.metadataRoot) agent.metadataRoot = provisioned?.metadataRoot ?? body.metadataRoot;
     if (body.policyId) agent.policyId = body.policyId;
     store.agents.set(agent.id, agent);
     return agent;
@@ -203,25 +261,26 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   });
 
   app.get('/v1/agents/:id', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), response: { 200: agentSchema } } }, async (request, reply) => {
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    const agent = store.agents.get(id);
-    return agent ?? problem(reply, 404, 'Agent not found', id);
+    return ownedAgent(reply, user, id);
   });
 
   app.patch('/v1/agents/:id/policy', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), body: policyPatchSchema } }, async (request, reply) => {
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    const agent = store.agents.get(id);
-    if (!agent) return problem(reply, 404, 'Agent not found', id);
+    const agent = ownedAgent(reply, user, id);
+    if ('statusCode' in agent) return agent;
     agent.policyId = agent.policyId ?? newId('policy');
     broadcast(id, { event: 'policy.changed', payload: json(policyPatchSchema.parse(request.body)) });
     return { policyId: agent.policyId, ...policyPatchSchema.parse(request.body) };
   });
 
-  app.post('/v1/agents/:id/skills', { schema: { tags: ['skills'], params: z.object({ id: idSchema }), body: skillBodySchema } }, async (request) => {
-    await requireAuth(request);
+  app.post('/v1/agents/:id/skills', { schema: { tags: ['skills'], params: z.object({ id: idSchema }), body: skillBodySchema } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
+    const agent = ownedAgent(reply, user, id);
+    if ('statusCode' in agent) return agent;
     const body = skillBodySchema.parse(request.body);
     const install: SkillInstall = { agentId: id, skillId: body.skillId, installedAt: nowIso() };
     if (body.version) install.version = body.version;
@@ -230,16 +289,20 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return install;
   });
 
-  app.delete('/v1/agents/:id/skills/:skillId', { schema: { tags: ['skills'], params: z.object({ id: idSchema, skillId: idSchema }) } }, async (request) => {
-    await requireAuth(request);
+  app.delete('/v1/agents/:id/skills/:skillId', { schema: { tags: ['skills'], params: z.object({ id: idSchema, skillId: idSchema }) } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const { id, skillId } = z.object({ id: idSchema, skillId: idSchema }).parse(request.params);
+    const agent = ownedAgent(reply, user, id);
+    if ('statusCode' in agent) return agent;
     store.skills.delete(`${id}:${skillId}`);
     return { ok: true };
   });
 
-  app.post('/v1/agents/:id/run', { schema: { tags: ['runs'], params: z.object({ id: idSchema }), body: runBodySchema } }, async (request) => {
-    await requireAuth(request);
+  app.post('/v1/agents/:id/run', { schema: { tags: ['runs'], params: z.object({ id: idSchema }), body: runBodySchema } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
+    const agent = ownedAgent(reply, user, id);
+    if ('statusCode' in agent) return agent;
     runBodySchema.parse(request.body);
     const run: RunRecord = { id: newId('run'), agentId: id, status: 'queued', createdAt: nowIso(), updatedAt: nowIso(), receipts: [], steps: [{ id: newId('step'), name: 'queued', status: 'succeeded', createdAt: nowIso() }] };
     store.runs.set(run.id, run);
@@ -248,22 +311,24 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   });
 
   app.get('/v1/runs/:runId', { schema: { tags: ['runs'], params: z.object({ runId: idSchema }), response: { 200: runSchema } } }, async (request, reply) => {
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const { runId } = z.object({ runId: idSchema }).parse(request.params);
-    const run = store.runs.get(runId);
-    return run ?? problem(reply, 404, 'Run not found', runId);
+    return ownedRun(reply, user, runId);
   });
 
   app.get('/v1/runs/:runId/receipts', { schema: { tags: ['runs'], params: z.object({ runId: idSchema }) } }, async (request, reply) => {
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const { runId } = z.object({ runId: idSchema }).parse(request.params);
-    const run = store.runs.get(runId);
-    return run?.receipts ?? problem(reply, 404, 'Run not found', runId);
+    const run = ownedRun(reply, user, runId);
+    if ('statusCode' in run) return run;
+    return run.receipts;
   });
 
-  app.post('/v1/services', { schema: { tags: ['services'], body: serviceBodySchema, response: { 200: serviceSchema } } }, async (request) => {
-    await requireAuth(request);
+  app.post('/v1/services', { schema: { tags: ['services'], body: serviceBodySchema, response: { 200: serviceSchema } } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const body = serviceBodySchema.parse(request.body);
+    const agent = ownedAgent(reply, user, body.agentId);
+    if ('statusCode' in agent) return agent;
     const service: ServiceRecord = { id: newId('svc'), agentId: body.agentId, serviceId: body.serviceId, tags: body.tags, priceWei: body.priceWei };
     if (body.description) service.description = body.description;
     store.services.set(service.id, service);
@@ -275,14 +340,14 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return [...store.services.values()].filter((service) => !tag || service.tags.includes(tag));
   });
 
-  app.post('/v1/quote', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } }, schema: { tags: ['billing'], body: quoteBodySchema, response: { 200: quoteResponseSchema } }, preHandler: async (request, reply) => {
+  app.post('/v1/quote', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } }, schema: { tags: ['billing'], body: quoteBodySchema, response: { 402: quoteResponseSchema } }, preHandler: async (request, reply) => {
     const body = quoteBodySchema.parse(request.body);
     if (!quoteByPayee.check(body.payeeAgentId)) return problem(reply, 429, 'Rate limit exceeded', 'Too many quotes for this payeeAgent');
     return undefined;
-  } }, async (request) => {
+  } }, async (request, reply) => {
     const body = quoteBodySchema.parse(request.body);
     const quote = await stack.quoteIssuer.issue({ ...body, requestedAmount: bigintFrom(body.requestedAmount) });
-    return { ...quote, amount: quote.amount.toString(), nonce: quote.nonce.toString() };
+    return reply.status(402).send({ ...quote, amount: quote.amount.toString(), nonce: quote.nonce.toString() });
   });
 
   app.post('/v1/settle', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } }, schema: { tags: ['billing'], body: settleBodySchema }, preHandler: async (request, reply) => {
@@ -291,27 +356,40 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return undefined;
   } }, async (request) => stack.settlementHandler.settle(settleBodySchema.parse(request.body)));
 
-  app.post('/v1/refund/:paymentId', { schema: { tags: ['billing'], params: z.object({ paymentId: idSchema }), body: refundBodySchema } }, async (request) => {
-    await requireAuth(request);
+  app.post('/v1/refund/:paymentId', { schema: { tags: ['billing'], params: z.object({ paymentId: idSchema }), body: refundBodySchema } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const { paymentId } = z.object({ paymentId: idSchema }).parse(request.params);
-    return stack.refundManager.refund({ paymentId, ...refundBodySchema.parse(request.body) });
+    const body = refundBodySchema.parse(request.body);
+    if (body.agentId) {
+      const agent = ownedAgent(reply, user, body.agentId);
+      if ('statusCode' in agent) return agent;
+    }
+    return stack.refundManager.refund({ paymentId, ...body });
   });
 
-  app.post('/v1/refund', { schema: { hide: true, body: z.object({ paymentId: idSchema }).merge(refundBodySchema) } }, async (request) => {
-    await requireAuth(request);
+  app.post('/v1/refund', { schema: { hide: true, body: z.object({ paymentId: idSchema }).merge(refundBodySchema) } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const body = z.object({ paymentId: idSchema }).merge(refundBodySchema).parse(request.body);
+    if (body.agentId) {
+      const agent = ownedAgent(reply, user, body.agentId);
+      if ('statusCode' in agent) return agent;
+    }
     return stack.refundManager.refund(body);
   });
 
-  app.get('/v1/memory/:agentId', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }) } }, async (request) => {
-    await requireAuth(request);
+  app.get('/v1/memory/:agentId', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }) } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
+    const agent = ownedAgent(reply, user, agentId);
+    if ('statusCode' in agent) return agent;
     return [...store.memory.values()].filter((entry) => entry.agentId === agentId).map((entry) => ({ key: entry.key, tags: entry.tags, updatedAt: entry.updatedAt }));
   });
 
-  app.put('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }), body: memoryPutSchema } }, async (request) => {
-    await requireAuth(request);
+  app.put('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }), body: memoryPutSchema } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const { agentId, key } = z.object({ agentId: idSchema, key: idSchema }).parse(request.params);
+    const agent = ownedAgent(reply, user, agentId);
+    if ('statusCode' in agent) return agent;
     const body = memoryPutSchema.parse(request.body);
     const record: MemoryRecord = { agentId, key, value: body.value, tags: body.tags, updatedAt: nowIso() };
     store.memory.set(`${agentId}:${key}`, record);
@@ -319,36 +397,51 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   });
 
   app.get('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }) } }, async (request, reply) => {
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const { agentId, key } = z.object({ agentId: idSchema, key: idSchema }).parse(request.params);
+    const agent = ownedAgent(reply, user, agentId);
+    if ('statusCode' in agent) return agent;
     return store.memory.get(`${agentId}:${key}`) ?? problem(reply, 404, 'Memory key not found', key);
   });
 
-  app.delete('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }) } }, async (request) => {
-    await requireAuth(request);
+  app.delete('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }) } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const { agentId, key } = z.object({ agentId: idSchema, key: idSchema }).parse(request.params);
+    const agent = ownedAgent(reply, user, agentId);
+    if ('statusCode' in agent) return agent;
     store.memory.delete(`${agentId}:${key}`);
     return { ok: true };
   });
 
-  app.post('/v1/memory/:agentId/search', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }), body: memorySearchSchema } }, async (request) => {
-    await requireAuth(request);
+  app.post('/v1/memory/:agentId/search', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }), body: memorySearchSchema } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
+    const agent = ownedAgent(reply, user, agentId);
+    if ('statusCode' in agent) return agent;
     const body = memorySearchSchema.parse(request.body);
     return [...store.memory.values()].filter((entry) => entry.agentId === agentId && JSON.stringify(entry.value).includes(body.query)).slice(0, body.limit);
   });
 
-  app.get('/v1/receipts', { schema: { tags: ['receipts'], querystring: paginationSchema } }, async (request) => {
-    await requireAuth(request);
+  app.get('/v1/receipts', { schema: { tags: ['receipts'], querystring: paginationSchema } }, async (request, reply) => {
+    const user = await requireAuth(request);
     const query = paginationSchema.parse(request.query);
-    const rows = [...store.receipts.values()].filter((receipt) => !query.agentId || receipt.agentId === query.agentId).slice(0, query.limit);
+    if (query.agentId) {
+      const agent = ownedAgent(reply, user, query.agentId);
+      if ('statusCode' in agent) return agent;
+    }
+    const ownedAgentIds = new Set([...store.agents.values()].filter((agent) => sameAddress(agent.owner, user.address)).map((agent) => agent.id));
+    const rows = [...store.receipts.values()].filter((receipt) => ownedAgentIds.has(receipt.agentId) && (!query.agentId || receipt.agentId === query.agentId)).slice(0, query.limit);
     return { items: rows, nextCursor: null };
   });
 
   app.get('/v1/receipts/:id', { schema: { tags: ['receipts'], params: z.object({ id: idSchema }) } }, async (request, reply) => {
-    await requireAuth(request);
+    const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    return store.receipts.get(id) ?? problem(reply, 404, 'Receipt not found', id);
+    const receipt = store.receipts.get(id);
+    if (!receipt) return problem(reply, 404, 'Receipt not found', id);
+    const agent = ownedAgent(reply, user, receipt.agentId);
+    if ('statusCode' in agent) return agent;
+    return receipt;
   });
 
   app.get('/v1/stream/:agentId', { websocket: true }, (socket, request) => {
@@ -358,8 +451,13 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       return;
     }
     try {
-      app.jwt.verify<AuthUser>(token);
+      const user = app.jwt.verify<AuthUser>(token);
       const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
+      const agent = store.agents.get(agentId);
+      if (!agent || !sameAddress(agent.owner, user.address)) {
+        socket.close();
+        return;
+      }
       const client = { send: (payload: string) => socket.send(payload), close: () => socket.close() };
       const clients = streamClients.get(agentId) ?? new Set<typeof client>();
       clients.add(client);
@@ -387,10 +485,14 @@ export async function startFromEnv(): Promise<FastifyInstance> {
   const storageIndexerUrl = process.env.ZERO_G_STORAGE_INDEXER_URL ?? 'https://indexer-storage-testnet-turbo.0g.ai';
   const paymentRouterAddress = process.env.PAYMENT_ROUTER_ADDRESS;
   const receiptBookAddress = process.env.RECEIPT_BOOK_ADDRESS;
-  if (!signerKey || !paymentRouterAddress || !receiptBookAddress) throw new Error('Missing edge API environment: EDGE_SERVICE_PRIVATE_KEY, PAYMENT_ROUTER_ADDRESS, and RECEIPT_BOOK_ADDRESS are required');
+  const accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS;
+  const agentIdentityAddress = process.env.AGENT_IDENTITY_ADDRESS;
+  if (!signerKey || !paymentRouterAddress || !receiptBookAddress || !accountFactoryAddress || !agentIdentityAddress) {
+    throw new Error('Missing edge API environment: EDGE_SERVICE_PRIVATE_KEY, PAYMENT_ROUTER_ADDRESS, RECEIPT_BOOK_ADDRESS, ACCOUNT_FACTORY_ADDRESS, and AGENT_IDENTITY_ADDRESS are required');
+  }
   const chainClient = new ChainClient({ rpcUrl, chainId: 16602, signerKey }) as unknown as BillingChainClient & { verifyMessage(message: string, signature: string): string };
   const storageClient = new StorageClient({ rpcUrl, indexerUrl: storageIndexerUrl, signerKey }) as StorageBoundary;
-  const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16602, paymentRouterAddress, receiptBookAddress, jwtSecret: process.env.EDGE_JWT_SECRET });
+  const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16602, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, jwtSecret: process.env.EDGE_JWT_SECRET });
   await app.listen({ port: Number(process.env.PORT ?? 8080), host: '0.0.0.0' });
   return app;
 }

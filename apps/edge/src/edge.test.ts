@@ -8,7 +8,14 @@ const signerKey = `0x${'1'.repeat(64)}`;
 
 class FakeChain implements BillingChainClient {
   contract<T>(): T {
-    return { emitReceipt: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }) } as T;
+    return {
+      emitReceipt: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
+      nextTokenId: async () => 7n,
+      predict: async () => '0x0000000000000000000000000000000000000007',
+      createAccount: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
+      mint: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
+      setAgentAccount: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
+    } as T;
   }
   async send(): Promise<{ hash: string }> { return { hash: txHash }; }
   async waitForReceipt(): Promise<{ hash: string }> { return { hash: txHash }; }
@@ -36,17 +43,20 @@ describe('edge API', () => {
     const docs = await app.inject({ method: 'GET', url: '/docs/api' });
     expect(docs.statusCode).toBe(200);
 
-    const quote = await app.inject({ method: 'POST', url: '/v1/quote', payload: { payeeAgentId: '2', payerAgentId: '1', serviceId: 'svc', requestedAmount: '1' } });
-    expect(quote.statusCode).toBe(200);
+    const created = await app.inject({ method: 'POST', url: '/v1/agents', headers: auth, payload: { metadataRoot: 'root' } });
+    expect(created.statusCode).toBe(200);
+    const agent = created.json<{ id: string }>();
+
+    const service = await app.inject({ method: 'POST', url: '/v1/services', headers: auth, payload: { agentId: agent.id, serviceId: 'svc', priceWei: '1', tags: ['demo'] } });
+    expect(service.statusCode).toBe(200);
+
+    const quote = await app.inject({ method: 'POST', url: '/v1/quote', payload: { payeeAgentId: agent.id, payerAgentId: agent.id, serviceId: 'svc' } });
+    expect(quote.statusCode).toBe(402);
     const body = quote.json<{ quoteHash: string }>();
 
     const settle = await app.inject({ method: 'POST', url: '/v1/settle', payload: { quoteHash: body.quoteHash } });
     expect(settle.statusCode).toBe(200);
     expect(settle.json<{ status: string }>().status).toBe('unsigned_tx');
-
-    const created = await app.inject({ method: 'POST', url: '/v1/agents', headers: auth, payload: { metadataRoot: 'root' } });
-    expect(created.statusCode).toBe(200);
-    const agent = created.json<{ id: string }>();
 
     const run = await app.inject({ method: 'POST', url: `/v1/agents/${agent.id}/run`, headers: auth, payload: { skillId: 'chat.completion', input: { prompt: 'hi' } } });
     expect(run.statusCode).toBe(200);
@@ -59,6 +69,34 @@ describe('edge API', () => {
 
     const refund = await app.inject({ method: 'POST', url: `/v1/refund/${body.quoteHash}`, headers: auth, payload: { reason: 'test', agentId: '1' } });
     expect(refund.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('enforces owner scope on agent subresources', async () => {
+    const app = buildEdgeServer({ chainClient: new FakeChain(), storageClient: new FakeStorage(), signerKey, chainId: 16602, paymentRouterAddress: address, receiptBookAddress: address, jwtSecret: 'test-secret' });
+    await app.ready();
+    const ownerAuth = { authorization: `Bearer ${app.jwt.sign({ address })}` };
+    const otherAuth = { authorization: `Bearer ${app.jwt.sign({ address: '0x0000000000000000000000000000000000000002' })}` };
+    const created = await app.inject({ method: 'POST', url: '/v1/agents', headers: ownerAuth, payload: {} });
+    const agent = created.json<{ id: string }>();
+
+    const read = await app.inject({ method: 'GET', url: `/v1/agents/${agent.id}`, headers: otherAuth });
+    expect(read.statusCode).toBe(403);
+    const memory = await app.inject({ method: 'PUT', url: `/v1/memory/${agent.id}/private`, headers: otherAuth, payload: { value: 'nope', tags: [] } });
+    expect(memory.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('provisions agents through factory, iNFT mint, and payment router mapping when contract env is provided', async () => {
+    const app = buildEdgeServer({ chainClient: new FakeChain(), storageClient: new FakeStorage(), signerKey, chainId: 16602, paymentRouterAddress: address, receiptBookAddress: address, accountFactoryAddress: address, agentIdentityAddress: address, jwtSecret: 'test-secret' });
+    await app.ready();
+    const auth = { authorization: `Bearer ${app.jwt.sign({ address })}` };
+    const created = await app.inject({ method: 'POST', url: '/v1/agents', headers: auth, payload: { metadataRoot: 'root' } });
+    expect(created.statusCode).toBe(200);
+    const agent = created.json<{ id: string; accountAddress: string; metadataRoot: string }>();
+    expect(agent.id).toBe('7');
+    expect(agent.accountAddress).toBe('0x0000000000000000000000000000000000000007');
+    expect(agent.metadataRoot).toMatch(/^0x[a-f0-9]{64}$/);
     await app.close();
   });
 });
