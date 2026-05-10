@@ -75,3 +75,10 @@
 - Deviation: `webpack.extensionAlias` added to `next.config.mjs` to resolve `.js` imports to `.ts`/`.tsx` source files for `@apogee/ui` transpiled package. This is needed because packages/ui uses TypeScript ESM `.js` extension convention.
 - Performance: Landing page 98.2 KB (budget 130 KB ✓); Dashboard 180 KB (budget 180 KB ✓). `pnpm typecheck`, `pnpm build`, and `pnpm lint` all green.
 - Follow-up: Add `GET /v1/stats` and `GET /v1/receipts/heatmap` endpoints to `apps/edge`; wire wagmi wallet balance display in dashboard; add real deploy transaction signing in WizardStepDeploy.
+
+## 2026-05-10 — Prompt 7 verification
+
+- Verification gates passed: `pnpm -F @apogee/web typecheck` ✓, `pnpm -F @apogee/web build` ✓ (landing 98.2 KB, dashboard 180 KB), `pnpm -F @apogee/web lint` ✓, `pnpm -F @apogee/web test` ✓ (stub). Cross-package checks: `packages/ui`, `packages/billing`, `apps/edge` typecheck all ✓ (no regression).
+- Vercel deployment: `success` — https://apogee-18dr54j1k-franlinozzs-projects.vercel.app (sha 17050bc).
+- CI fix: corrected `pnpm/action-setup` step ordering in `.github/workflows/ci.yml` — must run before `actions/setup-node` (which uses pnpm for cache lookup). All prior CI failures had this same root cause.
+- Disk management: `pnpm store prune` run after each build; `.next` artifacts deleted immediately post-verification. VM root filesystem at ~96% (9.7 GB total). Per-session discipline: clear `.next` and `/tmp/*.log` after each build cycle.
