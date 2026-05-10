@@ -7,6 +7,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "start": "APOGEE_EDGE_AUTOSTART=1 node dist/index.js",
     "dev": "APOGEE_EDGE_AUTOSTART=1 node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
