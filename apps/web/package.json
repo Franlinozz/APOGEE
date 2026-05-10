@@ -4,17 +4,26 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo web-tests-pending"
+    "test": "echo web-tests-pending",
+    "analyze": "ANALYZE=true next build",
+    "lhci": "lhci autorun"
   },
   "dependencies": {
+    "@apogee/ui": "workspace:*",
+    "geist": "1.3.1",
+    "lucide-react": "0.460.0",
     "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@apogee/typescript-config": "workspace:^",
+    "@lhci/cli": "0.14.0",
+    "@next/bundle-analyzer": "14.2.35",
     "@types/node": "20.17.57",
     "@types/react": "18.3.27",
     "@types/react-dom": "18.3.7",

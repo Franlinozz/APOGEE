@@ -1,13 +1,12 @@
 import type { Config } from 'tailwindcss';
+import preset from '@apogee/ui/tailwind-preset';
 
 const config: Config = {
-  content: ['./src/**/*.{ts,tsx}'],
-  theme: {
-    extend: {
-      colors: { ink: '#080A12', line: 'rgba(255,255,255,0.12)', brand: '#8B5CF6' },
-      boxShadow: { glow: '0 0 80px rgba(139, 92, 246, 0.28)' }
-    }
-  },
-  plugins: []
+  presets: [preset as Config],
+  content: [
+    './src/**/*.{ts,tsx}',
+    '../../packages/ui/src/**/*.{ts,tsx}',
+  ],
+  plugins: [],
 };
 export default config;

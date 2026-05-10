@@ -1,22 +1,65 @@
-import Link from 'next/link';
+import { Suspense } from 'react';
+import dynamic from 'next/dynamic';
+import { Nav } from '@/components/landing/Nav';
+import { Hero } from '@/components/landing/Hero';
+import { FeaturePanels } from '@/components/landing/FeaturePanels';
+import { HowItWorks } from '@/components/landing/HowItWorks';
+import { ZeroGStack } from '@/components/landing/ZeroGStack';
+import { NumbersSection } from '@/components/landing/NumbersSection';
+import { FinalCta } from '@/components/landing/FinalCta';
+import { Footer } from '@/components/landing/Footer';
 
-const pillars = ['Smart wallet policy engine', 'Encrypted 0G memory', 'On-chain receipts', 'Paid skills marketplace'];
+/*
+ * ReceiptsTicker: client-only WebSocket component.
+ * ssr:false — no server-side attempt; the Suspense fallback holds the
+ * exact same height so CLS stays at 0.
+ */
+const ReceiptsTicker = dynamic(
+  () => import('@/components/landing/ReceiptsTicker').then((m) => m.ReceiptsTicker),
+  { ssr: false },
+);
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#2b1f63,transparent_36rem)]">
-      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-20">
-        <div className="mb-6 inline-flex w-fit rounded-full border border-line bg-white/5 px-4 py-2 text-sm text-violet-100">Built for 0G Galileo testnet</div>
-        <h1 className="max-w-4xl text-5xl font-semibold tracking-tight sm:text-7xl">The runtime layer for autonomous agents on 0G.</h1>
-        <p className="mt-6 max-w-2xl text-lg leading-8 text-white/70">APOGEE gives agents wallets, policy, memory, payments, skills, compute, and verifiable receipts — in one developer-grade control plane.</p>
-        <div className="mt-10 flex gap-3">
-          <Link href="/proofs" className="rounded-xl bg-white px-5 py-3 font-medium text-ink hover:bg-violet-100">View proofs</Link>
-          <a href="https://github.com/Franlinozz/APOGEE" className="rounded-xl border border-line px-5 py-3 font-medium text-white/85 hover:bg-white/10">GitHub</a>
-        </div>
-        <div className="mt-16 grid gap-4 md:grid-cols-4">
-          {pillars.map((pillar) => <div key={pillar} className="rounded-2xl border border-line bg-white/[0.04] p-5 shadow-glow"><p className="font-medium">{pillar}</p></div>)}
-        </div>
-      </section>
-    </main>
+    <>
+      <Nav />
+
+      <main>
+        {/* ── Above fold: zero client JS ── */}
+        <Hero />
+
+        {/* ── Live receipt ticker ─────────
+            SSR fallback: empty snapshot satisfies the static shape so CLS = 0. */}
+        <Suspense fallback={<div className="h-[49px] border-y border-[var(--color-line)]" />}>
+          <ReceiptsTicker snapshot={[]} />
+        </Suspense>
+
+        {/* ── Rest of page: server components ── */}
+        <FeaturePanels />
+        <HowItWorks />
+        <ZeroGStack />
+
+        <Suspense
+          fallback={
+            <div className="py-24">
+              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div className="grid gap-5 sm:grid-cols-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-32 animate-pulse rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          }
+        >
+          {/* NumbersSection is async (fetch) — wrap in Suspense */}
+          <NumbersSection />
+        </Suspense>
+
+        <FinalCta />
+      </main>
+
+      <Footer />
+    </>
   );
 }
