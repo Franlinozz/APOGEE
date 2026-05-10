@@ -53,13 +53,12 @@ export function Nav() {
           ))}
         </nav>
 
-        {/* CTA — Connect Wallet placeholder (wagmi wired in dashboard prompt) */}
-        <a
-          href="/dashboard"
+        <Link
+          href="/connect"
           className="inline-flex h-8 items-center rounded-[var(--radius)] bg-accent px-4 text-xs font-semibold text-white transition-colors hover:bg-accent/85"
         >
           Connect Wallet
-        </a>
+        </Link>
       </div>
     </header>
   );

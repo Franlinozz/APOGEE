@@ -62,3 +62,16 @@
 - Lighthouse CI config added at `apps/web/.lighthouserc.json`; asserts all 4 Lighthouse categories ≥ 95 and LCP ≤ 1800 ms.
 - Deviation: `exactOptionalPropertyTypes` disabled in `packages/ui/tsconfig.json` (kept enabled in all other packages). This is necessary because Radix UI's JSX prop types for optional boolean/string fields are not compatible with the strict mode flag when spreading destructured props. The setting applies only to the component-library package, not to app or domain code.
 - Follow-up: `NEXT_PUBLIC_API_URL` must be set in `apps/web/.env.local` before NumbersSection and ReceiptsTicker can fetch live data. Add `/v1/stats` endpoint to `apps/edge` in a later prompt.
+
+## 2026-05-10 — Prompt 7: authenticated app surface (dashboard, agents, marketplace, memory, receipts, policies)
+
+- Added wagmi 2.14.1 + viem 2.21.58 with custom 0G Galileo (16602) and Aristotle (16661) chain configs; injected connector only (no RainbowKit). `WagmiProvider` added to `(app)` and `connect` route groups only — landing page retains zero client JS.
+- SIWE auth flow: `POST /v1/auth/siwe/nonce` + `POST /v1/auth/siwe/verify`; JWT stored as httpOnly cookie `apogee-jwt` via `/api/auth/set-cookie`; never localStorage.
+- `apps/web/src/middleware.ts` gates all app routes on `apogee-jwt` cookie presence; redirects to `/connect?redirect=<path>` on missing cookie.
+- App shell: `Sidebar` (client, active route highlighting) + `Topbar` (server, JWT decode for address display, "New agent" CTA).
+- Pages shipped: `/dashboard` (stat tiles, 7×24 CSS heatmap, recent receipts), `/agents` (TanStack Table v8, row virtualizer above 100 rows), `/agents/new` (5-step wizard: Identity/Funding/Policy/Skills/Deploy with CSS progress steps), `/agents/:id` (7-tab detail: Overview/Activity/Memory/Skills/Policy/Splits/Settings), `/marketplace` (Skills + Services tabs with filter), `/memory` (index), `/memory/:agentId` (tree view, semantic search, anchor-on-chain), `/receipts` (TanStack Table, CSV export), `/policies/:id` (read-only + new-version CTA), `/apogee-pilot` (placeholder), `/connect` (wallet connect page).
+- API split: `lib/api.ts` is client-safe (pure fetch, no `next/headers`); `lib/server-api.ts` is server-only (reads `apogee-jwt` cookie, wraps api.ts calls). Server pages import from `server-api.ts`; client components import from `api.ts`.
+- Deviation: `exactOptionalPropertyTypes: false` added to `apps/web/tsconfig.json`. Required because apps/web directly imports packages/ui source (via `transpilePackages`), and packages/ui Radix UI wrappers are incompatible with this strict flag. The landing page and domain packages are unaffected.
+- Deviation: `webpack.extensionAlias` added to `next.config.mjs` to resolve `.js` imports to `.ts`/`.tsx` source files for `@apogee/ui` transpiled package. This is needed because packages/ui uses TypeScript ESM `.js` extension convention.
+- Performance: Landing page 98.2 KB (budget 130 KB ✓); Dashboard 180 KB (budget 180 KB ✓). `pnpm typecheck`, `pnpm build`, and `pnpm lint` all green.
+- Follow-up: Add `GET /v1/stats` and `GET /v1/receipts/heatmap` endpoints to `apps/edge`; wire wagmi wallet balance display in dashboard; add real deploy transaction signing in WizardStepDeploy.
