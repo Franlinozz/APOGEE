@@ -146,18 +146,33 @@ export function ApogeeePilot({ isGuest = false }: ApogeeePilotProps) {
         unreadCount={unreadCount}
       />
       {isOpen && (
-        <Panel
-          messages={messages}
-          isStreaming={isStreaming}
-          streamingContent={streamingContent}
-          isGuest={isGuest}
-          guestRemaining={Math.max(0, GUEST_LIMIT - guestCount)}
-          isExiting={isExiting}
-          onClose={handleClose}
-          onMinimize={handleClose}
-          onSend={handleSend}
-          onCancel={handleCancel}
-        />
+        <>
+          {/* Soft bokeh glow behind the panel — desktop only, purely decorative */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none fixed bottom-0 right-0 hidden sm:block"
+            style={{
+              width: 520,
+              height: 700,
+              background:
+                'radial-gradient(ellipse at 78% 88%, rgba(99,102,241,0.14) 0%, rgba(99,102,241,0.05) 42%, transparent 65%)',
+              filter: 'blur(64px)',
+              zIndex: 49,
+            }}
+          />
+          <Panel
+            messages={messages}
+            isStreaming={isStreaming}
+            streamingContent={streamingContent}
+            isGuest={isGuest}
+            guestRemaining={Math.max(0, GUEST_LIMIT - guestCount)}
+            isExiting={isExiting}
+            onClose={handleClose}
+            onMinimize={handleClose}
+            onSend={handleSend}
+            onCancel={handleCancel}
+          />
+        </>
       )}
     </>
   );

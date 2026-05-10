@@ -110,11 +110,22 @@ export function Panel({
         aria-modal="true"
         className={`
           fixed z-50 flex flex-col overflow-hidden
-          bg-[var(--color-surface)] border border-[var(--color-line)] shadow-2xl
+          border
           inset-0
-          sm:inset-auto sm:bottom-[88px] sm:right-6 sm:w-[380px] sm:h-[560px] sm:rounded-[var(--radius-xl)]
+          sm:inset-auto sm:bottom-[88px] sm:right-6 sm:w-[390px] sm:h-[560px] sm:rounded-2xl
           ${isExiting ? styles.panelExit : styles.panel}
         `}
+        style={{
+          background: 'rgba(8, 10, 22, 0.92)',
+          backdropFilter: 'blur(28px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(140%)',
+          borderColor: 'rgba(255,255,255,0.07)',
+          boxShadow: [
+            '0 32px 80px -8px rgba(0,0,0,0.80)',
+            '0 0 0 1px rgba(99,102,241,0.10)',
+            'inset 0 1px 0 rgba(255,255,255,0.05)',
+          ].join(','),
+        }}
       >
         {/* Header */}
         <div className="flex shrink-0 items-center gap-3 border-b border-[var(--color-line)] px-4 py-3">
