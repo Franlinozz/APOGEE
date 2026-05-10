@@ -102,3 +102,10 @@
 - Deviation: `apps/edge/routes/pilot/chat.ts` spec path not created — route added directly to `apps/edge/src/index.ts` following existing monolithic pattern. `react-markdown`/`remark-gfm` not installed; custom inline renderer used instead (avoids disk pressure on 9.7 GB VM and adds zero npm deps to the project).
 - Optional real LLM env vars (Railway): `PILOT_LLM_BASE_URL` (OpenAI-compatible base URL), `PILOT_LLM_API_KEY`, `PILOT_LLM_MODEL` (default `gpt-4o-mini`). Without these, simulation streams context-aware canned responses.
 - Verification: `pnpm -F @apogee/edge typecheck` ✓, `pnpm -F @apogee/edge build` ✓, `pnpm -F @apogee/web typecheck` ✓, `pnpm -F @apogee/web build` ✓ (no bundle regression).
+
+## 2026-05-10 — Prompt 8 verification + chatbot visibility fix
+
+- All CI gates green: `pnpm -F @apogee/web lint` ✓, `pnpm -F @apogee/web typecheck` ✓, `pnpm -F @apogee/web test` ✓, `pnpm -F @apogee/edge typecheck` ✓, `pnpm -F @apogee/billing typecheck` ✓.
+- Bug fixed: Pilot was invisible on the live site for authenticated users on non-app pages (e.g. the landing page). Root cause: root layout rendered `GuestPilot` only when `!isAuthenticated`, but `AuthPilot` in `(app)/layout.tsx` only mounts on dashboard/agents/etc. routes. An authenticated user visiting `/` had no Pilot instance at all.
+- Fix: Root layout now unconditionally mounts a single `ApogeePilot` with `isGuest={!isAuthenticated}`. `(app)/layout.tsx` no longer imports or mounts a second Pilot instance. One mount point, zero double-mounting risk, Pilot visible on every page regardless of auth state.
+- No bundle regression: landing 98.2 kB, dashboard 180 kB (unchanged).

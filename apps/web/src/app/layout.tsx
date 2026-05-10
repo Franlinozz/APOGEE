@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { cookies } from 'next/headers';
 import './globals.css';
 
-const GuestPilot = dynamic(
+const ApogeePilot = dynamic(
   () => import('@/components/apogee-pilot').then(m => m.ApogeeePilot),
   { ssr: false },
 );
@@ -51,8 +51,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <body>
         {children}
-        {/* Guest Pilot — only on non-app pages; app layout mounts the auth Pilot */}
-        {!isAuthenticated && <GuestPilot isGuest />}
+        {/* Pilot on every page: guest mode when unauthenticated, auth mode when signed in.
+            Single mount point — (app)/layout does NOT add a second instance. */}
+        <ApogeePilot isGuest={!isAuthenticated} />
       </body>
     </html>
   );
