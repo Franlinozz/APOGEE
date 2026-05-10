@@ -45,14 +45,21 @@ async function fetchProofsData(): Promise<ProofsApiResponse | null> {
   }
 }
 
+// Known seeded addresses on Aristotle mainnet (from demo-agents-aristotle.json)
+const SEEDED_AGENTS: Record<string, string> = {
+  aurora: '0x8AD1Ef8a59554E5537631BfBa9a655A88A803a34',
+  vesper: '0x4d1d3E14913C050dF9fD68aFaB90D04079C37f90',
+  helix:  '0x62283f2064bA32c9797C5c1D7d5F6942229FAf00',
+};
+
 function emptyProofs(): ProofsApiResponse {
   return {
     generatedAt: new Date().toISOString(),
     totalReceipts: 0,
     demoAgents: [
-      { slug: 'aurora', agentId: null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
-      { slug: 'vesper', agentId: null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
-      { slug: 'helix',  agentId: null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
+      { slug: 'aurora', agentId: SEEDED_AGENTS['aurora'] ?? null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
+      { slug: 'vesper', agentId: SEEDED_AGENTS['vesper'] ?? null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
+      { slug: 'helix',  agentId: SEEDED_AGENTS['helix']  ?? null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
     ],
     heatmap: Object.fromEntries(
       Array.from({ length: 14 }, (_, i) => {
@@ -64,9 +71,19 @@ function emptyProofs(): ProofsApiResponse {
   };
 }
 
+function mergeSeededAddresses(proofs: ProofsApiResponse): ProofsApiResponse {
+  return {
+    ...proofs,
+    demoAgents: proofs.demoAgents.map(a => ({
+      ...a,
+      agentId: a.agentId ?? SEEDED_AGENTS[a.slug] ?? null,
+    })),
+  };
+}
+
 // ── Sub-components (server) ───────────────────────────────────────────────────
 
-const DEFAULT_CHAIN = 16602 as const; // Galileo has live addresses; aristotle pending deploy
+const DEFAULT_CHAIN = 16661 as const; // Aristotle mainnet — deployed 2026-05-10
 
 function ContractsTable() {
   const chainId = DEFAULT_CHAIN;
@@ -137,9 +154,12 @@ function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForH
       <div className="space-y-2 text-xs">
         <div className="flex justify-between gap-2">
           <span className="text-white/40 shrink-0">Address</span>
-          <span className="font-mono text-violet-300 truncate">
-            {agentId ? `${agentId.slice(0, 12)}…` : <span className="text-white/20">not seeded</span>}
-          </span>
+          {agentId ? (
+            <a href={`https://chainscan.0g.ai/address/${agentId}`} target="_blank" rel="noreferrer"
+              className="font-mono text-violet-300 hover:text-violet-200 truncate">
+              {agentId.slice(0, 12)}…
+            </a>
+          ) : <span className="text-white/20">not seeded</span>}
         </div>
         <div className="flex justify-between">
           <span className="text-white/40">Receipts</span>
@@ -249,7 +269,8 @@ function StorageProofsSection({ samples }: { samples: StorageSample[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function ProofsPage() {
-  const proofs = (await fetchProofsData()) ?? emptyProofs();
+  const raw = (await fetchProofsData()) ?? emptyProofs();
+  const proofs = mergeSeededAddresses(raw);
 
   return (
     <main className="min-h-screen px-6 py-16 bg-bg">

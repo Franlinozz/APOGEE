@@ -1,0 +1,65 @@
+[
+  {
+    "name": "PolicyEngine",
+    "address": "0xa8933d96A27BDfFac07C0d7467f3213cb340f550",
+    "txHash": "0x0a5d5ae4f461cdf617ae2fcda7dd0e20469ad0f1548870243f0914802a550ca2",
+    "blockNumber": 32866636,
+    "verified": true
+  },
+  {
+    "name": "ReceiptBook",
+    "address": "0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53",
+    "txHash": "0x360c0e6de23871b744f833666510cecb1c149103d2e22940bb45e38804a47cfd",
+    "blockNumber": 32866647,
+    "verified": true
+  },
+  {
+    "name": "AgentIdentity",
+    "address": "0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3",
+    "txHash": "0x9057027a616bc0141b524e1814ce9a38fb636079c68f8012fdce34e70620faec",
+    "blockNumber": 32866657,
+    "verified": true
+  },
+  {
+    "name": "ServiceRegistry",
+    "address": "0x47438d9169FD5dCC0C5DA06511b7F61Fb6BdD5Ad",
+    "txHash": "0x1b1e73e3db562533f6a20d6640991625c9c8896a033aed7fad651d0d495c54c6",
+    "blockNumber": 32866670,
+    "verified": true
+  },
+  {
+    "name": "RevenueSplitter",
+    "address": "0x1E32A89B6815a492Ad30f71a5E35280EF7399b74",
+    "txHash": "0x9a9396744a4c8774ce499e4b388942c5e07f8afcead7561590623f879316e47c",
+    "blockNumber": 32866679,
+    "verified": true
+  },
+  {
+    "name": "PaymentRouter",
+    "address": "0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c",
+    "txHash": "0xd79d91178daf689760f6c3d6872eee54c185e30feb7cb9c65605ac455c28a0ee",
+    "blockNumber": 32866692,
+    "verified": true
+  },
+  {
+    "name": "EscrowVault",
+    "address": "0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767",
+    "txHash": "0x1412d7dae7a1285ec5d74898ce5748d57ce4f17d3751fce585f9537674864686",
+    "blockNumber": 32866704,
+    "verified": true
+  },
+  {
+    "name": "AccountFactory",
+    "address": "0xABc44aF98e6d873C0700c9B687fbf3Be560cba90",
+    "txHash": "0xb5cf9d3f242c8bf9060db01f48292df7fd8a6bbcd7d39bedebedff43901c210f",
+    "blockNumber": 32866715,
+    "verified": true
+  },
+  {
+    "name": "AgentAccount",
+    "address": "0xc18eD4e075a23A66505744A353eeFE91340F924d",
+    "txHash": "0xe3425ce7a3855b47e239590a67316b1007303fcdc36540ad280c587a326c4630",
+    "blockNumber": 32866777,
+    "verified": false
+  }
+]

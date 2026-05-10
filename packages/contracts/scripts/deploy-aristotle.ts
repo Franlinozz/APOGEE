@@ -11,7 +11,7 @@ type DeploymentRecord = {
   verified: boolean;
 };
 
-const DRY_RUN = process.argv.includes('--dry-run');
+const DRY_RUN = process.argv.includes('--dry-run') || process.env['DRY_RUN'] === 'true';
 const MAX_GAS_0G = 0.3;
 
 async function waitReceipt(contract: BaseContract): Promise<ContractTransactionReceipt> {

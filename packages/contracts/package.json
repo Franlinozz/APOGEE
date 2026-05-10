@@ -10,10 +10,10 @@
     "test": "hardhat test",
     "coverage": "hardhat coverage --testfiles 'test/**/*.ts'",
     "deploy:galileo": "hardhat run scripts/deploy-galileo.ts --network galileo",
-    "deploy:aristotle:dry-run": "hardhat run scripts/deploy-aristotle.ts --network aristotle -- --dry-run",
+    "deploy:aristotle:dry-run": "DRY_RUN=true hardhat run scripts/deploy-aristotle.ts --network aristotle",
     "deploy:aristotle": "hardhat run scripts/deploy-aristotle.ts --network aristotle",
     "seed:demo-agents": "hardhat run scripts/seed-demo-agents.ts --network aristotle",
-    "seed:demo-agents:testnet": "hardhat run scripts/seed-demo-agents.ts --network galileo -- --testnet"
+    "seed:demo-agents:testnet": "TESTNET=true hardhat run scripts/seed-demo-agents.ts --network galileo"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.4.0",

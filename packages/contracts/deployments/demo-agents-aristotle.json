@@ -1,0 +1,49 @@
+{
+  "network": "aristotle",
+  "chainId": 16661,
+  "seededAt": "2026-05-10T19:53:27.644Z",
+  "agents": {
+    "aurora": {
+      "address": "0x8AD1Ef8a59554E5537631BfBa9a655A88A803a34",
+      "tokenId": "1",
+      "policyId": "4",
+      "name": "Aurora",
+      "skills": [
+        "web.search",
+        "news.aggregate",
+        "summarize.long",
+        "chat.embed",
+        "memory.write",
+        "chain.send"
+      ],
+      "description": "News analysis and market intelligence agent"
+    },
+    "vesper": {
+      "address": "0x4d1d3E14913C050dF9fD68aFaB90D04079C37f90",
+      "tokenId": "2",
+      "policyId": "5",
+      "name": "Vesper",
+      "skills": [
+        "memory.search",
+        "image.generate",
+        "storage.upload",
+        "nft.mint",
+        "chain.send"
+      ],
+      "description": "Creative media generation agent (registered service)"
+    },
+    "helix": {
+      "address": "0x62283f2064bA32c9797C5c1D7d5F6942229FAf00",
+      "tokenId": "3",
+      "policyId": "6",
+      "name": "Helix",
+      "skills": [
+        "chain.query",
+        "chat.completion",
+        "memory.write",
+        "chain.send"
+      ],
+      "description": "On-chain analytics and reporting agent"
+    }
+  }
+}
