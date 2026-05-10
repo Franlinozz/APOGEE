@@ -103,6 +103,18 @@
 - Optional real LLM env vars (Railway): `PILOT_LLM_BASE_URL` (OpenAI-compatible base URL), `PILOT_LLM_API_KEY`, `PILOT_LLM_MODEL` (default `gpt-4o-mini`). Without these, simulation streams context-aware canned responses.
 - Verification: `pnpm -F @apogee/edge typecheck` ✓, `pnpm -F @apogee/edge build` ✓, `pnpm -F @apogee/web typecheck` ✓, `pnpm -F @apogee/web build` ✓ (no bundle regression).
 
+## 2026-05-10 — Prompt 9: Aristotle mainnet scripts, demo agents, heartbeat loops, reconciler, /proofs page
+
+- Added `packages/contracts/scripts/deploy-aristotle.ts`: chainId 16661 guard, balance ≥ 0.5 0G preflight, `--dry-run` flag (gas estimation via `factory.getDeployTransaction()` + `provider.estimateGas()`, aborts if total > 0.3 0G without deploying), deploys all 9 contracts, authorises relayers, verifies on chainscan.0g.ai, writes `deployments/aristotle.json`, regenerates `apps/web/src/lib/contracts.ts` with both network entries.
+- Added `packages/contracts/scripts/seed-demo-agents.ts`: `--testnet` flag for Galileo vs Aristotle, deploys AgentAccount + mints iNFT for Aurora/Vesper/Helix, registers policies with computed allowlistRoot, registers Vesper in ServiceRegistry as `vesper.media`, writes `deployments/demo-agents-{network}.json`.
+- Added `apps/runtime/src/heartbeats.ts`: three BullMQ heartbeat loops — Aurora (10 min: web.search→news.aggregate→summarize.long→chat.embed→memory.write→receipt 0.0005 0G), Vesper (15 min: memory.search→image.generate→storage.upload→nft.mint→receipt 0.0002 0G), Helix (30 min: chain.query→chat.completion→memory.write→receipt). All calls wrapped in `safeSkill()` (catch+continue). Default paused via `HEARTBEATS_PAUSED=true`; activates when `HEARTBEATS_PAUSED=false`. Exports `lastHeartbeat` for health endpoint.
+- Added `apps/runtime/src/reconciler.ts`: BullMQ job every 60s, reads fallback dir, retries `receiptMinter.mint()`, deletes file on success, warns if age > 10 min.
+- Extended `apps/runtime/src/index.ts`: `startRuntime()` now creates SkillRunner, ReceiptMinter (with `InMemoryReceiptIndex` + fallbackDir), schedules heartbeats and reconciler, creates heartbeat and reconciler workers. `/health` endpoint returns `{ ok, uptimeSec, lastHeartbeat }`.
+- Extended `apps/edge/src/index.ts`: `GET /v1/health` now returns chain status (Galileo + Aristotle) and runtime state. Chain status cached in background `setInterval(30s)` via `addHook('onReady')` so health endpoint is instant (6ms in tests, down from ~958ms). `GET /v1/proofs`: public, ISR-friendly, returns 14d×24h heatmap, demo agents with heartbeat state, last 50 receipts, 5 storage proof samples. `POST /internal/heartbeat`: internal push from runtime (protected by `x-internal-secret`).
+- Added `apps/web/src/app/proofs/page.tsx`: ISR 30s (`export const revalidate = 30`), server components `ContractsTable`, `DemoAgentCard`, `ActivityHeatmap`, `StorageProofsSection`, client islands `ReceiptsFeed` (auto-refresh 10s) and `NetworkToggle` from `_client.tsx`.
+- Deviation: `@apogee/billing` not added as dependency to `apps/web` — `ReceiptIndexRow` type redefined locally in `apps/web/src/app/proofs/_client.tsx`. Tags in heartbeats.ts are plain strings (not `bytes4` keccak values) because `ReceiptMinter` handles the bytes4 conversion internally. `ethers` not imported in runtime — `createHash('sha256')` from `node:crypto` used for short hashes instead.
+- Verification: `pnpm typecheck` (22/22) ✓, `pnpm -F @apogee/edge test` (4/4) ✓ — health endpoint 6ms (< 50ms budget).
+
 ## 2026-05-10 — Prompt 8 verification + chatbot visibility fix
 
 - All CI gates green: `pnpm -F @apogee/web lint` ✓, `pnpm -F @apogee/web typecheck` ✓, `pnpm -F @apogee/web test` ✓, `pnpm -F @apogee/edge typecheck` ✓, `pnpm -F @apogee/billing typecheck` ✓.

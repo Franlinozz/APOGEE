@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 import { Queue, Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -7,11 +8,13 @@ import pino from 'pino';
 import { ChainClient } from '@apogee/chain-client';
 import { ComputeClient } from '@apogee/compute-client';
 import { StorageClient } from '@apogee/storage-client';
-import { ReceiptMinter } from '@apogee/billing';
+import { ReceiptMinter, InMemoryReceiptIndex, type StorageBoundary, type ChainBoundary } from '@apogee/billing';
 import { SkillRegistry, SkillRunner, type SkillManifest } from '@apogee/skills-runtime';
 import { registerCoreSkills } from '@apogee/skills-core';
 import { registerPremiumSkills } from '@apogee/skills-premium';
 import { z } from 'zod';
+import { createHeartbeatWorker, scheduleHeartbeats, lastHeartbeat, type HeartbeatJobData } from './heartbeats.js';
+import { createReconcilerWorker, scheduleReconciler } from './reconciler.js';
 
 const logger = pino({ name: 'apogee-runtime' });
 
@@ -206,27 +209,27 @@ export function createRegistry(): SkillRegistry {
   return registerPremiumSkills(registerCoreSkills(new SkillRegistry()));
 }
 
-export function createQueues(connection: Redis): { agentRuns: Queue<AgentRunJob>; heartbeats: Queue } {
+export function createQueues(connection: Redis): { agentRuns: Queue<AgentRunJob>; heartbeats: Queue<HeartbeatJobData>; reconciler: Queue } {
   return {
-    agentRuns: new Queue<AgentRunJob>('agent-runs', { connection }),
-    heartbeats: new Queue('heartbeats', { connection }),
+    agentRuns:  new Queue<AgentRunJob>('agent-runs', { connection }),
+    heartbeats: new Queue<HeartbeatJobData>('heartbeats', { connection }),
+    reconciler: new Queue('reconcile-pending-receipts', { connection }),
   };
-}
-
-export async function seedDemoHeartbeatConfigs(queue: Queue): Promise<void> {
-  // Prompt 9 will enable these. For Prompt 5 we only seed durable queue configs, paused by default.
-  for (const name of ['Aurora', 'Vesper', 'Helix']) {
-    await queue.add(`heartbeat:${name.toLowerCase()}`, { agentName: name, enabled: false }, { jobId: `demo-heartbeat:${name.toLowerCase()}`, repeat: { every: 60_000 } });
-  }
 }
 
 export function startMetricsServer(port = 9100): http.Server {
   const started = Date.now();
   const server = http.createServer((req, res) => {
-    if (req.url !== '/metrics') {
-      res.writeHead(404).end();
+    if (req.url === '/health') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        ok: true,
+        uptimeSec: Math.floor((Date.now() - started) / 1000),
+        lastHeartbeat,
+      }));
       return;
     }
+    if (req.url !== '/metrics') { res.writeHead(404).end(); return; }
     const uptime = Math.floor((Date.now() - started) / 1000);
     res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' });
     res.end(`# HELP apogee_runtime_uptime_seconds Runtime uptime in seconds\n# TYPE apogee_runtime_uptime_seconds gauge\napogee_runtime_uptime_seconds ${uptime}\n`);
@@ -240,17 +243,43 @@ export async function startRuntime(): Promise<{ worker: Worker<AgentRunJob>; que
   const prisma = new PrismaClient();
   const registry = createRegistry();
   const clients = createClients();
+  const skillRunner = new SkillRunner(registry, logger);
   const orchestrator = new RuntimeOrchestrator(prisma, registry, clients);
   const mutex = new AgentMutex();
   const queues = createQueues(connection);
-  await seedDemoHeartbeatConfigs(queues.heartbeats);
+
+  const fallbackDir = process.env.RECEIPT_FALLBACK_DIR ?? join(process.cwd(), '.receipt-fallback');
+  const receiptMinter = new ReceiptMinter({
+    storageClient: clients.storageClient as unknown as StorageBoundary,
+    chainClient: clients.chainClient as unknown as ChainBoundary,
+    receiptBookAddress: requiredEnv('RECEIPT_BOOK_ADDRESS'),
+    index: new InMemoryReceiptIndex(),
+    fallbackDir,
+    logger,
+  });
+
+  // Schedule repeating heartbeat jobs (HEARTBEATS_PAUSED=true until smoke-tested)
+  await scheduleHeartbeats(queues.heartbeats);
+  await scheduleReconciler(queues.reconciler);
+
   const concurrency = Number(process.env.RUNTIME_WORKER_CONCURRENCY ?? 5);
   const worker = new Worker<AgentRunJob>('agent-runs', async (job: Job<AgentRunJob>) => {
     const data = agentRunJobSchema.parse(job.data);
     await mutex.run(data.agentId, () => orchestrator.execute(data));
   }, { connection, concurrency });
   worker.on('failed', (job, error) => logger.error({ jobId: job?.id, error }, 'agent run failed'));
+
+  const heartbeatWorker = createHeartbeatWorker(connection, {
+    skillRunner, receiptMinter, chainClient: clients.chainClient,
+    storageClient: clients.storageClient, logger,
+  });
+  heartbeatWorker.on('failed', (job, error) => logger.error({ jobId: job?.id, error }, 'heartbeat failed'));
+
+  const reconcilerWorker = createReconcilerWorker(connection, { receiptMinter, fallbackDir, logger });
+  reconcilerWorker.on('failed', (job, error) => logger.error({ jobId: job?.id, error }, 'reconciler failed'));
+
   const metrics = startMetricsServer(Number(process.env.METRICS_PORT ?? 9100));
+  logger.info({ heartbeatsPaused: process.env.HEARTBEATS_PAUSED !== 'false' }, 'apogee runtime started');
   return { worker, queues, metrics };
 }
 

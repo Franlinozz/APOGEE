@@ -37,7 +37,16 @@ const refundBodySchema = z.object({ reason: z.string(), agentId: z.string().opti
 const memoryPutSchema = z.object({ value: jsonValueSchema, tags: z.array(z.string()).default([]) });
 const memorySearchSchema = z.object({ query: z.string().min(1), limit: z.number().int().positive().max(50).default(10) });
 const paginationSchema = z.object({ cursor: z.string().optional(), limit: z.coerce.number().int().positive().max(100).default(25), tag: z.string().optional(), agentId: z.string().optional() });
-const healthSchema = z.object({ ok: z.boolean(), uptimeSec: z.number(), version: z.string() });
+const chainStatusSchema = z.object({ ok: z.boolean(), chainId: z.number(), blockNumber: z.number().optional(), latencyMs: z.number().optional(), rpc: z.string() });
+const healthSchema = z.object({
+  ok: z.boolean(),
+  uptimeSec: z.number(),
+  version: z.string(),
+  db: z.object({ ok: z.boolean(), note: z.string() }),
+  redis: z.object({ ok: z.boolean(), note: z.string() }),
+  chain: z.object({ galileo: chainStatusSchema, aristotle: chainStatusSchema }),
+  runtime: z.object({ workers: z.number(), lastHeartbeat: z.object({ aurora: z.string().nullable(), vesper: z.string().nullable(), helix: z.string().nullable() }) }),
+});
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 type AuthUser = { address: string };
@@ -85,6 +94,7 @@ class InMemoryEdgeStore {
   readonly memory = new Map<string, MemoryRecord>();
   readonly receipts = new Map<string, ReceiptIndexRow>();
   readonly pilotConversations = new Map<string, PilotConvo>();
+  readonly lastHeartbeat = { aurora: null as string | null, vesper: null as string | null, helix: null as string | null };
 }
 
 class FieldRateLimiter {
@@ -243,8 +253,143 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return { token, address };
   });
 
-  app.get('/v1/health', { schema: { tags: ['system'], response: { 200: healthSchema } } }, async () => ({ ok: true, uptimeSec: process.uptime(), version: '0.4.0' }));
-  app.get('/health', async () => ({ ok: true, uptimeSec: process.uptime(), version: '0.4.0' }));
+  // Background-cached chain status — refreshed every 30s so health endpoint is instant
+  const chainCache = {
+    galileo:   { ok: false, chainId: 16602, rpc: process.env.ZERO_G_GALILEO_RPC_URL   ?? 'https://evmrpc-testnet.0g.ai' } as z.infer<typeof chainStatusSchema>,
+    aristotle: { ok: false, chainId: 16661, rpc: process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc.0g.ai'        } as z.infer<typeof chainStatusSchema>,
+  };
+
+  async function checkRpc(rpcUrl: string, chainId: number): Promise<z.infer<typeof chainStatusSchema>> {
+    const t0 = Date.now();
+    try {
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] }),
+        signal: AbortSignal.timeout(3000),
+      });
+      const data = await res.json() as { result?: string };
+      const ok = typeof data.result === 'string' && data.result.startsWith('0x');
+      const blockNumber = ok ? Number(BigInt(data.result ?? '0x0')) : undefined;
+      return { ok, chainId, blockNumber, latencyMs: Date.now() - t0, rpc: rpcUrl };
+    } catch {
+      return { ok: false, chainId, latencyMs: Date.now() - t0, rpc: rpcUrl };
+    }
+  }
+
+  async function refreshChainCache(): Promise<void> {
+    const [g, a] = await Promise.all([
+      checkRpc(chainCache.galileo.rpc, 16602),
+      checkRpc(chainCache.aristotle.rpc, 16661),
+    ]);
+    chainCache.galileo = g;
+    chainCache.aristotle = a;
+  }
+
+  async function syncRuntimeHeartbeat(): Promise<void> {
+    const metricsUrl = process.env.RUNTIME_METRICS_URL ?? 'http://localhost:9100';
+    try {
+      const res = await fetch(`${metricsUrl}/health`, { signal: AbortSignal.timeout(1500) });
+      if (res.ok) {
+        const data = await res.json() as { lastHeartbeat?: typeof store.lastHeartbeat };
+        if (data.lastHeartbeat) Object.assign(store.lastHeartbeat, data.lastHeartbeat);
+      }
+    } catch { /* runtime not reachable — keep stored state */ }
+  }
+
+  // Start background refresh on server ready; clear on close
+  let chainRefreshTimer: ReturnType<typeof setInterval> | undefined;
+  app.addHook('onReady', () => {
+    void refreshChainCache();
+    void syncRuntimeHeartbeat();
+    chainRefreshTimer = setInterval(() => {
+      void refreshChainCache();
+      void syncRuntimeHeartbeat();
+    }, 30_000);
+  });
+
+  app.get('/v1/health', { schema: { tags: ['system'], response: { 200: healthSchema } } }, () => {
+    return {
+      ok: chainCache.galileo.ok,
+      uptimeSec: Math.floor(process.uptime()),
+      version: '0.5.0',
+      db: { ok: true, note: 'in-memory store' },
+      redis: { ok: false, note: 'not used by edge' },
+      chain: { galileo: chainCache.galileo, aristotle: chainCache.aristotle },
+      runtime: { workers: store.agents.size, lastHeartbeat: store.lastHeartbeat },
+    };
+  });
+  app.get('/health', async () => ({ ok: true, uptimeSec: Math.floor(process.uptime()), version: '0.5.0' }));
+
+  // ── Public proofs data (no auth, ISR-friendly) ────────────────────────────
+  app.get('/v1/proofs', { schema: { tags: ['system'] } }, async (request) => {
+    const chainParam = (request.query as Record<string, string>)['chain'] ?? 'galileo';
+    const chainId = chainParam === 'aristotle' ? 16661 : 16602;
+    const allReceipts = [...store.receipts.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const last50 = allReceipts.slice(0, 50);
+
+    // 14d × 24h heatmap
+    const now = Date.now();
+    const heatmap: Record<string, Record<number, number>> = {};
+    for (let d = 0; d < 14; d++) {
+      const day = new Date(now - d * 86_400_000).toISOString().slice(0, 10);
+      heatmap[day] = {};
+      for (let h = 0; h < 24; h++) heatmap[day][h] = 0;
+    }
+    for (const r of allReceipts) {
+      const dt = new Date(r.createdAt);
+      const day = dt.toISOString().slice(0, 10);
+      const hour = dt.getUTCHours();
+      if (heatmap[day]) heatmap[day][hour] = (heatmap[day][hour] ?? 0) + 1;
+    }
+
+    const demoAgents = ['aurora', 'vesper', 'helix'].map(slug => {
+      const agentReceipts = allReceipts.filter(r => r.agentId.toLowerCase().includes(slug));
+      return {
+        slug,
+        agentId: agentReceipts[0]?.agentId ?? null,
+        receiptCount: agentReceipts.length,
+        lastHeartbeat: store.lastHeartbeat[slug as keyof typeof store.lastHeartbeat],
+        runningForHours: store.lastHeartbeat[slug as keyof typeof store.lastHeartbeat]
+          ? Math.floor((Date.now() - new Date(store.lastHeartbeat[slug as keyof typeof store.lastHeartbeat]!).getTime()) / 3_600_000)
+          : null,
+      };
+    });
+
+    // 5 random receipts for storage proof sample
+    const shuffled = [...last50].sort(() => Math.random() - 0.5);
+    const storageProofSample = shuffled.slice(0, 5).map(r => ({
+      receiptId: r.receiptId,
+      actionTag: r.actionTag,
+      storageRoot: r.storageRoot,
+      status: r.status,
+      createdAt: r.createdAt,
+    }));
+
+    return {
+      chainId,
+      generatedAt: new Date().toISOString(),
+      totalReceipts: store.receipts.size,
+      demoAgents,
+      receipts: last50,
+      heatmap,
+      storageProofSample,
+    };
+  });
+
+  // Internal endpoint for runtime to push heartbeat state
+  app.post('/internal/heartbeat', {
+    config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
+    schema: { hide: true, body: z.object({ aurora: z.string().nullable().optional(), vesper: z.string().nullable().optional(), helix: z.string().nullable().optional() }) },
+  }, async (request, reply) => {
+    const secret = request.headers['x-internal-secret'];
+    if (secret !== process.env.INTERNAL_SECRET) return problem(reply, 401, 'Unauthorized', 'Invalid internal secret.');
+    const body = request.body as { aurora?: string | null; vesper?: string | null; helix?: string | null };
+    if (body.aurora !== undefined) store.lastHeartbeat.aurora = body.aurora;
+    if (body.vesper !== undefined) store.lastHeartbeat.vesper = body.vesper;
+    if (body.helix  !== undefined) store.lastHeartbeat.helix  = body.helix;
+    return { ok: true };
+  });
 
   app.post('/v1/agents', { schema: { tags: ['agents'], body: agentCreateSchema, response: { 200: agentSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
@@ -669,6 +814,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   // ── End pilot ──────────────────────────────────────────────────────────────
 
   app.addHook('onClose', async () => {
+    if (chainRefreshTimer) clearInterval(chainRefreshTimer);
     for (const clients of streamClients.values()) for (const client of clients) client.close();
   });
 
