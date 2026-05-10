@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAccount, useConnect, useSignMessage, useDisconnect } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { siweNonce, siweVerify } from '@/lib/api';
+import { siweNonce, siweVerify, ApiError } from '@/lib/api';
 
 export function ConnectWallet() {
   const router = useRouter();
@@ -47,8 +47,19 @@ export function ConnectWallet() {
       router.push(redirect);
       router.refresh();
     } catch (err: unknown) {
+      // EIP-1193 user rejection — silently return to idle
+      if ((err as { code?: number })?.code === 4001) {
+        setStatus('idle');
+        return;
+      }
       setStatus('error');
-      setErrorMsg(err instanceof Error ? err.message : 'Connection failed');
+      if (err instanceof ApiError) {
+        setErrorMsg(err.detail ?? err.title);
+      } else if (err instanceof TypeError) {
+        setErrorMsg('Cannot reach the auth service. Check your connection and try again.');
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Sign-in failed — please try again.');
+      }
     }
   }
 

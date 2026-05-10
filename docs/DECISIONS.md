@@ -82,3 +82,11 @@
 - Vercel deployment: `success` — https://apogee-18dr54j1k-franlinozzs-projects.vercel.app (sha 17050bc).
 - CI fix: corrected `pnpm/action-setup` step ordering in `.github/workflows/ci.yml` — must run before `actions/setup-node` (which uses pnpm for cache lookup). All prior CI failures had this same root cause.
 - Disk management: `pnpm store prune` run after each build; `.next` artifacts deleted immediately post-verification. VM root filesystem at ~96% (9.7 GB total). Per-session discipline: clear `.next` and `/tmp/*.log` after each build cycle.
+
+## 2026-05-10 — Wallet auth fix (SIWE sign-in on Vercel)
+
+- Root cause: `apps/web/src/lib/api.ts` used `process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'` as the base for `siweNonce` and `siweVerify` calls. On Vercel `NEXT_PUBLIC_API_URL` is unset, so the browser fired fetch requests to `http://localhost:8080/v1/auth/siwe/*` which fail immediately with `TypeError: Failed to fetch`.
+- Fix: Added two same-origin Next.js API proxy routes — `apps/web/src/app/api/auth/siwe/nonce/route.ts` and `.../verify/route.ts` — that forward POST bodies to the Edge API using the server-side env var `EDGE_API_URL`. Updated `siweNonce` and `siweVerify` in `api.ts` to call `/api/auth/siwe/nonce` and `/api/auth/siwe/verify` (relative, same-origin). The browser never needs to know the Edge API URL; CORS is irrelevant for the auth path.
+- UX: ConnectWallet.tsx now distinguishes EIP-1193 user rejection (code 4001 → silently resets to idle), `ApiError` (shows detail/title), `TypeError` (network error message), and other errors. Eliminates the raw "Failed to fetch" display.
+- Files changed: `apps/web/src/lib/api.ts`, `apps/web/src/components/auth/ConnectWallet.tsx`, `apps/web/src/app/api/auth/siwe/nonce/route.ts` (new), `apps/web/src/app/api/auth/siwe/verify/route.ts` (new), `.env.example`.
+- Vercel env vars required: `EDGE_API_URL` (server-side, points to the deployed Edge API, no trailing slash) and `NEXT_PUBLIC_API_URL` (client-side, same host, for authenticated app API calls).

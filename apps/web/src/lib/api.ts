@@ -38,18 +38,39 @@ export async function apiFetch<T>(path: string, init?: RequestInit, token?: stri
 }
 
 // ── Auth ──────────────────────────────────────────────────
+// SIWE calls go through same-origin Next.js proxy routes so the browser never
+// needs to know the Edge API URL and no CORS preflight is required.
+
+async function authFetch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let title = res.statusText;
+    let detail: string | undefined;
+    try {
+      const json = await res.json();
+      title = json.title ?? title;
+      detail = json.detail;
+    } catch {}
+    throw new ApiError(res.status, title, detail);
+  }
+  return res.json() as Promise<T>;
+}
 
 export function siweNonce(address: string, domain: string, uri: string, chainId: number) {
-  return apiFetch<{ nonce: string; message: string }>(
-    '/v1/auth/siwe/nonce',
-    { method: 'POST', body: JSON.stringify({ address, domain, uri, chainId }) },
+  return authFetch<{ nonce: string; message: string }>(
+    '/api/auth/siwe/nonce',
+    { address, domain, uri, chainId },
   );
 }
 
 export function siweVerify(message: string, signature: string) {
-  return apiFetch<{ token: string; address: string }>(
-    '/v1/auth/siwe/verify',
-    { method: 'POST', body: JSON.stringify({ message, signature }) },
+  return authFetch<{ token: string; address: string }>(
+    '/api/auth/siwe/verify',
+    { message, signature },
   );
 }
 
