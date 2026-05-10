@@ -26,11 +26,14 @@ enum PaymentStatus {
 
 model Agent {
   id             String         @id @default(cuid())
+  name           String?
+  description    String?
   ownerAddress   String         @map("owner_address")
   accountAddress String?        @unique @map("account_address")
   tokenId        String?        @map("token_id")
   metadataRoot   String?        @map("metadata_root")
   policyId       String?        @map("policy_id")
+  paused         Boolean        @default(false)
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   policy         Policy?        @relation(fields: [policyId], references: [id])

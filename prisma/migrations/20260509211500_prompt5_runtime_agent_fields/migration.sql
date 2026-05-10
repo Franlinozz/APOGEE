@@ -1,0 +1,4 @@
+ALTER TABLE "agents" ADD COLUMN IF NOT EXISTS "name" TEXT;
+ALTER TABLE "agents" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "agents" ADD COLUMN IF NOT EXISTS "paused" BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS "agents_paused_idx" ON "agents"("paused");

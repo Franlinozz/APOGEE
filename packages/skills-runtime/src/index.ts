@@ -19,6 +19,11 @@ export interface SkillAuthor {
   agentId?: string | undefined;
 }
 
+export interface RevenueSplitPointer {
+  authorAgentId: string;
+  comment?: string | undefined;
+}
+
 export interface SkillManifest<I = unknown, O = unknown> {
   id: string;
   version: string;
@@ -29,6 +34,7 @@ export interface SkillManifest<I = unknown, O = unknown> {
   sideEffects: readonly SideEffect[];
   declaredEgress: readonly string[];
   pricePerCallWei: bigint;
+  revenueSplit?: RevenueSplitPointer | undefined;
   requiresEnv: readonly string[];
   timeoutMs: number;
 }
@@ -74,6 +80,7 @@ export const skillManifestSchema = z.object({
   sideEffects: z.array(z.enum(['chain', 'storage', 'compute', 'http'])),
   declaredEgress: z.array(z.string().min(1)),
   pricePerCallWei: z.bigint().nonnegative(),
+  revenueSplit: z.object({ authorAgentId: z.string().min(1), comment: z.string().optional() }).optional(),
   requiresEnv: z.array(z.string().min(1)),
   timeoutMs: z.number().int().positive().default(30_000),
 });

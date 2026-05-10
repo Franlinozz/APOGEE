@@ -1,5 +1,28 @@
 {
   "name": "@apogee/runtime",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@apogee/billing": "workspace:*",
+    "@apogee/chain-client": "workspace:*",
+    "@apogee/compute-client": "workspace:*",
+    "@apogee/skills-core": "workspace:*",
+    "@apogee/skills-premium": "workspace:*",
+    "@apogee/skills-runtime": "workspace:*",
+    "@apogee/storage-client": "workspace:*",
+    "@prisma/client": "5.22.0",
+    "bullmq": "5.65.0",
+    "ioredis": "5.8.2",
+    "pino": "9.14.0",
+    "zod": "4.4.3"
+  }
 }
