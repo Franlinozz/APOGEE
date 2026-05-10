@@ -18,13 +18,17 @@ jobs:
           node-version: 20.18.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Build packages/ui (source-only, no native deps) so downstream consumers typecheck cleanly
-      - run: pnpm -F @apogee/ui typecheck
-      # Web app — lint, typecheck, test (no native dependency chain)
+      # Build pure-TS packages (no native deps) so downstream consumers can typecheck
+      - run: pnpm -F @apogee/chain-client build
+      - run: pnpm -F @apogee/storage-client build
+      - run: pnpm -F @apogee/compute-client build
+      - run: pnpm -F @apogee/memory build
+      - run: pnpm -F @apogee/billing build
+      # Web app (imports only @apogee/ui which exports from source — no build needed)
       - run: pnpm -F @apogee/web lint
       - run: pnpm -F @apogee/web typecheck
       - run: pnpm -F @apogee/web test
-      # Edge API
+      # Edge API (imports billing, chain-client, storage-client — built above)
       - run: pnpm -F @apogee/edge typecheck
-      # Billing
+      # Billing standalone typecheck
       - run: pnpm -F @apogee/billing typecheck
