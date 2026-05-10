@@ -48,6 +48,8 @@ type SkillInstall = { agentId: string; skillId: string; version?: string | undef
 type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 type TxResponse = { hash: string; wait(): Promise<unknown> };
+type PilotMsg = { role: 'user' | 'assistant'; content: string; createdAt: string };
+type PilotConvo = { id: string; userAddress: string; messages: PilotMsg[]; createdAt: string };
 type AccountFactoryContract = { predict(owner: string, salt: string): Promise<string>; createAccount(owner: string, salt: string): Promise<TxResponse> };
 type AgentIdentityContract = { nextTokenId(): Promise<bigint>; mint(to: string, metadataRoot: string, publicKey: string, controller: string): Promise<TxResponse> };
 type PaymentRouterAdminContract = { setAgentAccount(agentId: bigint, account: string): Promise<TxResponse> };
@@ -82,6 +84,7 @@ class InMemoryEdgeStore {
   readonly skills = new Map<string, SkillInstall>();
   readonly memory = new Map<string, MemoryRecord>();
   readonly receipts = new Map<string, ReceiptIndexRow>();
+  readonly pilotConversations = new Map<string, PilotConvo>();
 }
 
 class FieldRateLimiter {
@@ -467,6 +470,203 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       socket.close();
     }
   });
+
+  // ── Pilot chat ────────────────────────────────────────────────────────────
+
+  const pilotGuestLimiter = new FieldRateLimiter(5, 10 * 60_000);
+
+  const pilotChatBody = z.object({
+    messages: z.array(z.object({
+      role: z.enum(['user', 'assistant']),
+      content: z.string().min(1).max(4000),
+    })).min(1).max(50),
+  });
+
+  async function executePilotTool(name: string, args: Record<string, unknown>, userAddress?: string): Promise<unknown> {
+    if (name === 'getMyAgents') {
+      if (!userAddress) return [];
+      return [...store.agents.values()].filter(a => sameAddress(a.owner, userAddress));
+    }
+    if (name === 'listRecentReceipts') {
+      const agentId = args.agentId ? String(args.agentId) : '';
+      const limit = Math.min(Number(args.limit ?? 5), 20);
+      return [...store.receipts.values()].filter(r => !agentId || r.agentId === agentId).slice(0, limit);
+    }
+    if (name === 'getMemorySummary') {
+      const agentId = String(args.agentId ?? '');
+      return [...store.memory.values()].filter(m => m.agentId === agentId).slice(0, 10).map(m => ({ key: m.key, tags: m.tags, updatedAt: m.updatedAt }));
+    }
+    if (name === 'getProtocolStats') {
+      return { totalAgents: store.agents.size, totalReceipts: store.receipts.size, totalServices: store.services.size };
+    }
+    if (name === 'explainConcept') {
+      const concepts: Record<string, string> = {
+        agent: 'An autonomous AI agent with an ERC-4337 smart account, on-chain identity NFT, and configurable spending policy.',
+        receipt: 'A cryptographic proof of an agent action stored in 0G decentralised storage and anchored on-chain.',
+        policy: 'Spending rules: max per transaction, daily cap, active hours, and allowed skill addresses.',
+        skill: 'A sandboxed capability module: chat.completion, web.search, memory.write, chain.query, etc.',
+        memory: 'Encrypted agent state in 0G Storage with semantic search and on-chain version anchors.',
+        '0g': '0G is a decentralised AI operating system providing storage, compute, and data availability layers.',
+      };
+      const key = String(args.name ?? '').toLowerCase();
+      return concepts[key] ?? `No explanation found for "${String(args.name)}". Try: agent, receipt, policy, skill, memory.`;
+    }
+    return null;
+  }
+
+  async function* simulatePilotTokens(msg: string, toolResults: { name: string; result: unknown }[]): AsyncGenerator<string> {
+    const lower = msg.toLowerCase();
+    const agentList = (toolResults.find(t => t.name === 'getMyAgents')?.result ?? []) as Array<{ id?: string; balanceWei?: string }>;
+    const receiptList = (toolResults.find(t => t.name === 'listRecentReceipts')?.result ?? []) as unknown[];
+
+    let response: string;
+    if (lower.includes('deploy') || lower.includes('first agent') || lower.includes('create agent')) {
+      response = `To deploy your first agent, click **New agent** in the sidebar and follow the 5-step wizard:\n\n1. **Identity** — name and description\n2. **Funding** — copy the predicted ERC-4337 address to fund it\n3. **Policy** — set spending limits and active hours\n4. **Skills** — select capabilities (chat.completion, web.search, etc.)\n5. **Deploy** — confirm the on-chain transaction\n\nGas cost is ~0.02 0G on Galileo testnet.`;
+    } else if (lower.includes('receipt')) {
+      const n = receiptList.length;
+      response = `Receipts are cryptographic proofs of every agent action.\n\nEach receipt contains:\n- **Action tag** — a \`bytes4\` keccak hash (e.g. \`pilot.chat\`)\n- **Amount** — 0G tokens spent\n- **Content hash** — stored in 0G decentralised storage\n- **On-chain anchor** — block number + tx hash\n\n${n > 0 ? `You have **${n}** receipt${n > 1 ? 's' : ''} on record.` : 'No receipts yet — they appear when your agents run.'} Navigate to **Receipts** in the sidebar for the full list.`;
+    } else if (lower.includes('stop') || lower.includes('paused') || lower.includes('error')) {
+      response = `Common reasons an agent stops:\n\n1. **Policy limit** — exceeded daily cap or per-tx max\n2. **Zero balance** — smart account ran out of 0G tokens\n3. **Skill error** — unhandled exception in a skill module\n4. **Manual pause** — disabled from the Settings tab\n\nCheck the **Activity** tab on the agent detail page for the last run log and error details.`;
+    } else if (lower.includes('cost') || lower.includes('price') || lower.includes('estimate') || lower.includes('monthly')) {
+      response = `Estimated costs on Galileo testnet:\n\n| Operation | Cost |\n|-----------|------|\n| Deploy agent | ~0.02 0G |\n| chat.completion | ~0.001 0G/call |\n| web.search | ~0.0005 0G/call |\n| memory.write | ~0.0002 0G/write |\n\nA typical agent at 100 tasks/day costs **~3–5 0G/month**. Adjust limits in the Policy settings.`;
+    } else if (lower.includes('memory')) {
+      response = `Agent memory is encrypted state stored in 0G decentralised storage.\n\nEach write:\n- Encrypts the value with AES-256-GCM\n- Uploads to 0G Storage (content-addressed)\n- Anchors the storage root on-chain via ReceiptBook\n\nYou can view, search (semantic), and anchor entries in the **Memory** section.`;
+    } else if (lower.includes('demo run') || lower.includes('show me')) {
+      response = `Here's a typical agent run:\n\n\`\`\`\n[00:00] Receives task via API\n[00:01] Calls web.search("latest 0G price")\n[00:12] Processes with chat.completion\n[00:18] Stores summary via memory.write\n[00:19] Mints receipt (tag: pilot.chat)\n[00:20] ✓ Done — cost: 0.0008 0G\n\`\`\`\n\nEvery step is logged in the **Activity** tab on the agent detail page.`;
+    } else if (agentList.length > 0) {
+      const a = agentList[0]!;
+      const bal = (Number(BigInt(a.balanceWei ?? '0')) / 1e18).toFixed(6);
+      response = `You have **${agentList.length}** agent${agentList.length > 1 ? 's' : ''}. Your first agent (\`${String(a.id ?? '').slice(0, 8)}…\`) has a balance of **${bal} 0G**.\n\nI can help you:\n- Check receipts and activity logs\n- Explain spending policies\n- Guide you through deploying more agents\n\nWhat would you like to know?`;
+    } else {
+      response = `I'm Apogee Pilot — your on-chain agent assistant.\n\nI can help you:\n- **Deploy and manage agents** on the 0G blockchain\n- **Understand receipts** and on-chain proofs\n- **Read agent memory** and activity\n- **Estimate costs** and configure policies\n\nTry: *"Deploy my first agent"* or *"Explain receipts"*.`;
+    }
+
+    for (const token of response.split(/(?<= )/)) {
+      yield token;
+      await new Promise<void>(r => setTimeout(r, 18 + Math.random() * 28));
+    }
+  }
+
+  app.post('/v1/pilot/chat', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: { tags: ['pilot'], body: pilotChatBody },
+  }, async (request, reply) => {
+    let user: AuthUser | null = null;
+    try { user = await requireAuth(request); } catch {}
+
+    if (!user) {
+      const guestIp = request.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() ?? request.ip;
+      if (!pilotGuestLimiter.check(guestIp)) {
+        return problem(reply, 429, 'Guest limit reached', 'Sign in to continue. Guests may send 5 messages per 10 minutes.');
+      }
+    }
+
+    const body = pilotChatBody.parse(request.body);
+    const lastMsg = body.messages[body.messages.length - 1];
+    if (!lastMsg) return problem(reply, 400, 'Bad Request', 'messages array is empty');
+    const userMsg = lastMsg.content;
+    const lower = userMsg.toLowerCase();
+
+    void reply.hijack();
+    const res = reply.raw;
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const emit = (event: string, data: unknown): void => {
+      if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      const toolsToRun: { name: string; args: Record<string, unknown> }[] = user
+        ? [
+            { name: 'getMyAgents', args: {} },
+            ...(lower.includes('receipt') || lower.includes('spent') || lower.includes('cost')
+              ? [{ name: 'listRecentReceipts', args: { limit: 5 } }]
+              : []),
+            ...(lower.includes('memory')
+              ? [{ name: 'getMemorySummary', args: { agentId: '' } }]
+              : []),
+          ]
+        : [{ name: 'getProtocolStats', args: {} }];
+
+      const toolResults: { name: string; result: unknown }[] = [];
+      for (const tool of toolsToRun) {
+        emit('tool_call', { name: tool.name, args: tool.args });
+        const result = await executePilotTool(tool.name, tool.args, user?.address);
+        emit('tool_result', { name: tool.name, result });
+        toolResults.push({ name: tool.name, result });
+      }
+
+      const chatId = newId('pilot');
+      const assistantParts: string[] = [];
+      let tokenCount = 0;
+
+      const llmBase = process.env.PILOT_LLM_BASE_URL;
+      const llmKey = process.env.PILOT_LLM_API_KEY;
+
+      if (llmBase && llmKey) {
+        const toolCtx = toolResults.map(t => `[${t.name}]\n${JSON.stringify(t.result, null, 2)}`).join('\n\n');
+        const sysPrompt = `You are Apogee Pilot, an AI assistant embedded in the Apogee Protocol — an autonomous agent runtime on the 0G blockchain. Be concise, technical, and helpful. You only read data, never mutate state.\n\n${toolCtx ? `Current context:\n${toolCtx}` : ''}`;
+        const llmRes = await fetch(`${llmBase}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llmKey}` },
+          body: JSON.stringify({
+            model: process.env.PILOT_LLM_MODEL ?? 'gpt-4o-mini',
+            messages: [{ role: 'system', content: sysPrompt }, ...body.messages],
+            stream: true,
+            max_tokens: 800,
+          }),
+        });
+        if (llmRes.ok && llmRes.body) {
+          const reader = llmRes.body.getReader();
+          const dec = new TextDecoder();
+          let buf = '';
+          streamLoop: while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop() ?? '';
+            for (const line of lines) {
+              if (line === 'data: [DONE]') break streamLoop;
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const c = JSON.parse(line.slice(6)) as { choices?: [{ delta?: { content?: string } }] };
+                const tok = c.choices?.[0]?.delta?.content ?? '';
+                if (tok) { emit('token', tok); assistantParts.push(tok); tokenCount++; }
+              } catch { /* malformed chunk */ }
+            }
+          }
+        }
+      } else {
+        for await (const tok of simulatePilotTokens(userMsg, toolResults)) {
+          emit('token', tok);
+          assistantParts.push(tok);
+          tokenCount++;
+        }
+      }
+
+      emit('done', { chatId, tokensUsed: tokenCount });
+
+      if (user) {
+        const prev = store.pilotConversations.get(user.address) ?? { id: chatId, userAddress: user.address, messages: [] as PilotMsg[], createdAt: nowIso() };
+        prev.messages.push(
+          { role: 'user', content: userMsg, createdAt: nowIso() },
+          { role: 'assistant', content: assistantParts.join(''), createdAt: nowIso() },
+        );
+        store.pilotConversations.set(user.address, prev);
+      }
+    } catch (err) {
+      emit('error', { message: err instanceof Error ? err.message : 'Pilot error' });
+    } finally {
+      if (!res.writableEnded) res.end();
+    }
+  });
+
+  // ── End pilot ──────────────────────────────────────────────────────────────
 
   app.addHook('onClose', async () => {
     for (const clients of streamClients.values()) for (const client of clients) client.close();

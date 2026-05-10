@@ -1,7 +1,14 @@
 import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
+import dynamic from 'next/dynamic';
+import { cookies } from 'next/headers';
 import './globals.css';
+
+const GuestPilot = dynamic(
+  () => import('@/components/apogee-pilot').then(m => m.ApogeeePilot),
+  { ssr: false },
+);
 
 export const metadata: Metadata = {
   title: {
@@ -32,14 +39,21 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = await cookies();
+  const isAuthenticated = !!cookieStore.get('apogee-jwt')?.value;
+
   return (
     <html
       lang="en"
       className={`${GeistSans.variable} ${GeistMono.variable}`}
       suppressHydrationWarning
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Guest Pilot — only on non-app pages; app layout mounts the auth Pilot */}
+        {!isAuthenticated && <GuestPilot isGuest />}
+      </body>
     </html>
   );
 }

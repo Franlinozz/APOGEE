@@ -1,0 +1,91 @@
+/* Breathing animation for the launcher button */
+@keyframes breathe {
+  0%, 100% { opacity: 0.85; box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 99 102 241) / 0.2); }
+  50%       { opacity: 1;    box-shadow: 0 0 0 8px rgba(var(--accent-rgb, 99 102 241) / 0); }
+}
+
+/* Orbit node spinning */
+@keyframes orbitSpin {
+  from { transform: rotate(0deg) translateY(-18px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateY(-18px) rotate(-360deg); }
+}
+
+/* Thinking dots */
+@keyframes dotPulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.25; }
+  40%           { transform: scale(1);   opacity: 1; }
+}
+
+/* Panel slide-up enter */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Panel slide-down exit */
+@keyframes slideDown {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(12px); }
+}
+
+.launcher {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+.launcher:hover,
+.launcher:focus-visible {
+  animation-play-state: paused;
+}
+
+.launcherOrbit {
+  transform-origin: 14px 14px;
+  animation: orbitSpin 3s linear infinite;
+}
+
+.orbitNode {
+  transform-origin: center center;
+  animation: orbitSpin var(--orbit-duration, 3s) linear infinite;
+}
+
+.panel {
+  animation: slideUp 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.panelExit {
+  animation: slideDown 280ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.thinkingDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-accent) 80%, transparent);
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+
+/* Caret blink for streaming */
+.streamCaret::after {
+  content: '▍';
+  display: inline-block;
+  color: var(--color-accent);
+  animation: caretBlink 0.8s step-end infinite;
+  margin-left: 1px;
+  font-size: 0.75em;
+  vertical-align: baseline;
+}
+
+@keyframes caretBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher       { animation: none; opacity: 1; }
+  .launcherOrbit  { animation: none; }
+  .orbitNode      { animation: none; }
+  .panel          { animation: none; }
+  .panelExit      { animation: none; }
+  .thinkingDot    { animation: none; opacity: 0.6; }
+  .streamCaret::after { animation: none; }
+}
