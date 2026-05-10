@@ -20,21 +20,30 @@ export function Launcher({ isOpen, onToggle, unreadCount }: LauncherProps) {
         ${isOpen ? 'scale-105' : styles.launcher}`}
       style={{ background: 'linear-gradient(145deg, #0c0e22 0%, #12153a 100%)' }}
     >
-      <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+      {/*
+        --color-accent is stored as raw RGB channels ("124 95 241"), not a full color.
+        SVG presentation attributes don't process rgb(var(...)), so we set `color` on
+        the SVG element and reference it via `currentColor` inside every shape.
+      */}
+      <svg
+        width="30"
+        height="30"
+        viewBox="0 0 30 30"
+        fill="none"
+        aria-hidden="true"
+        style={{ color: 'rgb(var(--color-accent, 124 95 241))' }}
+      >
         {/* outer ring */}
-        <circle cx="15" cy="15" r="13.5" stroke="var(--color-accent, #6366f1)" strokeOpacity="0.45" strokeWidth="1" />
+        <circle cx="15" cy="15" r="13.5" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1" />
         {/* dashed orbit track */}
-        <circle cx="15" cy="15" r="8.5" stroke="var(--color-accent, #6366f1)" strokeOpacity="0.55" strokeWidth="0.8" strokeDasharray="3 2" />
+        <circle cx="15" cy="15" r="8.5" stroke="currentColor" strokeOpacity="0.65" strokeWidth="0.9" strokeDasharray="3 2" />
         {/* soft core glow */}
-        <circle cx="15" cy="15" r="5" fill="var(--color-accent, #6366f1)" fillOpacity="0.12" />
+        <circle cx="15" cy="15" r="5" fill="currentColor" fillOpacity="0.18" />
         {/* core dot */}
-        <circle cx="15" cy="15" r="3" fill="var(--color-accent, #6366f1)" />
-        {/* orbiting node — simple rotate around viewBox center (15,15) */}
-        <g
-          className={styles.launcherOrbit}
-          style={{ transformOrigin: '15px 15px' }}
-        >
-          <circle cx="15" cy="6.5" r="2.4" fill="var(--color-accent, #6366f1)" />
+        <circle cx="15" cy="15" r="3.2" fill="currentColor" />
+        {/* orbiting node */}
+        <g className={styles.launcherOrbit} style={{ transformOrigin: '15px 15px' }}>
+          <circle cx="15" cy="6.5" r="2.5" fill="currentColor" />
         </g>
       </svg>
 

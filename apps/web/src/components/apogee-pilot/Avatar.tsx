@@ -14,20 +14,21 @@ export function Avatar({ isStreaming, size = 40 }: AvatarProps) {
   const coreR = r * 0.2;
 
   return (
+    // --color-accent stores raw RGB channels; set `color` here so children use currentColor
     <svg
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
       fill="none"
       aria-hidden="true"
-      style={{ flexShrink: 0 }}
+      style={{ flexShrink: 0, color: 'rgb(var(--color-accent, 124 95 241))' }}
     >
       {/* Subtle glow ring */}
-      <circle cx={r} cy={r} r={r - 1} stroke="var(--color-accent)" strokeOpacity="0.12" strokeWidth="1.5" />
+      <circle cx={r} cy={r} r={r - 1} stroke="currentColor" strokeOpacity="0.20" strokeWidth="1.5" />
       {/* Dashed orbit path */}
-      <circle cx={r} cy={r} r={orbitR} stroke="var(--color-accent)" strokeOpacity="0.3" strokeWidth="0.75" strokeDasharray="3 2" />
+      <circle cx={r} cy={r} r={orbitR} stroke="currentColor" strokeOpacity="0.45" strokeWidth="0.75" strokeDasharray="3 2" />
       {/* Core dot */}
-      <circle cx={r} cy={r} r={coreR} fill="var(--color-accent)" />
+      <circle cx={r} cy={r} r={coreR} fill="currentColor" />
       {/* Orbiting node — speed controlled via CSS variable */}
       <g
         className={styles.orbitNode}
@@ -35,7 +36,7 @@ export function Avatar({ isStreaming, size = 40 }: AvatarProps) {
           { '--orbit-duration': isStreaming ? '1.1s' : '3s', transformOrigin: `${r}px ${r}px` } as React.CSSProperties
         }
       >
-        <circle cx={r} cy={r - orbitR} r={nodeR} fill="var(--color-accent)" />
+        <circle cx={r} cy={r - orbitR} r={nodeR} fill="currentColor" />
       </g>
     </svg>
   );

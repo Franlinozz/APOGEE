@@ -112,19 +112,22 @@ export function Panel({
           fixed z-50 flex flex-col overflow-hidden
           border
           inset-0
-          sm:inset-auto sm:bottom-[88px] sm:right-6 sm:w-[390px] sm:h-[560px] sm:rounded-2xl
+          sm:inset-auto sm:bottom-[88px] sm:right-6 sm:w-[380px] sm:rounded-2xl
           ${isExiting ? styles.panelExit : styles.panel}
         `}
         style={{
-          background: 'rgba(8, 10, 22, 0.92)',
-          backdropFilter: 'blur(28px) saturate(140%)',
-          WebkitBackdropFilter: 'blur(28px) saturate(140%)',
-          borderColor: 'rgba(255,255,255,0.07)',
+          // Glass: low enough opacity that backdrop-blur shows through
+          background: 'rgba(13, 14, 26, 0.72)',
+          backdropFilter: 'blur(24px) saturate(150%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+          borderColor: 'rgba(255,255,255,0.08)',
           boxShadow: [
-            '0 32px 80px -8px rgba(0,0,0,0.80)',
-            '0 0 0 1px rgba(99,102,241,0.10)',
-            'inset 0 1px 0 rgba(255,255,255,0.05)',
+            '0 24px 64px -8px rgba(0,0,0,0.75)',
+            '0 0 0 1px rgba(124,95,241,0.12)',
+            'inset 0 1px 0 rgba(255,255,255,0.06)',
           ].join(','),
+          // Keep panel from reaching the navbar; clamps height on short viewports
+          height: 'min(490px, calc(100vh - 180px))',
         }}
       >
         {/* Header */}
