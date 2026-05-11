@@ -270,8 +270,11 @@ export async function startRuntime(): Promise<{ worker: Worker<AgentRunJob>; que
   worker.on('failed', (job, error) => logger.error({ jobId: job?.id, error }, 'agent run failed'));
 
   const heartbeatWorker = createHeartbeatWorker(connection, {
-    skillRunner, receiptMinter, chainClient: clients.chainClient,
-    storageClient: clients.storageClient, logger,
+    skillRunner, receiptMinter,
+    chainClient: clients.chainClient,
+    storageClient: clients.storageClient,
+    computeClient: clients.computeClient,
+    logger,
   });
   heartbeatWorker.on('failed', (job, error) => logger.error({ jobId: job?.id, error }, 'heartbeat failed'));
 

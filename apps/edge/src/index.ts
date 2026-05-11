@@ -391,6 +391,20 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return { ok: true };
   });
 
+  // Internal endpoint for runtime to push minted heartbeat receipts into the edge store
+  app.post('/internal/receipt', {
+    config: { rateLimit: { max: 600, timeWindow: '1 minute' } },
+    schema: { hide: true },
+  }, async (request, reply) => {
+    const secret = request.headers['x-internal-secret'];
+    if (secret !== process.env.INTERNAL_SECRET) return problem(reply, 401, 'Unauthorized', 'Invalid internal secret.');
+    const row = request.body as ReceiptIndexRow;
+    if (!row?.receiptId) return problem(reply, 400, 'Bad request', 'Missing receiptId');
+    store.receipts.set(row.receiptId, row);
+    broadcast(row.agentId, { event: 'receipt', payload: json(row) });
+    return { ok: true };
+  });
+
   app.post('/v1/agents', { schema: { tags: ['agents'], body: agentCreateSchema, response: { 200: agentSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
     const body = agentCreateSchema.parse(request.body);
