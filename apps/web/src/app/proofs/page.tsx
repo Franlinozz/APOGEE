@@ -37,7 +37,7 @@ type ProofsApiResponse = {
 
 async function fetchProofsData(): Promise<ProofsApiResponse | null> {
   try {
-    const res = await fetch(`${EDGE_URL}/v1/proofs`, { next: { revalidate: 30 } });
+    const res = await fetch(`${EDGE_URL}/v1/proofs?chain=aristotle`, { next: { revalidate: 30 } });
     if (!res.ok) return null;
     return await res.json() as ProofsApiResponse;
   } catch {

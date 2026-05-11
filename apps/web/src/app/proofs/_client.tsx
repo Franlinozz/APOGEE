@@ -58,7 +58,7 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
   const fetch_ = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${edgeUrl}/v1/proofs`);
+      const res = await fetch(`${edgeUrl}/v1/proofs?chain=aristotle`);
       if (res.ok) {
         const json = await res.json() as ProofsData;
         setData(json);
