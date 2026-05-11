@@ -183,17 +183,18 @@ export class ReceiptMinter {
     };
 
     await this.index.insert(row);
-    if (row.status === 'pending') {
-      this.eventBus.publish('receipt', row);
-      return { receiptId, storageRoot, status: 'pending' };
-    }
 
-    const receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(storageRoot), valueWei);
+    // When 0G storage is unavailable the payload was written to a local fallback file.
+    // We still anchor on-chain immediately using payloadHash as the bytes32 storageRoot so
+    // the receipt is verifiable; the reconciler will re-upload and update storageRoot later.
+    const effectiveStorageRoot = storageRoot.startsWith('local://') ? payloadHash : storageRoot;
+
+    const receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei);
     const txHash = receipt.hash;
-    await this.index.update(receiptId, { txHash, status: 'minted' });
-    const minted = { ...row, txHash, status: 'minted' as const };
+    await this.index.update(receiptId, { txHash, storageRoot: effectiveStorageRoot, status: 'minted' });
+    const minted = { ...row, storageRoot: effectiveStorageRoot, txHash, status: 'minted' as const };
     this.eventBus.publish('receipt', minted);
-    return { receiptId, txHash, storageRoot, status: 'minted' };
+    return { receiptId, txHash, storageRoot: effectiveStorageRoot, status: 'minted' };
   }
 
   async reconcilePending(): Promise<number> {
