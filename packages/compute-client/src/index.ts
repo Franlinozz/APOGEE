@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import {
-  createZGComputeNetworkBroker,
-  type ZGComputeNetworkBroker,
-} from '@0glabs/0g-serving-broker';
+import { createRequire } from 'node:module';
+// import type only — the runtime value is loaded lazily via createRequire to
+// avoid the broken ESM chunk in @0gfoundation/0g-compute-ts-sdk@0.8.2 which
+// re-exports named symbols from a CJS bundle (index-7abe02cb.js).
+import type { ZGComputeNetworkBroker } from '@0glabs/0g-serving-broker';
 import { JsonRpcProvider, Wallet, formatEther } from 'ethers';
 import pino, { type Logger } from 'pino';
 import { z } from 'zod';
@@ -324,8 +325,15 @@ export class ComputeClient {
   }
 
   private async getBroker(): Promise<ZGComputeNetworkBroker> {
-    const sdkSigner = this.signer as unknown as Parameters<typeof createZGComputeNetworkBroker>[0];
-    this.broker ??= await createZGComputeNetworkBroker(sdkSigner);
+    if (!this.broker) {
+      // Force CJS resolution so Node.js bypasses the broken ESM bundle in
+      // @0gfoundation/0g-compute-ts-sdk which re-exports from a CJS chunk.
+      const _require = createRequire(import.meta.url);
+      const sdk = _require('@0glabs/0g-serving-broker') as {
+        createZGComputeNetworkBroker(signer: unknown): Promise<ZGComputeNetworkBroker>;
+      };
+      this.broker = await sdk.createZGComputeNetworkBroker(this.signer as unknown);
+    }
     return this.broker;
   }
 
