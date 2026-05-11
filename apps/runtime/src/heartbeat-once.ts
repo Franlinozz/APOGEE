@@ -48,19 +48,20 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const rpcUrl = process.env['ZERO_G_GALILEO_RPC_URL'] ?? 'https://evmrpc.0g.ai';
+  const chainRpcUrl = process.env['ZERO_G_GALILEO_RPC_URL'] ?? 'https://evmrpc.0g.ai';
+  const storageRpcUrl = process.env['ZERO_G_STORAGE_RPC_URL'] ?? 'https://evmrpc-testnet.0g.ai';
   const chainId = Number(process.env['ZERO_G_GALILEO_CHAIN_ID'] ?? 16661);
   const signerKey = requiredEnv('EDGE_SERVICE_PRIVATE_KEY');
 
-  log.info({ rpcUrl, chainId }, 'Connecting to chain');
+  log.info({ chainRpcUrl, storageRpcUrl, chainId }, 'Connecting to chain');
 
-  const chainClient = new ChainClient({ rpcUrl, chainId, signerKey });
+  const chainClient = new ChainClient({ rpcUrl: chainRpcUrl, chainId, signerKey });
   const storageClient = new StorageClient({
-    rpcUrl,
+    rpcUrl: storageRpcUrl,
     indexerUrl: process.env['ZERO_G_STORAGE_INDEXER_URL'] ?? 'https://indexer-storage-testnet-turbo.0g.ai',
     signerKey,
   });
-  const computeClient = new ComputeClient({ rpcUrl, signerKey });
+  const computeClient = new ComputeClient({ rpcUrl: chainRpcUrl, signerKey });
 
   const registry = registerPremiumSkills(registerCoreSkills(new SkillRegistry()));
   const skillRunner = new SkillRunner(registry, log);

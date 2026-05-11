@@ -287,12 +287,13 @@ export async function startRuntime(): Promise<{ worker: Worker<AgentRunJob>; que
 }
 
 function createClients(): RuntimeClients {
-  const rpcUrl = process.env.ZERO_G_GALILEO_RPC_URL ?? 'https://evmrpc-testnet.0g.ai';
+  const chainRpcUrl = process.env.ZERO_G_GALILEO_RPC_URL ?? 'https://evmrpc.0g.ai';
+  const storageRpcUrl = process.env.ZERO_G_STORAGE_RPC_URL ?? 'https://evmrpc-testnet.0g.ai';
   const signerKey = requiredEnv('EDGE_SERVICE_PRIVATE_KEY');
   return {
-    chainClient: new ChainClient({ rpcUrl, chainId: Number(process.env.ZERO_G_GALILEO_CHAIN_ID ?? 16602), signerKey }),
-    storageClient: new StorageClient({ rpcUrl, indexerUrl: process.env.ZERO_G_STORAGE_INDEXER_URL ?? 'https://indexer-storage-testnet-turbo.0g.ai', signerKey }),
-    computeClient: new ComputeClient({ rpcUrl, signerKey }),
+    chainClient: new ChainClient({ rpcUrl: chainRpcUrl, chainId: Number(process.env.ZERO_G_GALILEO_CHAIN_ID ?? 16661), signerKey }),
+    storageClient: new StorageClient({ rpcUrl: storageRpcUrl, indexerUrl: process.env.ZERO_G_STORAGE_INDEXER_URL ?? 'https://indexer-storage-testnet-turbo.0g.ai', signerKey }),
+    computeClient: new ComputeClient({ rpcUrl: chainRpcUrl, signerKey }),
   };
 }
 

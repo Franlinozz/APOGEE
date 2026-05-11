@@ -235,7 +235,7 @@ function StorageProofsSection({ samples }: { samples: StorageSample[] }) {
   if (samples.length === 0) {
     return (
       <p className="text-sm text-white/40 text-center py-6">
-        No storage proofs yet — will populate within 10 min of first heartbeat.
+        No verified storage proofs yet — receipts are anchored on-chain via payload hash until 0G Storage uploads succeed.
       </p>
     );
   }

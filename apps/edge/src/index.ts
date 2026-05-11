@@ -356,8 +356,13 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       };
     });
 
-    // 5 random receipts for storage proof sample
-    const shuffled = [...last50].sort(() => Math.random() - 0.5);
+    // 5 random receipts that have a real 0G storage root (not a local fallback or bare payloadHash)
+    const withRealStorage = allReceipts.filter(r =>
+      r.storageRoot &&
+      !r.storageRoot.startsWith('local://') &&
+      r.storageRoot !== r.payloadHash,
+    );
+    const shuffled = [...withRealStorage].sort(() => Math.random() - 0.5);
     const storageProofSample = shuffled.slice(0, 5).map(r => ({
       receiptId: r.receiptId,
       actionTag: r.actionTag,
