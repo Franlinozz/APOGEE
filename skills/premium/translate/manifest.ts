@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { SkillManifest } from '@apogee/skills-runtime';
 
 const manifest = {
-  id: 'translate',
+  id: 'translate.text',
   version: '1.0.0',
   author: { name: 'APOGEE Deployer', agentId: 'deployer-inft-v1' },
   description: 'Translate text to/from 50 languages with a quality score via 0G chat.',
