@@ -5,9 +5,12 @@
  * Reads pending receipts from the ReceiptMinter's fallback directory,
  * re-submits each one, and emits a Pino warning when any receipt has
  * been pending for more than 10 minutes.
+ *
+ * File format written by ReceiptMinter.uploadWithFallback:
+ *   { receiptId, createdAt?, action: { agentId, actionTag, payload, valueWei? } }
  */
 
-import { readdir, readFile, unlink } from 'node:fs/promises';
+import { rename, readdir, readFile, unlink, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import pino, { type Logger } from 'pino';
 import { Worker, type Queue, type Job } from 'bullmq';
@@ -48,34 +51,62 @@ export function createReconcilerWorker(
         const filePath = join(deps.fallbackDir, file);
         try {
           const raw = await readFile(filePath, 'utf8');
-          const row = JSON.parse(raw) as {
-            receiptId: string;
-            agentId: string;
-            actionTag: string;
-            payloadHash: string;
-            storageRoot: string;
-            valueWei: string;
-            createdAt: string;
-          };
 
-          const ageMs = Date.now() - new Date(row.createdAt).getTime();
-          if (ageMs > PENDING_WARN_MS) {
-            log.warn({ receiptId: row.receiptId, ageMs }, 'Receipt pending > 10 min — retrying now');
+          // File format: { receiptId, createdAt?, action: { agentId, actionTag, payload, valueWei? } }
+          let data: { receiptId: string; createdAt?: string; action: { agentId: string; actionTag: string; payload: unknown; valueWei?: string } };
+          try {
+            data = JSON.parse(raw) as typeof data;
+          } catch (parseErr) {
+            // Unparseable (invalid JSON from old stableJson bug) — quarantine so it stops looping.
+            const corrupt = filePath.replace(/\.json$/, '.corrupt.json');
+            await rename(filePath, corrupt).catch(() => undefined);
+            log.warn({ file, parseErr: parseErr instanceof Error ? parseErr.message : String(parseErr) },
+              'Reconciler: corrupt fallback file (invalid JSON) — quarantined to .corrupt.json; manual review needed');
+            continue;
           }
 
-          // Re-mint: actionTag is already stored as bytes4 hex; payload from stored hash
+          const { receiptId, action } = data;
+
+          // Validate required fields before attempting mint.
+          if (!action?.agentId || !action?.actionTag) {
+            const corrupt = filePath.replace(/\.json$/, '.corrupt.json');
+            await rename(filePath, corrupt).catch(() => undefined);
+            log.warn({ file, receiptId, agentId: action?.agentId, actionTag: action?.actionTag },
+              'Reconciler: fallback file missing agentId or actionTag — quarantined');
+            continue;
+          }
+
+          // Age check: warn if pending too long.
+          let createdAt = data.createdAt;
+          if (!createdAt) {
+            // Fall back to file mtime if createdAt not in file (old format).
+            const s = await stat(filePath).catch(() => null);
+            createdAt = s?.mtime.toISOString();
+          }
+          const ageMs = createdAt ? Date.now() - new Date(createdAt).getTime() : 0;
+          if (ageMs > PENDING_WARN_MS) {
+            log.warn({ receiptId, agentId: action.agentId, actionTag: action.actionTag, ageMinutes: Math.floor(ageMs / 60_000) },
+              'Reconciler: receipt pending > 10 min — retrying now');
+          }
+
           await deps.receiptMinter.mint({
-            agentId: row.agentId,
-            actionTag: row.actionTag,
-            payload: { recovered: true, payloadHash: row.payloadHash, storageRoot: row.storageRoot },
-            valueWei: BigInt(row.valueWei),
-            clientReceiptId: row.receiptId,
+            agentId: action.agentId,
+            actionTag: action.actionTag,
+            payload: action.payload,
+            valueWei: action.valueWei !== undefined ? BigInt(action.valueWei) : 0n,
+            clientReceiptId: receiptId,
           });
 
-          await unlink(filePath);
-          log.info({ receiptId: row.receiptId }, 'Reconciler: receipt resubmitted and cleared');
+          // mint() with the billing fix will delete the fallback file after chain success.
+          // Attempt unlink anyway as belt-and-suspenders (idempotent).
+          await unlink(filePath).catch(() => undefined);
+          log.info({ receiptId, agentId: action.agentId, actionTag: action.actionTag },
+            'Reconciler: receipt resubmitted and cleared');
         } catch (err) {
-          log.error({ file, err }, 'Reconciler: failed to resubmit receipt — will retry next cycle');
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const errCode = (err as { code?: string }).code ?? 'UNKNOWN';
+          log.error({ file, errCode, errMsg },
+            'Reconciler: failed to resubmit receipt — will retry next cycle');
         }
       }
     },

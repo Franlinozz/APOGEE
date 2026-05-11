@@ -75,12 +75,18 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
     return () => clearInterval(id);
   }, [fetch_]);
 
-  const humanAction = (tag: string): string => {
-    const map: Record<string, string> = {
-      '0x00000000': 'genesis',
-      '0x12345678': 'test.action',
-    };
-    return map[tag] ?? `${tag.slice(0, 10)}…`;
+  // actionTag is stored as the full string (e.g. "agent.heartbeat.analyze").
+  // Show only the last dot-segment so the table stays compact.
+  const formatTag = (tag: string): string => {
+    if (!tag) return '—';
+    if (tag.startsWith('0x')) return tag.slice(0, 10) + '…';
+    const parts = tag.split('.');
+    return parts[parts.length - 1] ?? tag;
+  };
+
+  const formatValue = (wei: string): string => {
+    try { return (Number(BigInt(wei || '0')) / 1e18).toFixed(6) + ' 0G'; }
+    catch { return '— 0G'; }
   };
 
   return (
@@ -125,15 +131,15 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
                 <th className="px-4 py-3 font-medium">Value</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Time</th>
-                <th className="px-4 py-3 font-medium">Tx</th>
+                <th className="px-4 py-3 font-medium">Mint tx (Aristotle)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
               {data.receipts.map(r => (
                 <tr key={r.receiptId} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-4 py-2.5 font-mono text-violet-300">{humanAction(r.actionTag)}</td>
-                  <td className="px-4 py-2.5 text-white/60 font-mono">{r.agentId.slice(0, 10)}…</td>
-                  <td className="px-4 py-2.5 text-white/70">{(Number(BigInt(r.valueWei)) / 1e18).toFixed(6)} 0G</td>
+                  <td className="px-4 py-2.5 font-mono text-violet-300" title={r.actionTag}>{formatTag(r.actionTag)}</td>
+                  <td className="px-4 py-2.5 text-white/60 capitalize">{r.agentId}</td>
+                  <td className="px-4 py-2.5 text-white/70">{formatValue(r.valueWei)}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
                       {r.status}
@@ -143,10 +149,11 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
                   <td className="px-4 py-2.5">
                     {r.txHash ? (
                       <a
-                        href={`https://chainscan-galileo.0g.ai/tx/${r.txHash}`}
+                        href={`https://chainscan.0g.ai/tx/${r.txHash}`}
                         target="_blank"
                         rel="noreferrer"
                         className="font-mono text-violet-400 hover:text-violet-300"
+                        title={r.txHash}
                       >
                         {r.txHash.slice(0, 10)}…
                       </a>

@@ -110,10 +110,15 @@ export class LocalReceiptEventBus implements ReceiptEventBus {
 }
 
 const stableJson = (value: unknown): string => {
+  if (value === undefined) return 'null';
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`;
+  const entries = Object.keys(record)
+    .sort()
+    .filter((key) => record[key] !== undefined)
+    .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`);
+  return `{${entries.join(',')}}`;
 };
 
 const asBytes32 = (root: string): string => {
@@ -192,6 +197,12 @@ export class ReceiptMinter {
     const receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei);
     const txHash = receipt.hash;
     await this.index.update(receiptId, { txHash, storageRoot: effectiveStorageRoot, status: 'minted' });
+
+    // Clean up the local fallback file now that the chain tx landed.
+    if (storageRoot.startsWith('local://')) {
+      await unlink(storageRoot.slice('local://'.length)).catch(() => undefined);
+    }
+
     const minted = { ...row, storageRoot: effectiveStorageRoot, txHash, status: 'minted' as const };
     this.eventBus.publish('receipt', minted);
     return { receiptId, txHash, storageRoot: effectiveStorageRoot, status: 'minted' };
@@ -229,7 +240,7 @@ export class ReceiptMinter {
     }
     await mkdir(this.fallbackDir, { recursive: true });
     const path = join(this.fallbackDir, `${receiptId}.json`);
-    await writeFile(path, stableJson({ receiptId, action: { ...action, valueWei: action.valueWei?.toString() } }));
+    await writeFile(path, stableJson({ receiptId, createdAt: new Date().toISOString(), action: { ...action, valueWei: action.valueWei?.toString() } }));
     return `local://${path}`;
   }
 

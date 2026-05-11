@@ -244,15 +244,24 @@ function StorageProofsSection({ samples }: { samples: StorageSample[] }) {
       {samples.map(s => (
         <div key={s.receiptId} className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-4">
           <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1 min-w-0">
-              <p className="font-mono text-xs text-violet-300 truncate">{s.receiptId}</p>
-              <p className="text-xs text-white/40">
-                Action: <span className="text-white/60">{s.actionTag}</span>
-              </p>
+            <div className="space-y-1.5 min-w-0 text-xs">
+              <div className="flex gap-2">
+                <span className="text-white/30 shrink-0">Receipt ID</span>
+                <span className="font-mono text-violet-300 truncate" title={s.receiptId}>{s.receiptId.slice(0, 24)}…</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-white/30 shrink-0">Action</span>
+                <span className="text-white/60">{s.actionTag}</span>
+              </div>
               {s.storageRoot && (
-                <p className="text-xs text-white/40 break-all">
-                  Storage root: <span className="font-mono text-white/60">{s.storageRoot.slice(0, 28)}…</span>
-                </p>
+                <div className="flex gap-2">
+                  <span className="text-white/30 shrink-0">
+                    {s.storageRoot.startsWith('0x') && s.storageRoot.length === 66
+                      ? 'Payload hash'
+                      : 'Storage root'}
+                  </span>
+                  <span className="font-mono text-white/50 truncate" title={s.storageRoot}>{s.storageRoot.slice(0, 26)}…</span>
+                </div>
               )}
               <p className="text-[10px] text-white/25">{new Date(s.createdAt).toLocaleString()}</p>
             </div>
