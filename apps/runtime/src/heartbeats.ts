@@ -12,7 +12,7 @@
 
 import { createHash } from 'node:crypto';
 import pino, { type Logger } from 'pino';
-import type { Worker, Queue, Job } from 'bullmq';
+import { Worker, type Queue, type Job } from 'bullmq';
 import type { Redis } from 'ioredis';
 import type { SkillRunner, SkillRunnerContext } from '@apogee/skills-runtime';
 import type { ReceiptMinter } from '@apogee/billing';
@@ -219,9 +219,6 @@ export function createHeartbeatWorker(
   deps: HeartbeatWorkerDeps,
 ): Worker<HeartbeatJobData> {
   const log = deps.logger ?? pino({ name: 'apogee-heartbeats' });
-
-  // Lazy import to avoid circular dep; bullmq Worker is instantiated at runtime
-  const { Worker } = require('bullmq') as typeof import('bullmq');
 
   return new Worker<HeartbeatJobData>(
     'heartbeats',
