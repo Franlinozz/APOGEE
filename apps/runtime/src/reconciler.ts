@@ -10,7 +10,7 @@
 import { readdir, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import pino, { type Logger } from 'pino';
-import type { Worker, Queue, Job } from 'bullmq';
+import { Worker, type Queue, type Job } from 'bullmq';
 import type { Redis } from 'ioredis';
 import type { ReceiptMinter } from '@apogee/billing';
 
@@ -28,8 +28,6 @@ export function createReconcilerWorker(
   deps: ReconcilerDeps,
 ): Worker {
   const log = deps.logger ?? pino({ name: 'apogee-reconciler' });
-
-  const { Worker } = require('bullmq') as typeof import('bullmq');
 
   return new Worker(
     'reconcile-pending-receipts',
