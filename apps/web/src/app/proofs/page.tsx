@@ -24,6 +24,7 @@ type StorageProofRow = {
   actionTag: string;
   payloadHash: string;
   storageRoot: string;
+  storageTxHash?: string | undefined;
   txHash?: string | undefined;
   status: string;
   createdAt: string;
@@ -460,6 +461,7 @@ function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
                 <th className="px-4 py-3 font-medium">Action</th>
                 <th className="px-4 py-3 font-medium">Storage root (0G)</th>
                 <th className="px-4 py-3 font-medium">Payload hash</th>
+                <th className="px-4 py-3 font-medium">Storage tx (0G)</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Time</th>
                 <th className="px-4 py-3 font-medium">Mint tx (Aristotle)</th>
@@ -475,6 +477,19 @@ function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
                   </td>
                   <td className="px-4 py-2.5 font-mono text-white/35 text-[10px]" title={r.payloadHash}>
                     {r.payloadHash ? r.payloadHash.slice(0, 14) + '…' : '—'}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {r.storageTxHash ? (
+                      <a
+                        href={`https://chainscan.0g.ai/tx/${r.storageTxHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono text-emerald-400 hover:text-emerald-300 text-[10px]"
+                        title={r.storageTxHash}
+                      >
+                        {r.storageTxHash.slice(0, 10)}…
+                      </a>
+                    ) : <span className="text-white/20">—</span>}
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>

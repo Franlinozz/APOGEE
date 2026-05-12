@@ -149,7 +149,20 @@ export class StorageClient {
       const rootHash: string = treeRoot;
       const sdkSigner = this.signer as unknown as Parameters<Indexer['upload']>[2];
       const [upload, uploadErr] = await this.indexer.upload(file, this.rpcUrl, sdkSigner);
-      if (uploadErr) throw uploadErr;
+      if (uploadErr) {
+        const e = uploadErr as Error & { code?: unknown; reason?: unknown };
+        this.logger.error({
+          rpcUrl: this.rpcUrl,
+          sizeBytes: payload.byteLength,
+          localRootHash: rootHash,
+          errorName: e?.name,
+          errorMessage: e?.message ?? String(uploadErr),
+          errorCode: e?.code,
+          errorReason: e?.reason,
+          errorStack: e?.stack?.split('\n').slice(0, 5).join(' | '),
+        }, '0G indexer.upload returned error');
+        throw uploadErr;
+      }
       // upload is either single { txHash, rootHash, txSeq } or multi-fragment { txHashes[], rootHashes[], txSeqs[] }
       const singleRoot: string = ('rootHash' in upload && upload.rootHash) ? upload.rootHash : rootHash;
       const singleTx: string   = ('txHash'   in upload) ? upload.txHash : '';

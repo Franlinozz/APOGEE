@@ -20,6 +20,7 @@ export interface ReceiptIndexRow {
   actionTag: string;
   payloadHash: string;
   storageRoot: string;
+  storageTxHash?: string | undefined;
   valueWei: string;
   txHash?: string | undefined;
   status: 'pending' | 'minted';
@@ -60,8 +61,15 @@ export interface MintReceiptResult {
   receiptId: string;
   txHash?: string | undefined;
   storageRoot: string;
+  storageTxHash?: string | undefined;
   payloadHash: string;
   status: 'pending' | 'minted';
+}
+
+interface StorageUploadResult {
+  rootHash: string;
+  txHash: string;
+  isLocalFallback: boolean;
 }
 
 interface ReceiptBookContract {
@@ -140,6 +148,9 @@ export class ReceiptMinter {
   private readonly eventBus: ReceiptEventBus;
   private readonly fallbackDir: string;
   private readonly logger: Logger;
+  // Serialises all mint() calls on this instance so the shared signer
+  // never sends overlapping storage-upload or chain transactions.
+  private mintTail: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly options: ReceiptMinterOptions) {
     this.index = options.index ?? new InMemoryReceiptIndex();
@@ -161,19 +172,47 @@ export class ReceiptMinter {
 
   async mint(action: MintReceiptAction): Promise<MintReceiptResult> {
     const parsed = mintSchema.parse(action);
+
+    // Idempotency check (read-only, no mutex needed).
     if (parsed.clientReceiptId) {
       const existing = await this.index.findByClientReceiptId(parsed.clientReceiptId);
-      if (existing) return { receiptId: existing.receiptId, txHash: existing.txHash, storageRoot: existing.storageRoot, payloadHash: existing.payloadHash, status: existing.status };
+      if (existing) return {
+        receiptId: existing.receiptId,
+        txHash: existing.txHash,
+        storageRoot: existing.storageRoot,
+        storageTxHash: existing.storageTxHash,
+        payloadHash: existing.payloadHash,
+        status: existing.status,
+      };
     }
 
+    // Serialise: wait for the previous mint() to finish before starting this one.
+    // This prevents nonce conflicts when the shared signer sends both a 0G storage
+    // upload tx and an Aristotle ReceiptBook tx in rapid succession.
+    let release!: () => void;
+    const slot = new Promise<void>(r => { release = r; });
+    const prev = this.mintTail;
+    this.mintTail = slot;
+    await prev;
+    try {
+      return await this.mintLocked(parsed);
+    } finally {
+      release();
+    }
+  }
+
+  private async mintLocked(parsed: ReturnType<typeof mintSchema.parse>): Promise<MintReceiptResult> {
     const payloadJson = stableJson(parsed.payload);
     const payloadHash = keccak256(toUtf8Bytes(payloadJson));
     const receiptId = parsed.clientReceiptId ?? keccak256(toUtf8Bytes(`${parsed.agentId}:${parsed.actionTag}:${payloadHash}`));
     const valueWei = parsed.valueWei ?? 0n;
 
     let storageRoot = parsed.storageRoot;
+    let storageTxHash: string | undefined;
     if (!storageRoot) {
-      storageRoot = await this.uploadWithFallback(receiptId, parsed);
+      const upload = await this.uploadWithFallback(receiptId, parsed);
+      storageRoot = upload.rootHash;
+      storageTxHash = upload.isLocalFallback ? undefined : (upload.txHash || undefined);
     }
 
     const row: ReceiptIndexRow = {
@@ -183,6 +222,7 @@ export class ReceiptMinter {
       actionTag: parsed.actionTag,
       payloadHash,
       storageRoot,
+      storageTxHash,
       valueWei: valueWei.toString(),
       status: storageRoot.startsWith('local://') ? 'pending' : 'minted',
       createdAt: new Date().toISOString(),
@@ -197,16 +237,16 @@ export class ReceiptMinter {
 
     const receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei);
     const txHash = receipt.hash;
-    await this.index.update(receiptId, { txHash, storageRoot: effectiveStorageRoot, status: 'minted' });
+    await this.index.update(receiptId, { txHash, storageRoot: effectiveStorageRoot, storageTxHash, status: 'minted' });
 
     // Clean up the local fallback file now that the chain tx landed.
     if (storageRoot.startsWith('local://')) {
       await unlink(storageRoot.slice('local://'.length)).catch(() => undefined);
     }
 
-    const minted = { ...row, storageRoot: effectiveStorageRoot, txHash, status: 'minted' as const };
+    const minted = { ...row, storageRoot: effectiveStorageRoot, storageTxHash, txHash, status: 'minted' as const };
     this.eventBus.publish('receipt', minted);
-    return { receiptId, txHash, storageRoot: effectiveStorageRoot, payloadHash, status: 'minted' };
+    return { receiptId, txHash, storageRoot: effectiveStorageRoot, storageTxHash, payloadHash, status: 'minted' };
   }
 
   async reconcilePending(): Promise<number> {
@@ -229,20 +269,41 @@ export class ReceiptMinter {
     return reconciled;
   }
 
-  private async uploadWithFallback(receiptId: string, action: MintReceiptAction): Promise<string> {
+  private async uploadWithFallback(
+    receiptId: string,
+    action: ReturnType<typeof mintSchema.parse>,
+  ): Promise<StorageUploadResult> {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const upload = await this.options.storageClient.uploadJson(action.payload);
-        return upload.rootHash;
+        this.logger.debug({ receiptId, agentId: String(action.agentId), actionTag: action.actionTag, rootHash: upload.rootHash, txHash: upload.txHash }, '0G storage upload succeeded');
+        return { rootHash: upload.rootHash, txHash: upload.txHash, isLocalFallback: false };
       } catch (error) {
-        this.logger.warn({ attempt, error }, '0G storage receipt upload failed');
+        const err = error as Error & { code?: unknown; reason?: unknown; info?: unknown };
+        this.logger.warn({
+          attempt,
+          receiptId,
+          agentId: String(action.agentId),
+          actionTag: action.actionTag,
+          errorName: err?.name,
+          errorMessage: err?.message ?? String(error),
+          errorCode: err?.code,
+          errorReason: err?.reason,
+          errorInfo: err?.info,
+          errorStack: err?.stack?.split('\n').slice(0, 4).join(' | '),
+        }, '0G storage upload failed');
         await sleep(250 * (attempt + 1));
       }
     }
+    this.logger.error({
+      receiptId,
+      agentId: String(action.agentId),
+      actionTag: action.actionTag,
+    }, '0G storage upload exhausted all 3 retries — writing local fallback and anchoring payloadHash on-chain');
     await mkdir(this.fallbackDir, { recursive: true });
-    const path = join(this.fallbackDir, `${receiptId}.json`);
-    await writeFile(path, stableJson({ receiptId, createdAt: new Date().toISOString(), action: { ...action, valueWei: action.valueWei?.toString() } }));
-    return `local://${path}`;
+    const localPath = join(this.fallbackDir, `${receiptId}.json`);
+    await writeFile(localPath, stableJson({ receiptId, createdAt: new Date().toISOString(), action: { ...action, valueWei: action.valueWei?.toString() } }));
+    return { rootHash: `local://${localPath}`, txHash: '', isLocalFallback: true };
   }
 
   private async submitReceiptWithRetry(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint): Promise<TransactionReceipt> {

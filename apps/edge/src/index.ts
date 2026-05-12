@@ -369,6 +369,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       actionTag: r.actionTag,
       payloadHash: r.payloadHash,
       storageRoot: r.storageRoot,
+      storageTxHash: r.storageTxHash,
       txHash: r.txHash,
       status: r.status,
       createdAt: r.createdAt,
