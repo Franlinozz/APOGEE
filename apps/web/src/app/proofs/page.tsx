@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { CONTRACTS, EXPLORER_URLS, CHAIN_NAMES, CONTRACT_NAMES } from '@/lib/contracts';
 import { ReceiptsFeed } from './_client';
 
@@ -17,20 +18,12 @@ type DemoAgent = {
   runningForHours: number | null;
 };
 
-type StorageSample = {
-  receiptId: string;
-  actionTag: string;
-  storageRoot: string;
-  status: string;
-  createdAt: string;
-};
-
 type ProofsApiResponse = {
   generatedAt: string;
   totalReceipts: number;
   demoAgents: DemoAgent[];
   heatmap: Record<string, Record<string, number>>;
-  storageProofSample: StorageSample[];
+  storageProofSample: unknown[];
 };
 
 // ── Data fetching (server, ISR 30 s) ─────────────────────────────────────────
@@ -45,7 +38,6 @@ async function fetchProofsData(): Promise<ProofsApiResponse | null> {
   }
 }
 
-// Known seeded addresses on Aristotle mainnet (from demo-agents-aristotle.json)
 const SEEDED_AGENTS: Record<string, string> = {
   aurora: '0x8AD1Ef8a59554E5537631BfBa9a655A88A803a34',
   vesper: '0x4d1d3E14913C050dF9fD68aFaB90D04079C37f90',
@@ -81,11 +73,41 @@ function mergeSeededAddresses(proofs: ProofsApiResponse): ProofsApiResponse {
   };
 }
 
-// ── Sub-components (server) ───────────────────────────────────────────────────
+// ── Tab navigation ────────────────────────────────────────────────────────────
 
-const DEFAULT_CHAIN = 16661 as const; // Aristotle mainnet — deployed 2026-05-10
+const TABS = [
+  { id: 'overview',  label: 'Overview' },
+  { id: 'storage',   label: 'Storage Proofs' },
+  { id: 'contracts', label: 'Contracts' },
+] as const;
 
-function ContractsTable() {
+type TabId = (typeof TABS)[number]['id'];
+
+function TabNav({ current }: { current: TabId }) {
+  return (
+    <div className="flex gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.06] w-fit">
+      {TABS.map(t => (
+        <Link
+          key={t.id}
+          href={`?tab=${t.id}`}
+          className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+            current === t.id
+              ? 'bg-violet-600 text-white shadow'
+              : 'text-white/50 hover:text-white/80'
+          }`}
+        >
+          {t.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// ── Contracts tab ─────────────────────────────────────────────────────────────
+
+const DEFAULT_CHAIN = 16661 as const;
+
+function ContractsTab() {
   const chainId = DEFAULT_CHAIN;
   const contracts = CONTRACTS[chainId];
   const explorer = EXPLORER_URLS[chainId] ?? '';
@@ -93,10 +115,10 @@ function ContractsTable() {
   const deployedCount = contracts ? Object.values(contracts).filter(Boolean).length : 0;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div>
         <h2 className="text-lg font-semibold text-white">Deployed contracts</h2>
-        <span className="text-xs text-white/40">{chainName} · {deployedCount}/{CONTRACT_NAMES.length} contracts</span>
+        <p className="text-xs text-white/40 mt-1">{chainName} · chainId {chainId} · {deployedCount}/{CONTRACT_NAMES.length} deployed</p>
       </div>
       <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
         <table className="w-full text-sm">
@@ -114,7 +136,7 @@ function ContractsTable() {
                 <tr key={name} className="hover:bg-white/[0.02] transition-colors">
                   <td className="px-5 py-3 font-semibold text-white/80">{name}</td>
                   <td className="px-5 py-3 font-mono text-violet-300 text-xs">
-                    {addr || <span className="text-white/20 italic not-italic">pending</span>}
+                    {addr || <span className="text-white/20 italic">pending</span>}
                   </td>
                   <td className="px-5 py-3">
                     {addr ? (
@@ -133,6 +155,8 @@ function ContractsTable() {
     </div>
   );
 }
+
+// ── Overview tab ──────────────────────────────────────────────────────────────
 
 function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForHours }: DemoAgent) {
   const emoji = slug === 'aurora' ? '🔴' : slug === 'vesper' ? '🟣' : '🔵';
@@ -190,7 +214,6 @@ function ActivityHeatmap({ heatmap }: { heatmap: Record<string, Record<string, n
   const days = Object.keys(heatmap).sort().reverse();
   const allVals = days.flatMap(d => Object.values(heatmap[d] ?? {}).map(Number));
   const maxVal = Math.max(1, ...allVals);
-
   const intensityBg = ['bg-white/[0.04]', 'bg-violet-900/40', 'bg-violet-700/50', 'bg-violet-500/60', 'bg-violet-400'];
 
   return (
@@ -231,32 +254,90 @@ function ActivityHeatmap({ heatmap }: { heatmap: Record<string, Record<string, n
   );
 }
 
-function StorageProofsSection() {
+function OverviewTab({ proofs }: { proofs: ProofsApiResponse }) {
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-6 py-8 text-center space-y-3">
-      <p className="text-sm font-semibold text-white/50">Storage proofs unavailable</p>
-      <p className="text-xs text-white/30 max-w-md mx-auto leading-relaxed">
-        0G Storage SDK v0.3.3 is incompatible with the Aristotle mainnet Flow contract — the on-chain
-        <code className="mx-1 font-mono text-white/40">submit()</code>
-        ABI has changed since the SDK was released. Receipts are anchored on-chain via
-        payload hash (keccak256) until a compatible SDK is available.
-      </p>
-      <p className="text-[10px] text-white/20">
-        All receipts are still verifiable on-chain — see the live receipt feed above.
-      </p>
+    <div className="space-y-14">
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-white">Demo agents</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {proofs.demoAgents.map(agent => <DemoAgentCard key={agent.slug} {...agent} />)}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-white">Activity — last 14 days × 24 h</h2>
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+          <ActivityHeatmap heatmap={proofs.heatmap} />
+        </div>
+      </div>
+
+      <ReceiptsFeed edgeUrl={EDGE_URL} />
+    </div>
+  );
+}
+
+// ── Storage Proofs tab ────────────────────────────────────────────────────────
+
+function StorageProofsTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-white">Storage proof sample</h2>
+        <p className="text-xs text-white/40 mt-1">
+          Receipts with a real 0G Storage root hash (distinct from the payload hash) prove a full
+          round-trip: payload → 0G Storage upload → rootHash anchored on-chain. Receipts that fall
+          back show their keccak256 payload hash as the on-chain anchor instead.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 space-y-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-white/60">payloadHash</span>
+          <span className="text-white/30">—</span>
+          <span className="text-white/40">keccak256 of the stable-JSON serialised action payload; always present.</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-white/60">storageRoot</span>
+          <span className="text-white/30">—</span>
+          <span className="text-white/40">0G Storage Merkle root returned after a successful upload. Falls back to payloadHash when upload fails.</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-white/60">mint tx</span>
+          <span className="text-white/30">—</span>
+          <span className="text-white/40">Aristotle mainnet transaction that anchored the receipt via ReceiptBook.emitReceipt(). This is NOT the storage upload tx.</span>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-6 py-8 text-center space-y-3">
+        <p className="text-sm font-semibold text-white/50">Storage proofs unavailable</p>
+        <p className="text-xs text-white/30 max-w-md mx-auto leading-relaxed">
+          0G Storage SDK v0.3.3 is incompatible with the Aristotle mainnet Flow contract — the on-chain
+          <code className="mx-1 font-mono text-white/40">submit()</code>
+          ABI has changed since the SDK was released. Receipts are anchored on-chain via
+          payload hash (keccak256) until a compatible SDK is available.
+        </p>
+        <p className="text-[10px] text-white/20">
+          All receipts are still verifiable on-chain — see the Overview → Receipt feed.
+        </p>
+      </div>
     </div>
   );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function ProofsPage() {
+export default async function ProofsPage({ searchParams }: { searchParams: { tab?: string } }) {
   const raw = (await fetchProofsData()) ?? emptyProofs();
   const proofs = mergeSeededAddresses(raw);
 
+  const rawTab = searchParams.tab ?? 'overview';
+  const tab: TabId = (TABS.map(t => t.id) as string[]).includes(rawTab)
+    ? (rawTab as TabId)
+    : 'overview';
+
   return (
     <main className="min-h-screen px-6 py-16 bg-bg">
-      <section className="mx-auto max-w-5xl space-y-16">
+      <section className="mx-auto max-w-5xl space-y-10">
 
         {/* Hero */}
         <div className="space-y-4">
@@ -279,33 +360,13 @@ export default async function ProofsPage() {
           </div>
         </div>
 
-        {/* Contracts */}
-        <ContractsTable />
+        {/* Tab navigation */}
+        <TabNav current={tab} />
 
-        {/* Demo agents */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-white">Demo agents</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {proofs.demoAgents.map(agent => <DemoAgentCard key={agent.slug} {...agent} />)}
-          </div>
-        </div>
-
-        {/* Activity heatmap */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-white">Activity — last 14 days × 24 h</h2>
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
-            <ActivityHeatmap heatmap={proofs.heatmap} />
-          </div>
-        </div>
-
-        {/* Live receipts feed — client island, 10 s auto-refresh */}
-        <ReceiptsFeed edgeUrl={EDGE_URL} />
-
-        {/* Storage proof sample */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-white">Storage proof sample</h2>
-          <StorageProofsSection />
-        </div>
+        {/* Tab content */}
+        {tab === 'overview'  && <OverviewTab proofs={proofs} />}
+        {tab === 'storage'   && <StorageProofsTab />}
+        {tab === 'contracts' && <ContractsTab />}
 
       </section>
     </main>

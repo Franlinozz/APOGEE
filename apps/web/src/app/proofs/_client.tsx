@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
+const PAGE_SIZE = 9;
+
 type ReceiptIndexRow = {
   receiptId: string;
   agentId: string;
@@ -12,6 +14,53 @@ type ReceiptIndexRow = {
   status: 'pending' | 'minted';
   createdAt: string;
 };
+
+type ProofsData = {
+  receipts: ReceiptIndexRow[];
+  generatedAt: string;
+};
+
+// ── Pagination controls ───────────────────────────────────────────────────────
+
+function Pagination({
+  page,
+  totalPages,
+  total,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  onChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  const from = (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
+  return (
+    <div className="flex items-center justify-between pt-2 text-xs text-white/40">
+      <span>Showing {from}–{to} of {total}</span>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          className="px-3 py-1 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 transition-colors disabled:opacity-30 disabled:cursor-default"
+        >
+          Previous
+        </button>
+        <span className="px-3 py-1 text-white/30">
+          {page} / {totalPages}
+        </span>
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          className="px-3 py-1 rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 transition-colors disabled:opacity-30 disabled:cursor-default"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ── Network toggle ────────────────────────────────────────────────────────────
 
@@ -45,15 +94,11 @@ export function NetworkToggle({
 
 // ── Auto-refreshing receipts feed ─────────────────────────────────────────────
 
-type ProofsData = {
-  receipts: ReceiptIndexRow[];
-  generatedAt: string;
-};
-
 export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
   const [data, setData] = useState<ProofsData | null>(null);
   const [lastVerified, setLastVerified] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
@@ -75,8 +120,9 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
     return () => clearInterval(id);
   }, [fetch_]);
 
-  // actionTag is stored as the full string (e.g. "agent.heartbeat.analyze").
-  // Show only the last dot-segment so the table stays compact.
+  // Reset to page 1 when fresh data arrives
+  useEffect(() => { setPage(1); }, [data?.generatedAt]);
+
   const formatTag = (tag: string): string => {
     if (!tag) return '—';
     if (tag.startsWith('0x')) return tag.slice(0, 10) + '…';
@@ -88,6 +134,11 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
     try { return (Number(BigInt(wei || '0')) / 1e18).toFixed(6) + ' 0G'; }
     catch { return '— 0G'; }
   };
+
+  const receipts = data?.receipts ?? [];
+  const totalPages = Math.max(1, Math.ceil(receipts.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = receipts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <div className="space-y-3">
@@ -115,55 +166,64 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
         </div>
       )}
 
-      {data && data.receipts.length === 0 && (
+      {data && receipts.length === 0 && (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6 text-sm text-white/40 text-center">
           No receipts yet — heartbeats will populate this within 10 min after agents are seeded.
         </div>
       )}
 
-      {data && data.receipts.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-white/[0.06] text-white/40 text-left">
-                <th className="px-4 py-3 font-medium">Action</th>
-                <th className="px-4 py-3 font-medium">Agent</th>
-                <th className="px-4 py-3 font-medium">Value</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Time</th>
-                <th className="px-4 py-3 font-medium">Mint tx (Aristotle)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.04]">
-              {data.receipts.map(r => (
-                <tr key={r.receiptId} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-4 py-2.5 font-mono text-violet-300" title={r.actionTag}>{formatTag(r.actionTag)}</td>
-                  <td className="px-4 py-2.5 text-white/60 capitalize">{r.agentId}</td>
-                  <td className="px-4 py-2.5 text-white/70">{formatValue(r.valueWei)}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-white/40">{new Date(r.createdAt).toLocaleTimeString()}</td>
-                  <td className="px-4 py-2.5">
-                    {r.txHash ? (
-                      <a
-                        href={`https://chainscan.0g.ai/tx/${r.txHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-mono text-violet-400 hover:text-violet-300"
-                        title={r.txHash}
-                      >
-                        {r.txHash.slice(0, 10)}…
-                      </a>
-                    ) : <span className="text-white/20">—</span>}
-                  </td>
+      {data && receipts.length > 0 && (
+        <>
+          <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/[0.06] text-white/40 text-left">
+                  <th className="px-4 py-3 font-medium">Action</th>
+                  <th className="px-4 py-3 font-medium">Agent</th>
+                  <th className="px-4 py-3 font-medium">Value</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Time</th>
+                  <th className="px-4 py-3 font-medium">Mint tx (Aristotle)</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {pageRows.map(r => (
+                  <tr key={r.receiptId} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-4 py-2.5 font-mono text-violet-300" title={r.actionTag}>{formatTag(r.actionTag)}</td>
+                    <td className="px-4 py-2.5 text-white/60 capitalize">{r.agentId}</td>
+                    <td className="px-4 py-2.5 text-white/70">{formatValue(r.valueWei)}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-white/40">{new Date(r.createdAt).toLocaleTimeString()}</td>
+                    <td className="px-4 py-2.5">
+                      {r.txHash ? (
+                        <a
+                          href={`https://chainscan.0g.ai/tx/${r.txHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-violet-400 hover:text-violet-300"
+                          title={r.txHash}
+                        >
+                          {r.txHash.slice(0, 10)}…
+                        </a>
+                      ) : <span className="text-white/20">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={receipts.length}
+            onChange={setPage}
+          />
+        </>
       )}
     </div>
   );
