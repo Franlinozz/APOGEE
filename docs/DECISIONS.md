@@ -115,6 +115,17 @@
 - Deviation: `@apogee/billing` not added as dependency to `apps/web` — `ReceiptIndexRow` type redefined locally in `apps/web/src/app/proofs/_client.tsx`. Tags in heartbeats.ts are plain strings (not `bytes4` keccak values) because `ReceiptMinter` handles the bytes4 conversion internally. `ethers` not imported in runtime — `createHash('sha256')` from `node:crypto` used for short hashes instead.
 - Verification: `pnpm typecheck` (22/22) ✓, `pnpm -F @apogee/edge test` (4/4) ✓ — health endpoint 6ms (< 50ms budget).
 
+## 2026-05-12 — v1.0.0 hackathon submission (Prompt 10)
+
+- Upgraded `packages/storage-client` from `@0glabs/0g-ts-sdk@0.3.3` to `@0gfoundation/0g-ts-sdk@1.2.8` (commit `4fe87e2`). New SDK emits `submit()` selector `0xbc8c11f8` accepted by Aristotle Flow contract; old selector `0xef3e12dc` was rejected. `storage:once` smoke command confirmed working on Aristotle mainnet.
+- Added `storageTxHash` field through the full pipeline: `StorageClient.uploadWithFallback()` → `MintReceiptResult` → `ReceiptIndexRow` → `notifyEdge()` → edge `storageProofSample` → web Storage Proofs table.
+- Added per-instance serial mint mutex (`mintTail: Promise<unknown>`) in `ReceiptMinter` to prevent signer nonce conflicts when heartbeat worker and reconciler call `mint()` concurrently on the same instance.
+- Fixed heartbeat error logging to extract `err.name`, `err.message`, `err.code`, `err.reason`, `err.stack` explicitly (Pino serialises `Error` objects as `{}` without explicit extraction).
+- Replaced hardcoded "unavailable" banner in `StorageProofsTab` with a data-driven table. Edge `storageProofSample` filter: `r.storageRoot && !r.storageRoot.startsWith('local://') && r.storageRoot !== r.payloadHash`.
+- Created hackathon submission documentation package: `README.md` (bilingual EN + ZH), `docs/REVIEWER.md`, `docs/API.md`, `docs/ARCHITECTURE.md` (Mermaid sequence diagrams), `docs/TUTORIAL.md` (15-min paid translator agent walkthrough), `docs/video-script.md` (3-min demo storyboard), `docs/ADR/0001` through `docs/ADR/0003`, `docs/deck-outline.md` (10-slide pitch deck), `docs/x-posts.md` (3-post launch thread), `docs/diagrams/architecture.svg` (SVG system diagram).
+- Chinese README summary (5 paragraphs) flagged for native-speaker review before submission.
+- HackQuest submission deadline: 2026-05-16 23:59 UTC+8. ReceiptBook headline contract: `0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53`. Submission URL: https://apogee-red.vercel.app.
+
 ## 2026-05-10 — Prompt 8 verification + chatbot visibility fix
 
 - All CI gates green: `pnpm -F @apogee/web lint` ✓, `pnpm -F @apogee/web typecheck` ✓, `pnpm -F @apogee/web test` ✓, `pnpm -F @apogee/edge typecheck` ✓, `pnpm -F @apogee/billing typecheck` ✓.

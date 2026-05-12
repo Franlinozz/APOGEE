@@ -1,0 +1,247 @@
+# Apogee Protocol — Architecture
+
+## 1. System Overview
+
+Apogee is a four-layer autonomous-agent runtime:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 4 — User Interface                                    │
+│  Next.js 14  ·  SIWE auth  ·  Dashboard  ·  /proofs page    │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTPS / WS
+┌────────────────────────▼────────────────────────────────────┐
+│  Layer 3 — Edge API                                          │
+│  Fastify 5  ·  JWT  ·  BullMQ  ·  Prisma/PostgreSQL          │
+│  /v1/agents  /v1/skills  /v1/quote  /v1/receipts  /v1/ws     │
+└──────────────┬────────────────────────┬────────────────────┘
+               │                        │
+┌──────────────▼──────────┐  ┌──────────▼────────────────────┐
+│  Layer 2 — Runtime      │  │  Layer 1 — 0G Primitives       │
+│  BullMQ heartbeat workers│  │                               │
+│  SkillRunner (isolate)  │  │  0G Chain  (EVM, chainId 16661)│
+│  ReceiptMinter (mutex)  │  │  0G Storage (indexer SDK)      │
+│  Reconciler (60s retry) │  │  0G Compute (serving-broker)   │
+│  MemoryEngine           │  │  0G DA (planned)               │
+└─────────────────────────┘  └────────────────────────────────┘
+```
+
+## 2. Component Interaction Diagrams
+
+### 2.1 Agent Skill Execution (paid skill call)
+
+```mermaid
+sequenceDiagram
+    participant U as User (browser)
+    participant W as Web (Next.js)
+    participant E as Edge API
+    participant SK as SkillRunner
+    participant C as 0G Compute
+    participant CB as ReceiptBook (chain)
+
+    U->>W: POST /api/pilot/chat
+    W->>E: POST /v1/pilot/chat (server-side proxy)
+    E->>E: verify JWT, get agentId
+    E->>SK: runner.execute("chat.completion", input, ctx)
+    SK->>SK: spawn isolated-vm sandbox (128 MB, 30s TTL)
+    SK->>C: compute.chatCompletion(messages)
+    C-->>SK: stream tokens
+    SK-->>E: output + provenance (chatId, storageRoot)
+    E->>CB: receiptMinter.mint({ agentId, actionTag, payload })
+    CB-->>E: { receiptId, txHash, storageRoot }
+    E-->>W: SSE stream (token events → done event with receiptId)
+    W-->>U: rendered response + receipt link
+```
+
+### 2.2 Heartbeat Loop (Aurora — every 10 min)
+
+```mermaid
+sequenceDiagram
+    participant Q as BullMQ Queue
+    participant W as Heartbeat Worker
+    participant SK as SkillRunner
+    participant S as 0G Storage
+    participant CB as ReceiptBook
+    participant EE as Edge Store
+
+    Q->>W: heartbeat:aurora job fires
+    W->>W: check HEARTBEATS_PAUSED
+    W->>SK: web.search("0G news")
+    SK-->>W: headlines[]
+    W->>SK: news.aggregate(headlines)
+    W->>SK: summarize.long(aggregated)
+    W->>SK: chat.embed(summary)
+    W->>SK: memory.write(key, {summary, embedding})
+    SK->>S: StorageClient.uploadWithFallback(blob)
+    S-->>SK: { rootHash, txHash }
+    W->>CB: receiptMinter.mint({ agentId:1, tag:"agent.heartbeat.analyze", payload })
+    Note over W,CB: serial mutex prevents nonce conflict
+    CB-->>W: { receiptId, txHash, storageRoot }
+    W->>EE: POST /internal/receipt + /internal/heartbeat
+    EE-->>W: 200 OK
+```
+
+### 2.3 Storage Proof Path
+
+```mermaid
+sequenceDiagram
+    participant R as Runtime (ReceiptMinter)
+    participant S as 0G Storage Indexer
+    participant CB as ReceiptBook (0G Chain)
+    participant E as Edge API
+    participant P as /proofs page (web)
+
+    R->>S: indexer.upload(fileBlob, rpcUrl)
+    S-->>R: { rootHash, txHash }
+    R->>CB: recordOnChain(payloadHash, rootHash)
+    CB-->>R: txHash (mint)
+    R->>E: POST /internal/receipt { storageRoot, storageTxHash, txHash }
+    E->>E: append to InMemoryEdgeStore
+    P->>E: GET /v1/proofs (ISR 30s)
+    E-->>P: { storageProofSample: [ { storageRoot, storageTxHash } ] }
+    P-->>P: render Storage Proofs table
+```
+
+### 2.4 SIWE Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Browser (Next.js)
+    participant A as /api/auth proxy (Next.js)
+    participant E as Edge API
+
+    U->>B: click "Connect Wallet"
+    B->>A: GET /api/auth/siwe/nonce
+    A->>E: GET /v1/auth/siwe/nonce
+    E-->>A: { nonce }
+    A-->>B: { nonce }
+    B->>B: wagmi signMessage(SIWE message with nonce)
+    U->>B: approve signature in wallet
+    B->>A: POST /api/auth/siwe/verify { message, signature }
+    A->>E: POST /v1/auth/siwe/verify
+    E->>E: recover address, validate nonce
+    E-->>A: { token, address }
+    A->>A: Set-Cookie: apogee-jwt=<token> (httpOnly)
+    A-->>B: 200 OK
+    B->>B: router.push("/dashboard")
+```
+
+## 3. Data Flow — Receipt Lifecycle
+
+```
+Agent action occurs
+        │
+        ▼
+ReceiptMinter.mint()
+  ├── canonical JSON hash (keccak256)
+  ├── StorageClient.uploadWithFallback()
+  │     ├── attempt 0G Storage indexer.upload()  ──→ { rootHash, txHash }
+  │     └── on failure: write to local fallback dir  ──→ rootHash=local://...
+  ├── [serial mutex: await previous mint]
+  ├── ChainClient.sendTx() → ReceiptBook.mint(payloadHash, rootHash)
+  │     └── emits ReceiptMinted(agentId, receiptId, payloadHash, storageRoot)
+  └── return { receiptId, txHash, storageRoot, storageTxHash, payloadHash }
+        │
+        ▼
+notifyEdge() → POST /internal/receipt
+        │
+        ▼
+InMemoryEdgeStore.receipts[]  (max 1000, FIFO eviction)
+        │
+        ├── GET /v1/proofs  (polled by web, ISR 30s)
+        └── WS /v1/ws  (push to connected clients)
+```
+
+## 4. Package Dependency Graph
+
+```
+apps/web
+  └── @apogee/ui            (design system)
+
+apps/edge
+  ├── @apogee/billing       (QuoteIssuer, ReceiptMinter)
+  ├── @apogee/chain-client  (ethers v6 wrapper)
+  ├── @apogee/storage-client
+  └── @apogee/memory
+
+apps/runtime
+  ├── @apogee/skills-runtime  (isolated-vm executor)
+  ├── @apogee/billing
+  ├── @apogee/chain-client
+  ├── @apogee/storage-client
+  └── @apogee/compute-client
+
+@apogee/billing
+  ├── @apogee/chain-client
+  └── @apogee/storage-client
+
+@apogee/memory
+  ├── @apogee/storage-client
+  └── @apogee/chain-client
+
+@apogee/skills-runtime
+  └── isolated-vm (no apogee deps — sandbox boundary)
+```
+
+## 5. Smart Contract Architecture
+
+All nine contracts are deployed on Aristotle mainnet (chainId 16661).
+
+```
+AgentIdentity (ERC-721)
+  └── mints iNFT per agent
+  └── used by AccountFactory to gate AgentAccount deployment
+
+AccountFactory
+  └── CREATE2-deploys AgentAccount proxy per iNFT
+
+AgentAccount (proxy)
+  └── EIP-1271 signature validation
+  └── delegated skill execution via PolicyEngine
+
+PolicyEngine
+  └── allowlistRoot (Merkle) per policy version
+  └── enforced by PaymentRouter before payment
+
+PaymentRouter
+  ├── pay(quoteId) — on-chain quote payment
+  ├── paySignedQuote(quote, sig) — EIP-712 off-chain quote
+  ├── refund(receiptId) — refund with attestation
+  └── emits PaymentRouted → RevenueSplitter.distribute()
+
+RevenueSplitter
+  └── distributes payment to agent owner + protocol treasury
+
+EscrowVault
+  └── holds prepaid balance for subscription agents
+
+ReceiptBook ← headline contract
+  ├── mint(agentId, payloadHash, storageRoot) → receiptId
+  ├── getRecentReceipts(limit) → bytes32[]
+  └── emits ReceiptMinted(agentId, receiptId, payloadHash, storageRoot)
+
+ServiceRegistry
+  └── register(serviceId, owner, skills, priceWei)
+  └── lookup by serviceId or owner
+```
+
+## 6. Infrastructure
+
+| Component | Host | Notes |
+|---|---|---|
+| Web (Next.js) | Vercel | Automatic ISR, Edge CDN |
+| Edge API (Fastify) | Railway | Single replica, auto-restart |
+| Runtime (BullMQ workers) | Railway | Same process as Edge; `HEARTBEATS_PAUSED=false` to activate |
+| PostgreSQL | Railway | Managed; Prisma migrations |
+| Redis | Railway | BullMQ queues; `heartbeats` queue |
+| 0G Chain | Aristotle mainnet | RPC: https://evmrpc-testnet.0g.ai |
+| 0G Storage Indexer | 0G managed | SDK: `@0gfoundation/0g-ts-sdk@1.2.8` |
+
+## 7. ADR Index
+
+| ADR | Title | Status |
+|---|---|---|
+| [0001](ADR/0001-0g-storage-sdk.md) | Migrate to @0gfoundation/0g-ts-sdk | Accepted |
+| [0002](ADR/0002-bullmq-heartbeats.md) | BullMQ for repeatable heartbeat jobs | Accepted |
+| [0003](ADR/0003-siwe-jwt-auth.md) | SIWE + httpOnly JWT for authentication | Accepted |

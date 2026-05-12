@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 580" font-family="'Geist Mono', 'JetBrains Mono', monospace" font-size="12">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0f"/>
+      <stop offset="100%" style="stop-color:#0f0f1a"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#d97706"/>
+      <stop offset="100%" style="stop-color:#b45309"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#4f46e5" opacity="0.7"/>
+    </marker>
+    <marker id="arrow-g" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#10b981" opacity="0.7"/>
+    </marker>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="920" height="580" fill="url(#bg)"/>
+  <rect width="920" height="580" fill="none" stroke="#7c3aed" stroke-width="1" opacity="0.2"/>
+
+  <!-- Title -->
+  <text x="460" y="32" text-anchor="middle" fill="#a78bfa" font-size="15" font-weight="bold" letter-spacing="3">APOGEE PROTOCOL — SYSTEM ARCHITECTURE</text>
+
+  <!-- ── USER LAYER ── -->
+  <rect x="30" y="55" width="130" height="60" rx="8" fill="#1a1a2e" stroke="#4f46e5" stroke-width="1.5"/>
+  <text x="95" y="79" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="bold">Developer / User</text>
+  <text x="95" y="96" text-anchor="middle" fill="#6b7280" font-size="10">wagmi + MetaMask</text>
+  <text x="95" y="109" text-anchor="middle" fill="#6b7280" font-size="10">SIWE Auth</text>
+
+  <!-- ── WEB APP ── -->
+  <rect x="220" y="42" width="160" height="88" rx="8" fill="#1a1a2e" stroke="#7c3aed" stroke-width="2" filter="url(#glow)"/>
+  <text x="300" y="63" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="bold">apps/web</text>
+  <text x="300" y="79" text-anchor="middle" fill="#8b5cf6" font-size="10">Next.js 14 App Router</text>
+  <text x="300" y="93" text-anchor="middle" fill="#6b7280" font-size="10">ISR · Streaming SSR</text>
+  <text x="300" y="107" text-anchor="middle" fill="#6b7280" font-size="10">Tailwind · framer-motion</text>
+  <text x="300" y="121" text-anchor="middle" fill="#6b7280" font-size="10">Vercel</text>
+
+  <!-- ── EDGE API ── -->
+  <rect x="430" y="42" width="160" height="88" rx="8" fill="#1a1a2e" stroke="#7c3aed" stroke-width="2" filter="url(#glow)"/>
+  <text x="510" y="63" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="bold">apps/edge</text>
+  <text x="510" y="79" text-anchor="middle" fill="#8b5cf6" font-size="10">Fastify 5 REST + WS</text>
+  <text x="510" y="93" text-anchor="middle" fill="#6b7280" font-size="10">SIWE · JWT · Zod</text>
+  <text x="510" y="107" text-anchor="middle" fill="#6b7280" font-size="10">Billing · Quotes</text>
+  <text x="510" y="121" text-anchor="middle" fill="#6b7280" font-size="10">Railway</text>
+
+  <!-- ── RUNTIME ── -->
+  <rect x="640" y="42" width="160" height="88" rx="8" fill="#1a1a2e" stroke="#7c3aed" stroke-width="2" filter="url(#glow)"/>
+  <text x="720" y="63" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="bold">apps/runtime</text>
+  <text x="720" y="79" text-anchor="middle" fill="#8b5cf6" font-size="10">BullMQ Workers</text>
+  <text x="720" y="93" text-anchor="middle" fill="#6b7280" font-size="10">Skills Sandbox (ivm)</text>
+  <text x="720" y="107" text-anchor="middle" fill="#6b7280" font-size="10">ReceiptMinter</text>
+  <text x="720" y="121" text-anchor="middle" fill="#6b7280" font-size="10">Heartbeats · Reconciler</text>
+
+  <!-- ── INFRA ROW ── -->
+  <!-- PostgreSQL -->
+  <rect x="430" y="185" width="110" height="52" rx="8" fill="#1a1a2e" stroke="#374151" stroke-width="1.5"/>
+  <text x="485" y="207" text-anchor="middle" fill="#9ca3af" font-size="11" font-weight="bold">PostgreSQL 16</text>
+  <text x="485" y="224" text-anchor="middle" fill="#6b7280" font-size="10">Agents · Receipts</text>
+  <text x="485" y="237" text-anchor="middle" fill="#6b7280" font-size="10">Memory · Runs</text>
+
+  <!-- Redis/BullMQ -->
+  <rect x="560" y="185" width="120" height="52" rx="8" fill="#1a1a2e" stroke="#374151" stroke-width="1.5"/>
+  <text x="620" y="207" text-anchor="middle" fill="#9ca3af" font-size="11" font-weight="bold">Redis + BullMQ</text>
+  <text x="620" y="224" text-anchor="middle" fill="#6b7280" font-size="10">agent-runs queue</text>
+  <text x="620" y="237" text-anchor="middle" fill="#6b7280" font-size="10">heartbeats queue</text>
+
+  <!-- Prisma -->
+  <rect x="300" y="185" width="110" height="52" rx="8" fill="#1a1a2e" stroke="#374151" stroke-width="1.5"/>
+  <text x="355" y="207" text-anchor="middle" fill="#9ca3af" font-size="11" font-weight="bold">Prisma 5</text>
+  <text x="355" y="224" text-anchor="middle" fill="#6b7280" font-size="10">ORM · Migrations</text>
+  <text x="355" y="237" text-anchor="middle" fill="#6b7280" font-size="10">Connection Pooling</text>
+
+  <!-- ── SKILLS ── -->
+  <rect x="700" y="185" width="160" height="52" rx="8" fill="#1a1a2e" stroke="#374151" stroke-width="1.5"/>
+  <text x="780" y="205" text-anchor="middle" fill="#9ca3af" font-size="11" font-weight="bold">Skills Marketplace</text>
+  <text x="780" y="221" text-anchor="middle" fill="#6b7280" font-size="10">12 Free Core Skills</text>
+  <text x="780" y="235" text-anchor="middle" fill="#6b7280" font-size="10">10 Premium Paid Skills</text>
+
+  <!-- ── 0G NETWORK ── -->
+  <!-- 0G section background -->
+  <rect x="30" y="295" width="860" height="255" rx="12" fill="#0d0d1f" stroke="#4f46e5" stroke-width="1" opacity="0.5"/>
+  <text x="460" y="315" text-anchor="middle" fill="#6d28d9" font-size="11" font-weight="bold" letter-spacing="2">0G NETWORK (ARISTOTLE MAINNET — CHAIN ID 16661)</text>
+
+  <!-- 0G Chain -->
+  <rect x="50" y="325" width="235" height="200" rx="10" fill="#111127" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="167" y="346" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="bold">0G Chain</text>
+  <text x="167" y="362" text-anchor="middle" fill="#6b7280" font-size="10">https://evmrpc.0g.ai</text>
+
+  <rect x="65" y="370" width="205" height="22" rx="4" fill="#1e1e3f"/>
+  <text x="167" y="385" text-anchor="middle" fill="#c4b5fd" font-size="10">ReceiptBook · 0xD0B08…ff53</text>
+  <rect x="65" y="395" width="205" height="22" rx="4" fill="#1e1e3f"/>
+  <text x="167" y="410" text-anchor="middle" fill="#c4b5fd" font-size="10">AgentIdentity · 0xC6060…ff3</text>
+  <rect x="65" y="420" width="205" height="22" rx="4" fill="#1e1e3f"/>
+  <text x="167" y="435" text-anchor="middle" fill="#c4b5fd" font-size="10">PaymentRouter · 0xDafcdb…0c</text>
+  <rect x="65" y="445" width="205" height="22" rx="4" fill="#1e1e3f"/>
+  <text x="167" y="460" text-anchor="middle" fill="#c4b5fd" font-size="10">PolicyEngine · 0xa8933…550</text>
+  <rect x="65" y="470" width="205" height="22" rx="4" fill="#1e1e3f"/>
+  <text x="167" y="485" text-anchor="middle" fill="#c4b5fd" font-size="10">AccountFactory · 0xABc44…90</text>
+  <text x="167" y="510" text-anchor="middle" fill="#6b7280" font-size="9">+4 more contracts</text>
+
+  <!-- 0G Storage -->
+  <rect x="330" y="325" width="225" height="200" rx="10" fill="#111127" stroke="#10b981" stroke-width="1.5"/>
+  <text x="442" y="346" text-anchor="middle" fill="#6ee7b7" font-size="11" font-weight="bold">0G Storage</text>
+  <text x="442" y="362" text-anchor="middle" fill="#6b7280" font-size="10">indexer-storage-turbo.0g.ai</text>
+  <rect x="345" y="370" width="195" height="22" rx="4" fill="#0d2a1e"/>
+  <text x="442" y="385" text-anchor="middle" fill="#6ee7b7" font-size="10">Flow Contract Upload</text>
+  <rect x="345" y="395" width="195" height="22" rx="4" fill="#0d2a1e"/>
+  <text x="442" y="410" text-anchor="middle" fill="#6ee7b7" font-size="10">Merkle Root → rootHash</text>
+  <rect x="345" y="420" width="195" height="22" rx="4" fill="#0d2a1e"/>
+  <text x="442" y="435" text-anchor="middle" fill="#6ee7b7" font-size="10">AES-256-GCM Encryption</text>
+  <rect x="345" y="445" width="195" height="22" rx="4" fill="#0d2a1e"/>
+  <text x="442" y="460" text-anchor="middle" fill="#6ee7b7" font-size="10">LRU Cache (64 MB)</text>
+  <rect x="345" y="470" width="195" height="22" rx="4" fill="#0d2a1e"/>
+  <text x="442" y="485" text-anchor="middle" fill="#6ee7b7" font-size="10">Agent Memory Blobs</text>
+  <text x="442" y="510" text-anchor="middle" fill="#6b7280" font-size="9">@0gfoundation/0g-ts-sdk 1.2.8</text>
+
+  <!-- 0G Compute -->
+  <rect x="610" y="325" width="255" height="200" rx="10" fill="#111127" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="737" y="346" text-anchor="middle" fill="#fcd34d" font-size="11" font-weight="bold">0G Compute</text>
+  <text x="737" y="362" text-anchor="middle" fill="#6b7280" font-size="10">0g-serving-broker 0.6.5</text>
+  <rect x="625" y="370" width="225" height="22" rx="4" fill="#2a1e00"/>
+  <text x="737" y="385" text-anchor="middle" fill="#fcd34d" font-size="10">Provider Acknowledgement</text>
+  <rect x="625" y="395" width="225" height="22" rx="4" fill="#2a1e00"/>
+  <text x="737" y="410" text-anchor="middle" fill="#fcd34d" font-size="10">Chat Completion Streaming</text>
+  <rect x="625" y="420" width="225" height="22" rx="4" fill="#2a1e00"/>
+  <text x="737" y="435" text-anchor="middle" fill="#fcd34d" font-size="10">Embeddings · Image Gen</text>
+  <rect x="625" y="445" width="225" height="22" rx="4" fill="#2a1e00"/>
+  <text x="737" y="460" text-anchor="middle" fill="#fcd34d" font-size="10">Audio Transcription</text>
+  <rect x="625" y="470" width="225" height="22" rx="4" fill="#2a1e00"/>
+  <text x="737" y="485" text-anchor="middle" fill="#fcd34d" font-size="10">ChatID from Response Headers</text>
+  <text x="737" y="510" text-anchor="middle" fill="#6b7280" font-size="9">TEE Attestation · processResponse()</text>
+
+  <!-- ── ARROWS ── -->
+  <!-- User → Web -->
+  <line x1="160" y1="85" x2="218" y2="85" stroke="#4f46e5" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow)" opacity="0.7"/>
+  <!-- Web → Edge -->
+  <line x1="380" y1="85" x2="428" y2="85" stroke="#4f46e5" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.7"/>
+  <!-- Edge → Runtime -->
+  <line x1="590" y1="85" x2="638" y2="85" stroke="#4f46e5" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.7"/>
+  <!-- Web → Prisma -->
+  <line x1="300" y1="130" x2="300" y2="183" stroke="#374151" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>
+  <!-- Edge → Prisma/PG -->
+  <line x1="470" y1="130" x2="440" y2="183" stroke="#374151" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>
+  <!-- Edge → PG -->
+  <line x1="510" y1="130" x2="490" y2="183" stroke="#374151" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>
+  <!-- Runtime → Redis -->
+  <line x1="720" y1="130" x2="650" y2="183" stroke="#374151" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>
+  <!-- Runtime → Skills -->
+  <line x1="780" y1="130" x2="780" y2="183" stroke="#374151" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>
+  <!-- Runtime → 0G Chain -->
+  <line x1="680" y1="130" x2="260" y2="325" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow)" opacity="0.6"/>
+  <!-- Runtime → 0G Storage -->
+  <line x1="700" y1="130" x2="500" y2="325" stroke="#10b981" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow-g)" opacity="0.6"/>
+  <!-- Runtime → 0G Compute -->
+  <line x1="760" y1="130" x2="740" y2="323" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.6"/>
+  <!-- Edge → 0G Chain (receipts) -->
+  <line x1="460" y1="130" x2="200" y2="325" stroke="#7c3aed" stroke-width="1" stroke-dasharray="3,2" opacity="0.4"/>
+
+  <!-- Legend -->
+  <line x1="50" y1="557" x2="80" y2="557" stroke="#4f46e5" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="85" y="561" fill="#6b7280" font-size="10">HTTP / WS</text>
+  <line x1="160" y1="557" x2="190" y2="557" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+  <text x="195" y="561" fill="#6b7280" font-size="10">Chain TX</text>
+  <line x1="260" y1="557" x2="290" y2="557" stroke="#10b981" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow-g)"/>
+  <text x="295" y="561" fill="#6b7280" font-size="10">0G Storage</text>
+  <line x1="370" y1="557" x2="400" y2="557" stroke="#374151" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="405" y="561" fill="#6b7280" font-size="10">Internal</text>
+</svg>
