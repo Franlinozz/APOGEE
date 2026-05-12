@@ -365,8 +365,11 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const shuffled = [...withRealStorage].sort(() => Math.random() - 0.5);
     const storageProofSample = shuffled.slice(0, 5).map(r => ({
       receiptId: r.receiptId,
+      agentId: r.agentId,
       actionTag: r.actionTag,
+      payloadHash: r.payloadHash,
       storageRoot: r.storageRoot,
+      txHash: r.txHash,
       status: r.status,
       createdAt: r.createdAt,
     }));

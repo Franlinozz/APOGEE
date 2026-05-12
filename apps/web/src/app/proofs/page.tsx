@@ -18,12 +18,23 @@ type DemoAgent = {
   runningForHours: number | null;
 };
 
+type StorageProofRow = {
+  receiptId: string;
+  agentId: string;
+  actionTag: string;
+  payloadHash: string;
+  storageRoot: string;
+  txHash?: string | undefined;
+  status: string;
+  createdAt: string;
+};
+
 type ProofsApiResponse = {
   generatedAt: string;
   totalReceipts: number;
   demoAgents: DemoAgent[];
   heatmap: Record<string, Record<string, number>>;
-  storageProofSample: unknown[];
+  storageProofSample: StorageProofRow[];
 };
 
 // ── Data fetching (server, ISR 30 s) ─────────────────────────────────────────
@@ -59,7 +70,7 @@ function emptyProofs(): ProofsApiResponse {
         return [d, Object.fromEntries(Array.from({ length: 24 }, (_, h) => [String(h), 0]))];
       })
     ),
-    storageProofSample: [],
+    storageProofSample: [] as StorageProofRow[],
   };
 }
 
@@ -389,26 +400,33 @@ function OverviewTab({ proofs }: { proofs: ProofsApiResponse }) {
 
 // ── Storage Proofs tab ────────────────────────────────────────────────────────
 
-function StorageProofsTab() {
+function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
+  const fmtTag = (tag: string): string => {
+    if (!tag) return '—';
+    if (tag.startsWith('0x')) return tag.slice(0, 10) + '…';
+    const parts = tag.split('.');
+    return parts[parts.length - 1] ?? tag;
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-white">Storage proof sample</h2>
         <p className="text-xs text-white/40 mt-1 max-w-2xl leading-relaxed">
           A full storage proof proves the payload made a complete round-trip: serialised → uploaded to
-          0G Storage → Merkle root returned → that root anchored on-chain. Without a successful upload,
-          the keccak256 payload hash is anchored instead — still verifiable, not a full storage proof.
+          0G Storage → Merkle root returned → that root anchored on-chain via
+          <code className="mx-1 font-mono">ReceiptBook.emitReceipt()</code>.
         </p>
       </div>
 
       {/* Glossary */}
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
         {([
-          ['payloadHash',  'keccak256 of the stable-JSON serialised action payload. Always present. Content proof — not a transaction hash.'],
-          ['storageRoot',  '0G Storage Merkle root returned after a successful upload. Falls back to payloadHash if upload fails. Content proof — not a transaction hash.'],
-          ['mint tx',      'Aristotle mainnet transaction anchoring the receipt via ReceiptBook.emitReceipt(). This is the on-chain proof of agent activity. Not a storage upload tx.'],
-          ['minted',       'Receipt anchored on-chain. The mint tx is confirmed on Aristotle mainnet.'],
-          ['pending',      'Chain submission in flight or retrying. Resolves to minted within seconds under normal conditions.'],
+          ['payloadHash', 'keccak256 of the stable-JSON serialised action payload. Always present. Content proof — not a transaction hash, not linkable to a block explorer.'],
+          ['storageRoot', '0G Storage Merkle root returned after a successful upload to Aristotle mainnet (chainId 16661). Content proof — not a transaction hash.'],
+          ['mint tx',     'Aristotle mainnet transaction anchoring the receipt via ReceiptBook.emitReceipt(). The actual on-chain anchor — this links to chainscan.'],
+          ['minted',      'Receipt anchored on-chain. The mint tx is confirmed on Aristotle mainnet.'],
+          ['pending',     'Chain submission in flight or retrying. Resolves to minted within seconds.'],
         ] as [string, string][]).map(([term, def]) => (
           <div key={term} className="flex gap-4 px-5 py-3.5 text-xs">
             <code className="shrink-0 font-mono text-violet-300 w-28">{term}</code>
@@ -418,26 +436,71 @@ function StorageProofsTab() {
       </div>
 
       <p className="text-xs text-white/30 italic">
-        Storage roots and payload hashes are content proofs, not transaction hashes.
+        storageRoot and payloadHash are content-addressed proofs, not transaction hashes — only the mint tx links to a block explorer.
       </p>
 
-      {/* Unavailable banner */}
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-8 text-center space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1 text-[10px] font-semibold text-white/40 uppercase tracking-widest">
-          <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
-          Unavailable
+      {/* Proof table or empty state */}
+      {proofSample.length === 0 ? (
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-8 text-center space-y-2">
+          <p className="text-sm font-semibold text-white/50">No storage proofs yet</p>
+          <p className="text-xs text-white/30 max-w-md mx-auto leading-relaxed">
+            Heartbeats are running. Storage proofs appear once a heartbeat successfully
+            uploads its payload to 0G Storage and the receipt is anchored on-chain.
+          </p>
+          <p className="text-[10px] text-white/20 pt-1">
+            All receipts remain verifiable on-chain — see Overview → Receipt feed.
+          </p>
         </div>
-        <p className="text-sm font-semibold text-white/50 mt-2">0G Storage proofs not yet active</p>
-        <p className="text-xs text-white/30 max-w-md mx-auto leading-relaxed">
-          SDK v0.3.3 is incompatible with the Aristotle mainnet Flow contract — the on-chain
-          <code className="mx-1 font-mono text-white/40">submit()</code>
-          ABI changed after the SDK was released. Receipts are anchored via payload hash (keccak256)
-          until a compatible SDK ships.
-        </p>
-        <p className="text-[10px] text-white/20 pt-1">
-          All receipts remain verifiable on-chain — see Overview → Receipt feed.
-        </p>
-      </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-white/[0.06] text-white/40 text-left">
+                <th className="px-4 py-3 font-medium">Agent</th>
+                <th className="px-4 py-3 font-medium">Action</th>
+                <th className="px-4 py-3 font-medium">Storage root (0G)</th>
+                <th className="px-4 py-3 font-medium">Payload hash</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Time</th>
+                <th className="px-4 py-3 font-medium">Mint tx (Aristotle)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {proofSample.map(r => (
+                <tr key={r.receiptId} className="hover:bg-white/[0.02] transition-colors">
+                  <td className="px-4 py-2.5 text-white/60 capitalize">{r.agentId}</td>
+                  <td className="px-4 py-2.5 font-mono text-violet-300" title={r.actionTag}>{fmtTag(r.actionTag)}</td>
+                  <td className="px-4 py-2.5 font-mono text-emerald-400 text-[10px]" title={r.storageRoot}>
+                    {r.storageRoot ? r.storageRoot.slice(0, 14) + '…' : '—'}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-white/35 text-[10px]" title={r.payloadHash}>
+                    {r.payloadHash ? r.payloadHash.slice(0, 14) + '…' : '—'}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
+                      {r.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-white/40">{new Date(r.createdAt).toLocaleTimeString()}</td>
+                  <td className="px-4 py-2.5">
+                    {r.txHash ? (
+                      <a
+                        href={`https://chainscan.0g.ai/tx/${r.txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono text-violet-400 hover:text-violet-300"
+                        title={r.txHash}
+                      >
+                        {r.txHash.slice(0, 10)}…
+                      </a>
+                    ) : <span className="text-white/20">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -485,7 +548,7 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
 
         {/* Tab content */}
         {tab === 'overview'  && <OverviewTab proofs={proofs} />}
-        {tab === 'storage'   && <StorageProofsTab />}
+        {tab === 'storage'   && <StorageProofsTab proofSample={proofs.storageProofSample} />}
         {tab === 'contracts' && <ContractsTab />}
 
       </section>
