@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   }
 
   const chainRpcUrl = process.env['ZERO_G_GALILEO_RPC_URL'] ?? 'https://evmrpc.0g.ai';
-  const storageRpcUrl = process.env['ZERO_G_STORAGE_RPC_URL'] ?? 'https://evmrpc-testnet.0g.ai';
+  const storageRpcUrl = process.env['ZERO_G_STORAGE_RPC_URL'] ?? 'https://evmrpc.0g.ai';
   const chainId = Number(process.env['ZERO_G_GALILEO_CHAIN_ID'] ?? 16661);
   const signerKey = requiredEnv('EDGE_SERVICE_PRIVATE_KEY');
 
@@ -58,7 +58,7 @@ async function main(): Promise<void> {
   const chainClient = new ChainClient({ rpcUrl: chainRpcUrl, chainId, signerKey });
   const storageClient = new StorageClient({
     rpcUrl: storageRpcUrl,
-    indexerUrl: process.env['ZERO_G_STORAGE_INDEXER_URL'] ?? 'https://indexer-storage-testnet-turbo.0g.ai',
+    indexerUrl: process.env['ZERO_G_STORAGE_INDEXER_URL'] ?? 'https://indexer-storage-turbo.0g.ai',
     signerKey,
   });
   const computeClient = new ComputeClient({ rpcUrl: chainRpcUrl, signerKey });

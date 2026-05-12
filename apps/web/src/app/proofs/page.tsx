@@ -231,46 +231,19 @@ function ActivityHeatmap({ heatmap }: { heatmap: Record<string, Record<string, n
   );
 }
 
-function StorageProofsSection({ samples }: { samples: StorageSample[] }) {
-  if (samples.length === 0) {
-    return (
-      <p className="text-sm text-white/40 text-center py-6">
-        No verified storage proofs yet — receipts are anchored on-chain via payload hash until 0G Storage uploads succeed.
-      </p>
-    );
-  }
+function StorageProofsSection() {
   return (
-    <div className="space-y-3">
-      {samples.map(s => (
-        <div key={s.receiptId} className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1.5 min-w-0 text-xs">
-              <div className="flex gap-2">
-                <span className="text-white/30 shrink-0">Receipt ID</span>
-                <span className="font-mono text-violet-300 truncate" title={s.receiptId}>{s.receiptId.slice(0, 24)}…</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-white/30 shrink-0">Action</span>
-                <span className="text-white/60">{s.actionTag}</span>
-              </div>
-              {s.storageRoot && (
-                <div className="flex gap-2">
-                  <span className="text-white/30 shrink-0">
-                    {s.storageRoot.startsWith('0x') && s.storageRoot.length === 66
-                      ? 'Payload hash'
-                      : 'Storage root'}
-                  </span>
-                  <span className="font-mono text-white/50 truncate" title={s.storageRoot}>{s.storageRoot.slice(0, 26)}…</span>
-                </div>
-              )}
-              <p className="text-[10px] text-white/25">{new Date(s.createdAt).toLocaleString()}</p>
-            </div>
-            <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold ${s.status === 'minted' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
-              {s.status}
-            </span>
-          </div>
-        </div>
-      ))}
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-6 py-8 text-center space-y-3">
+      <p className="text-sm font-semibold text-white/50">Storage proofs unavailable</p>
+      <p className="text-xs text-white/30 max-w-md mx-auto leading-relaxed">
+        0G Storage SDK v0.3.3 is incompatible with the Aristotle mainnet Flow contract — the on-chain
+        <code className="mx-1 font-mono text-white/40">submit()</code>
+        ABI has changed since the SDK was released. Receipts are anchored on-chain via
+        payload hash (keccak256) until a compatible SDK is available.
+      </p>
+      <p className="text-[10px] text-white/20">
+        All receipts are still verifiable on-chain — see the live receipt feed above.
+      </p>
     </div>
   );
 }
@@ -330,13 +303,8 @@ export default async function ProofsPage() {
 
         {/* Storage proof sample */}
         <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Storage proof sample</h2>
-            <p className="text-xs text-white/40 mt-1">
-              5 random receipts proving the 0G Storage round-trip (payload → rootHash → on-chain anchor).
-            </p>
-          </div>
-          <StorageProofsSection samples={proofs.storageProofSample} />
+          <h2 className="text-lg font-semibold text-white">Storage proof sample</h2>
+          <StorageProofsSection />
         </div>
 
       </section>
