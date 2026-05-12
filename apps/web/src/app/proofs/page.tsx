@@ -73,6 +73,91 @@ function mergeSeededAddresses(proofs: ProofsApiResponse): ProofsApiResponse {
   };
 }
 
+// ── Agent emblems (inline SVG, no files, no IDs) ──────────────────────────────
+
+// Aurora — sunrise with rays, representing news analysis and real-time data broadcast.
+// Semicircle arc sits on a horizon line; 5 rays radiate outward at cardinal/diagonal angles.
+function AuroraIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <line x1="4" y1="27" x2="36" y2="27" strokeOpacity="0.5" />
+      <path d="M 7 27 A 13 13 0 0 1 33 27" />
+      <line x1="20" y1="4"  x2="20" y2="9" />
+      <line x1="30.2" y1="9.8"  x2="26.7" y2="13.3" />
+      <line x1="36"   y1="20"   x2="31"   y2="20"   />
+      <line x1="9.8"  y1="9.8"  x2="13.3" y2="13.3" />
+      <line x1="4"    y1="20"   x2="9"    y2="20"   />
+    </svg>
+  );
+}
+
+// Vesper — crescent moon, representing creative / generative work done in the evening cycle.
+// Path uses two arcs: outer circle center (19,20) r=13, inner circle center (26,20) r=11.
+// The crescent faces right. Two accent dots suggest a star field.
+function VesperIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M 26 9 A 13 13 0 1 0 26 31 A 11 11 0 0 1 26 9 Z"
+        fill="currentColor" fillOpacity="0.12" />
+      <circle cx="33" cy="10" r="1"    fill="currentColor" stroke="none" />
+      <circle cx="36" cy="18" r="0.7"  fill="currentColor" stroke="none" />
+      <circle cx="30" cy="5"  r="0.7"  fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// Helix — two crossing bezier strands with rungs, representing chain analytics and data interplay.
+// Strand 1: (8,8)→(32,32). Strand 2: (8,32)→(32,8). Rungs connect the strands at t≈0.2, 0.5, 0.8.
+function HelixIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M 8 8  C 16 8  24 32 32 32" />
+      <path d="M 8 32 C 16 32 24 8  32 8"  strokeOpacity="0.45" />
+      <line x1="12" y1="10.5" x2="12" y2="27"  strokeOpacity="0.35" />
+      <line x1="20" y1="17"   x2="20" y2="23"  strokeOpacity="0.6"  />
+      <line x1="28" y1="13"   x2="28" y2="29.5" strokeOpacity="0.35" />
+    </svg>
+  );
+}
+
+// ── Agent card metadata ───────────────────────────────────────────────────────
+
+const AGENT_META = {
+  aurora: {
+    Icon: AuroraIcon,
+    role: 'Analysis Agent',
+    capability: 'News · web.search · self-billing',
+    accent: 'text-amber-400',
+    iconBg: 'bg-amber-400/[0.08] border-amber-400/20',
+    topBar: 'from-amber-400/40 to-transparent',
+    badgeActive: 'bg-amber-400/10 text-amber-300',
+    dot: 'bg-amber-400',
+  },
+  vesper: {
+    Icon: VesperIcon,
+    role: 'Creative Agent',
+    capability: 'Media · image.generate · nft.mint',
+    accent: 'text-violet-400',
+    iconBg: 'bg-violet-400/[0.08] border-violet-400/20',
+    topBar: 'from-violet-400/40 to-transparent',
+    badgeActive: 'bg-violet-400/10 text-violet-300',
+    dot: 'bg-violet-400',
+  },
+  helix: {
+    Icon: HelixIcon,
+    role: 'Analytics Agent',
+    capability: 'Chain · chain.query · daily report',
+    accent: 'text-cyan-400',
+    iconBg: 'bg-cyan-400/[0.08] border-cyan-400/20',
+    topBar: 'from-cyan-400/40 to-transparent',
+    badgeActive: 'bg-cyan-400/10 text-cyan-300',
+    dot: 'bg-cyan-400',
+  },
+} as const;
+
 // ── Tab navigation ────────────────────────────────────────────────────────────
 
 const TABS = [
@@ -159,52 +244,78 @@ function ContractsTab() {
 // ── Overview tab ──────────────────────────────────────────────────────────────
 
 function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForHours }: DemoAgent) {
-  const emoji = slug === 'aurora' ? '🔴' : slug === 'vesper' ? '🟣' : '🔵';
-  const descriptions: Record<string, string> = {
-    aurora: 'News analysis · web.search · self-billing',
-    vesper: 'Creative media · image.generate · pays aurora',
-    helix:  'On-chain analytics · chain.query · daily report',
-  };
+  const meta = AGENT_META[slug as keyof typeof AGENT_META];
+  if (!meta) return null;
+  const { Icon, role, capability, accent, iconBg, topBar, badgeActive, dot } = meta;
+  const isActive = Boolean(lastHeartbeat);
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 space-y-4">
-      <div className="flex items-start gap-3">
-        <span className="text-xl leading-none">{emoji}</span>
-        <div className="min-w-0">
-          <p className="font-semibold text-white capitalize">{slug}</p>
-          <p className="text-[11px] text-white/40 leading-relaxed mt-0.5">{descriptions[slug]}</p>
+    <div className="relative rounded-2xl border border-white/[0.06] bg-white/[0.025] overflow-hidden flex flex-col">
+      {/* Top accent gradient bar */}
+      <div className={`h-px w-full bg-gradient-to-r ${topBar}`} />
+
+      <div className="p-5 flex flex-col gap-5 flex-1">
+        {/* Header: emblem + name + role */}
+        <div className="flex items-center gap-3.5">
+          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${iconBg} ${accent}`}>
+            <Icon className="w-6 h-6" />
+          </div>
+          <div className="min-w-0">
+            <p className={`font-semibold capitalize leading-tight ${accent}`}>{slug}</p>
+            <p className="text-[11px] text-white/35 mt-0.5">{role}</p>
+          </div>
+          {/* Live indicator top-right */}
+          <div className="ml-auto">
+            {isActive ? (
+              <span className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${dot}`} />
+                <span className="text-[10px] font-semibold text-white/40">Live</span>
+              </span>
+            ) : (
+              <span className="text-[10px] text-white/20">Idle</span>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="space-y-2 text-xs">
-        <div className="flex justify-between gap-2">
-          <span className="text-white/40 shrink-0">Address</span>
-          {agentId ? (
-            <a href={`https://chainscan.0g.ai/address/${agentId}`} target="_blank" rel="noreferrer"
-              className="font-mono text-violet-300 hover:text-violet-200 truncate">
-              {agentId.slice(0, 12)}…
-            </a>
-          ) : <span className="text-white/20">not seeded</span>}
+
+        {/* Capability tags */}
+        <p className="text-[10px] text-white/30 leading-relaxed -mt-2">{capability}</p>
+
+        {/* Stats */}
+        <div className="space-y-2.5 text-xs border-t border-white/[0.05] pt-4">
+          <div className="flex justify-between items-center gap-2">
+            <span className="text-white/35 shrink-0">Address</span>
+            {agentId ? (
+              <a href={`https://chainscan.0g.ai/address/${agentId}`} target="_blank" rel="noreferrer"
+                className={`font-mono hover:opacity-80 truncate ${accent}`} title={agentId}>
+                {agentId.slice(0, 6)}…{agentId.slice(-4)}
+              </a>
+            ) : <span className="text-white/20">not seeded</span>}
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-white/35">Receipts minted</span>
+            <span className="text-white/70 font-semibold tabular-nums">{receiptCount}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-white/35">Last heartbeat</span>
+            <span className="text-white/55 tabular-nums">
+              {lastHeartbeat ? new Date(lastHeartbeat).toLocaleTimeString() : '—'}
+            </span>
+          </div>
+          {runningForHours !== null && (
+            <div className="flex justify-between items-center">
+              <span className="text-white/35">Uptime</span>
+              <span className="text-green-400 font-semibold tabular-nums">{runningForHours}h</span>
+            </div>
+          )}
         </div>
-        <div className="flex justify-between">
-          <span className="text-white/40">Receipts</span>
-          <span className="text-white/70 font-semibold">{receiptCount}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-white/40">Last heartbeat</span>
-          <span className="text-white/60">
-            {lastHeartbeat ? new Date(lastHeartbeat).toLocaleTimeString() : '—'}
+
+        {/* Status badge */}
+        <div className="mt-auto pt-1">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase ${isActive ? badgeActive : 'bg-white/[0.04] text-white/25'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? dot : 'bg-white/20'}`} />
+            {isActive ? 'Active' : 'Awaiting first heartbeat'}
           </span>
         </div>
-        {runningForHours !== null && (
-          <div className="flex justify-between">
-            <span className="text-white/40">Running for</span>
-            <span className="text-green-400 font-semibold">{runningForHours}h</span>
-          </div>
-        )}
-      </div>
-      <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${lastHeartbeat ? 'bg-green-500/10 text-green-400' : 'bg-white/[0.05] text-white/30'}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${lastHeartbeat ? 'bg-green-400 animate-pulse' : 'bg-white/20'}`} />
-        {lastHeartbeat ? 'Active' : 'Awaiting seed'}
       </div>
     </div>
   );
@@ -283,41 +394,48 @@ function StorageProofsTab() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-white">Storage proof sample</h2>
-        <p className="text-xs text-white/40 mt-1">
-          Receipts with a real 0G Storage root hash (distinct from the payload hash) prove a full
-          round-trip: payload → 0G Storage upload → rootHash anchored on-chain. Receipts that fall
-          back show their keccak256 payload hash as the on-chain anchor instead.
+        <p className="text-xs text-white/40 mt-1 max-w-2xl leading-relaxed">
+          A full storage proof proves the payload made a complete round-trip: serialised → uploaded to
+          0G Storage → Merkle root returned → that root anchored on-chain. Without a successful upload,
+          the keccak256 payload hash is anchored instead — still verifiable, not a full storage proof.
         </p>
       </div>
 
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-4 space-y-3 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-white/60">payloadHash</span>
-          <span className="text-white/30">—</span>
-          <span className="text-white/40">keccak256 of the stable-JSON serialised action payload; always present.</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-white/60">storageRoot</span>
-          <span className="text-white/30">—</span>
-          <span className="text-white/40">0G Storage Merkle root returned after a successful upload. Falls back to payloadHash when upload fails.</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-white/60">mint tx</span>
-          <span className="text-white/30">—</span>
-          <span className="text-white/40">Aristotle mainnet transaction that anchored the receipt via ReceiptBook.emitReceipt(). This is NOT the storage upload tx.</span>
-        </div>
+      {/* Glossary */}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
+        {([
+          ['payloadHash',  'keccak256 of the stable-JSON serialised action payload. Always present. Content proof — not a transaction hash.'],
+          ['storageRoot',  '0G Storage Merkle root returned after a successful upload. Falls back to payloadHash if upload fails. Content proof — not a transaction hash.'],
+          ['mint tx',      'Aristotle mainnet transaction anchoring the receipt via ReceiptBook.emitReceipt(). This is the on-chain proof of agent activity. Not a storage upload tx.'],
+          ['minted',       'Receipt anchored on-chain. The mint tx is confirmed on Aristotle mainnet.'],
+          ['pending',      'Chain submission in flight or retrying. Resolves to minted within seconds under normal conditions.'],
+        ] as [string, string][]).map(([term, def]) => (
+          <div key={term} className="flex gap-4 px-5 py-3.5 text-xs">
+            <code className="shrink-0 font-mono text-violet-300 w-28">{term}</code>
+            <span className="text-white/40 leading-relaxed">{def}</span>
+          </div>
+        ))}
       </div>
 
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-6 py-8 text-center space-y-3">
-        <p className="text-sm font-semibold text-white/50">Storage proofs unavailable</p>
+      <p className="text-xs text-white/30 italic">
+        Storage roots and payload hashes are content proofs, not transaction hashes.
+      </p>
+
+      {/* Unavailable banner */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-8 text-center space-y-3">
+        <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1 text-[10px] font-semibold text-white/40 uppercase tracking-widest">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+          Unavailable
+        </div>
+        <p className="text-sm font-semibold text-white/50 mt-2">0G Storage proofs not yet active</p>
         <p className="text-xs text-white/30 max-w-md mx-auto leading-relaxed">
-          0G Storage SDK v0.3.3 is incompatible with the Aristotle mainnet Flow contract — the on-chain
+          SDK v0.3.3 is incompatible with the Aristotle mainnet Flow contract — the on-chain
           <code className="mx-1 font-mono text-white/40">submit()</code>
-          ABI has changed since the SDK was released. Receipts are anchored on-chain via
-          payload hash (keccak256) until a compatible SDK is available.
+          ABI changed after the SDK was released. Receipts are anchored via payload hash (keccak256)
+          until a compatible SDK ships.
         </p>
-        <p className="text-[10px] text-white/20">
-          All receipts are still verifiable on-chain — see the Overview → Receipt feed.
+        <p className="text-[10px] text-white/20 pt-1">
+          All receipts remain verifiable on-chain — see Overview → Receipt feed.
         </p>
       </div>
     </div>
@@ -346,16 +464,18 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
             On-chain proofs of<br />autonomous activity
           </h1>
           <p className="max-w-2xl text-white/55 leading-relaxed">
-            Every receipt is a cryptographic proof: agent identity NFT → action tag →
-            payload hash anchored in 0G Storage → on-chain transaction. Auto-refreshes every 30 s.
+            Each agent action produces a receipt: the payload is hashed (keccak256), optionally
+            uploaded to 0G Storage for a Merkle root, then anchored on Aristotle mainnet via
+            <code className="mx-1 text-sm font-mono text-white/60">ReceiptBook.emitReceipt()</code>.
+            On-chain transactions auto-refresh every 30 s.
           </p>
           <div className="flex flex-wrap items-center gap-4 pt-1 text-sm">
             <span className="text-white/40">
-              <span className="text-white font-semibold">{proofs.totalReceipts.toLocaleString()}</span> total receipts
+              <span className="text-white font-semibold">{proofs.totalReceipts.toLocaleString()}</span> receipts anchored
             </span>
             <span className="w-px h-4 bg-white/10" />
             <span className="text-white/40">
-              Generated <span className="text-white/60">{new Date(proofs.generatedAt).toLocaleTimeString()}</span>
+              Updated <span className="text-white/60">{new Date(proofs.generatedAt).toLocaleTimeString()}</span>
             </span>
           </div>
         </div>

@@ -223,6 +223,11 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
             total={receipts.length}
             onChange={setPage}
           />
+
+          <p className="text-[10px] text-white/25 pt-1">
+            Storage roots and payload hashes are content proofs, not transaction hashes.
+            The <span className="font-mono">Mint tx</span> column links to the on-chain anchor.
+          </p>
         </>
       )}
     </div>
