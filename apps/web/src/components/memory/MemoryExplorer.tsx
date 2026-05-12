@@ -119,7 +119,7 @@ export function MemoryExplorer({ agentId, initialEntries }: Props) {
               )}
               {selected.anchoredTxHash && (
                 <a
-                  href={`https://chainscan-galileo.0g.ai/tx/${selected.anchoredTxHash}`}
+                  href={`https://chainscan.0g.ai/tx/${selected.anchoredTxHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs text-success hover:underline"

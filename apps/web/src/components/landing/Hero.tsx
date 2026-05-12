@@ -26,7 +26,7 @@ export function Hero() {
         <div className="flex flex-col justify-center">
           {/* Eyebrow */}
           <div className="mb-6 inline-flex w-fit rounded-full border border-[var(--color-line-accent)] bg-accent/[0.07] px-4 py-1.5 text-xs font-medium text-accent-light">
-            Live on 0G Galileo Testnet
+            Live on Aristotle Mainnet
           </div>
 
           {/* H1 */}

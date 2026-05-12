@@ -23,7 +23,7 @@ const NAV_COLS = [
     links: [
       { label: 'GitHub',    href: 'https://github.com/Franlinozz/APOGEE', external: true },
       { label: '0G Docs',   href: 'https://docs.0g.ai', external: true },
-      { label: 'Explorer',  href: 'https://chainscan-galileo.0g.ai', external: true },
+      { label: 'Explorer',  href: 'https://chainscan.0g.ai', external: true },
     ],
   },
 ] as const;
@@ -58,14 +58,14 @@ export function Footer() {
             {/* Deployed contracts */}
             <div className="mt-6">
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-fg-faint">
-                Galileo contracts
+                Aristotle contracts
               </p>
               <ul className="space-y-2">
                 {CONTRACTS.map(({ label, address }) => (
                   <li key={label} className="flex items-center gap-2">
                     <span className="w-28 text-xs text-fg-muted">{label}</span>
                     <a
-                      href={`https://chainscan-galileo.0g.ai/address/${address}`}
+                      href={`https://chainscan.0g.ai/address/${address}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-mono text-[11px] text-fg-faint transition-colors hover:text-accent-light"
@@ -108,7 +108,7 @@ export function Footer() {
             © {year} Apogee Protocol. MIT License.
           </p>
           <p className="text-xs text-fg-faint">
-            Galileo Testnet · Chain ID 16602
+            Aristotle Mainnet · Chain ID 16661
           </p>
         </div>
       </div>

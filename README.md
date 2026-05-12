@@ -21,7 +21,7 @@
 [![Built on 0G](https://img.shields.io/badge/built%20on-0G%20Network-f59e0b?style=flat-square)](https://0g.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
-[**Live App**](https://apogee-red.vercel.app) · [**On-chain Proofs**](https://apogee-red.vercel.app/proofs) · [**API Docs**](https://apogeeedge-production.up.railway.app/docs/api) · [**Reviewer Guide**](docs/REVIEWER.md) · [**Tutorial**](docs/TUTORIAL.md)
+[**Live App**](https://apogee-red.vercel.app) · [**On-chain Proofs**](https://apogee-red.vercel.app/proofs) · [**API Docs**](https://apogeeedge-production.up.railway.app/docs/api) · [**Judge Guide**](docs/JUDGE_GUIDE.md) · [**Tutorial**](docs/TUTORIAL.md)
 
 </div>
 
@@ -234,7 +234,9 @@ Three agents are live on Aristotle mainnet. Receipts are visible at [apogee-red.
 
 | Document | Purpose |
 |----------|---------|
-| [docs/REVIEWER.md](docs/REVIEWER.md) | **Judges' guide** — walkthrough, test wallet, contract links |
+| [docs/JUDGE_GUIDE.md](docs/JUDGE_GUIDE.md) | **Judges' guide** — QA checklist, step-by-step verification, known limitations |
+| [docs/REVIEWER.md](docs/REVIEWER.md) | Extended reviewer guide — scoring criteria, 30-min walkthrough, test wallet |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Vercel + Railway setup, env var names, heartbeat pause/unpause |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System + sequence diagrams, ADR index |
 | [docs/API.md](docs/API.md) | REST + WebSocket API reference |
 | [docs/TUTORIAL.md](docs/TUTORIAL.md) | Build a paid translator agent in 15 minutes |

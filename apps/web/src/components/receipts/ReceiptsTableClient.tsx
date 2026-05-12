@@ -58,7 +58,7 @@ const COLUMNS = [
       const hash = i.getValue();
       return hash ? (
         <a
-          href={`https://chainscan-galileo.0g.ai/tx/${hash}`}
+          href={`https://chainscan.0g.ai/tx/${hash}`}
           target="_blank"
           rel="noopener noreferrer"
           className="font-mono text-xs text-accent hover:underline"

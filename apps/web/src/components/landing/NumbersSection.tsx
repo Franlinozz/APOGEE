@@ -47,7 +47,7 @@ export async function NumbersSection() {
             Network stats
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-fg" style={{ letterSpacing: '-0.02em' }}>
-            Running live on Galileo testnet.
+            Running live on Aristotle mainnet.
           </h2>
         </div>
 
