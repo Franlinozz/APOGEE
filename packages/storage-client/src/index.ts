@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Indexer, ZgFile } from '@0glabs/0g-ts-sdk';
+import { Indexer, ZgFile } from '@0gfoundation/0g-ts-sdk';
 import { Wallet, JsonRpcProvider } from 'ethers';
 import { LRUCache } from 'lru-cache';
 import pino, { type Logger } from 'pino';
@@ -144,13 +144,18 @@ export class StorageClient {
       const [tree, treeErr] = await file.merkleTree();
       if (treeErr) throw treeErr;
       if (!tree) throw new Error('0G SDK did not return a Merkle tree');
-      const rootHash = tree.rootHash();
+      const treeRoot = tree.rootHash();
+      if (!treeRoot) throw new Error('0G SDK Merkle tree has no root hash');
+      const rootHash: string = treeRoot;
       const sdkSigner = this.signer as unknown as Parameters<Indexer['upload']>[2];
       const [upload, uploadErr] = await this.indexer.upload(file, this.rpcUrl, sdkSigner);
       if (uploadErr) throw uploadErr;
+      // upload is either single { txHash, rootHash, txSeq } or multi-fragment { txHashes[], rootHashes[], txSeqs[] }
+      const singleRoot: string = ('rootHash' in upload && upload.rootHash) ? upload.rootHash : rootHash;
+      const singleTx: string   = ('txHash'   in upload) ? upload.txHash : '';
       return {
-        rootHash: upload.rootHash ?? rootHash,
-        txHash: upload.txHash,
+        rootHash: singleRoot,
+        txHash: singleTx,
         size: payload.byteLength,
       };
     } finally {
