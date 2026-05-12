@@ -60,6 +60,7 @@ export interface MintReceiptResult {
   receiptId: string;
   txHash?: string | undefined;
   storageRoot: string;
+  payloadHash: string;
   status: 'pending' | 'minted';
 }
 
@@ -162,7 +163,7 @@ export class ReceiptMinter {
     const parsed = mintSchema.parse(action);
     if (parsed.clientReceiptId) {
       const existing = await this.index.findByClientReceiptId(parsed.clientReceiptId);
-      if (existing) return { receiptId: existing.receiptId, txHash: existing.txHash, storageRoot: existing.storageRoot, status: existing.status };
+      if (existing) return { receiptId: existing.receiptId, txHash: existing.txHash, storageRoot: existing.storageRoot, payloadHash: existing.payloadHash, status: existing.status };
     }
 
     const payloadJson = stableJson(parsed.payload);
@@ -205,7 +206,7 @@ export class ReceiptMinter {
 
     const minted = { ...row, storageRoot: effectiveStorageRoot, txHash, status: 'minted' as const };
     this.eventBus.publish('receipt', minted);
-    return { receiptId, txHash, storageRoot: effectiveStorageRoot, status: 'minted' };
+    return { receiptId, txHash, storageRoot: effectiveStorageRoot, payloadHash, status: 'minted' };
   }
 
   async reconcilePending(): Promise<number> {
