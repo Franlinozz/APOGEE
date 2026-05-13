@@ -7,6 +7,7 @@ import {
   type TransactionReceipt,
   type TransactionRequest,
   Wallet,
+  getAddress,
   getBytes,
   verifyMessage,
 } from 'ethers';
@@ -76,6 +77,12 @@ const agentAccountSendSchema = z.object({
   value: z.union([z.bigint(), z.string()]).optional(),
   data: hexDataSchema.optional(),
 });
+// Converts any valid hex address to its EIP-55 checksummed form, tolerating
+// mixed-case inputs with incorrect checksums (e.g. addresses from older deployments).
+function normalizeAddress(address: string): string {
+  return getAddress(address.toLowerCase());
+}
+
 const AGENT_ACCOUNT_EXECUTE_ABI = ['function execute(address target,uint256 value,bytes data) returns (bytes)'];
 const SEND_BACKOFF_MS = [250, 750, 2_000] as const;
 const DEFAULT_RECEIPT_TIMEOUT_MS = 60_000;
@@ -109,7 +116,7 @@ export class ChainClient {
   }
 
   contract<T extends BaseContract = Contract>(address: string, abi: InterfaceAbi): T {
-    const parsedAddress = addressSchema.parse(address);
+    const parsedAddress = normalizeAddress(addressSchema.parse(address));
     const iface = new Interface(abi);
     this.errorInterfaces.push(iface);
     return new Contract(parsedAddress, abi, this.signer) as unknown as T;

@@ -26,25 +26,26 @@ export function Launcher({ isOpen, onToggle, unreadCount }: LauncherProps) {
         the SVG element and reference it via `currentColor` inside every shape.
       */}
       <svg
-        width="30"
-        height="30"
-        viewBox="0 0 30 30"
+        width="28"
+        height="28"
+        viewBox="0 0 28 28"
         fill="none"
         aria-hidden="true"
         style={{ color: 'rgb(var(--color-accent, 124 95 241))' }}
       >
-        {/* outer ring */}
-        <circle cx="15" cy="15" r="13.5" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1" />
-        {/* dashed orbit track */}
-        <circle cx="15" cy="15" r="8.5" stroke="currentColor" strokeOpacity="0.65" strokeWidth="0.9" strokeDasharray="3 2" />
-        {/* soft core glow */}
-        <circle cx="15" cy="15" r="5" fill="currentColor" fillOpacity="0.18" />
-        {/* core dot */}
-        <circle cx="15" cy="15" r="3.2" fill="currentColor" />
-        {/* orbiting node */}
-        <g className={styles.launcherOrbit} style={{ transformOrigin: '15px 15px' }}>
-          <circle cx="15" cy="6.5" r="2.5" fill="currentColor" />
-        </g>
+        {/* speech bubble body */}
+        <path
+          d="M4 6C4 4.895 4.895 4 6 4H22C23.105 4 24 4.895 24 6V17C24 18.105 23.105 19 22 19H16L11 24V19H6C4.895 19 4 18.105 4 17V6Z"
+          fill="currentColor"
+          fillOpacity="0.15"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+        {/* three dots — AI thinking indicator */}
+        <circle cx="10" cy="12.5" r="1.3" fill="currentColor" />
+        <circle cx="14" cy="12.5" r="1.3" fill="currentColor" fillOpacity="0.7" />
+        <circle cx="18" cy="12.5" r="1.3" fill="currentColor" fillOpacity="0.4" />
       </svg>
 
       {unreadCount > 0 && (

@@ -211,7 +211,7 @@ export function createRegistry(): SkillRegistry {
 
 export function createQueues(connection: Redis): { agentRuns: Queue<AgentRunJob>; heartbeats: Queue<HeartbeatJobData>; reconciler: Queue } {
   return {
-    agentRuns:  new Queue<AgentRunJob>('agent-runs', { connection }),
+    agentRuns:  new Queue<AgentRunJob>('agent-runs', { connection, defaultJobOptions: { removeOnComplete: 50, removeOnFail: 20 } }),
     heartbeats: new Queue<HeartbeatJobData>('heartbeats', { connection }),
     reconciler: new Queue('reconcile-pending-receipts', { connection }),
   };

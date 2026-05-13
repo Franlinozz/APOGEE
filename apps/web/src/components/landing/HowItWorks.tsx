@@ -9,7 +9,7 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section className="py-24">
+    <section id="skills" className="py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-16 max-w-xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-accent">

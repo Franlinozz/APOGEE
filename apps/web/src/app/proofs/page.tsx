@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Nav } from '@/components/landing/Nav';
 import { CONTRACTS, EXPLORER_URLS, CHAIN_NAMES, CONTRACT_NAMES } from '@/lib/contracts';
 import { ReceiptsFeed } from './_client';
 
@@ -532,7 +533,9 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
     : 'overview';
 
   return (
-    <main className="min-h-screen px-6 py-16 bg-bg">
+    <>
+      <Nav />
+      <main className="min-h-screen pt-28 pb-16 px-6 bg-bg">
       <section className="mx-auto max-w-5xl space-y-10">
 
         {/* Hero */}
@@ -567,6 +570,7 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
         {tab === 'contracts' && <ContractsTab />}
 
       </section>
-    </main>
+      </main>
+    </>
   );
 }

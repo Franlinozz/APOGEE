@@ -362,8 +362,10 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       !r.storageRoot.startsWith('local://') &&
       r.storageRoot !== r.payloadHash,
     );
-    const shuffled = [...withRealStorage].sort(() => Math.random() - 0.5);
-    const storageProofSample = shuffled.slice(0, 5).map(r => ({
+    const storageProofSample = [...withRealStorage]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 50)
+      .map(r => ({
       receiptId: r.receiptId,
       agentId: r.agentId,
       actionTag: r.actionTag,
