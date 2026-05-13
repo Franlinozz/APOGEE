@@ -1,8 +1,8 @@
 'use client';
 
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { createConfig, http } from 'wagmi';
+import { injected, coinbaseWallet } from 'wagmi/connectors';
 import { defineChain } from 'viem';
-import { http } from 'wagmi';
 
 export const galileo = defineChain({
   id: 16602,
@@ -25,10 +25,15 @@ export const aristotle = defineChain({
   },
 });
 
-export const wagmiConfig = getDefaultConfig({
-  appName: 'Apogee Protocol',
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '',
+// Use createConfig directly (no WalletConnect) to avoid:
+// - getDefaultConfig throwing "No projectId found" during SSR
+// - pino@7 / pino-pretty being bundled via @walletconnect/logger
+export const wagmiConfig = createConfig({
   chains: [aristotle, galileo],
+  connectors: [
+    injected(),
+    coinbaseWallet({ appName: 'Apogee Protocol' }),
+  ],
   transports: {
     [aristotle.id]: http('https://evmrpc.0g.ai'),
     [galileo.id]: http('https://evmrpc-testnet.0g.ai'),

@@ -41,30 +41,13 @@ const WALLETS = [
     ),
   },
   {
-    name: 'WalletConnect',
-    bg: '#3B99FC',
-    icon: (
-      <svg viewBox="0 0 40 25" fill="none" className="h-5 w-5">
-        <path d="M8.19 4.66c6.52-6.38 17.1-6.38 23.62 0l.78.77c.33.32.33.83 0 1.15l-2.68 2.62a.41.41 0 01-.57 0l-1.08-1.06c-4.55-4.45-11.93-4.45-16.48 0L11.43 9.2a.41.41 0 01-.57 0L8.18 6.58a.81.81 0 010-1.15l.01-.77zm29.18 5.43l2.38 2.33c.33.32.33.83 0 1.15L27.36 25.3a.82.82 0 01-1.15 0l-8.8-8.61a.2.2 0 00-.29 0l-8.8 8.61a.82.82 0 01-1.15 0L.26 13.57a.81.81 0 010-1.15l2.38-2.33a.82.82 0 011.15 0l8.8 8.61c.08.08.21.08.29 0l8.8-8.61a.82.82 0 011.15 0l8.8 8.61c.08.08.21.08.29 0l8.8-8.61a.82.82 0 011.45-.5z" fill="#3B99FC"/>
-      </svg>
-    ),
-  },
-  {
-    name: 'Rainbow',
-    bg: 'linear-gradient(135deg,#FF6B6B,#FF9F43,#FFC312,#A3CB38,#1289A7,#9980FA)',
+    name: 'Browser Wallet',
+    bg: '#6366F1',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
-        <defs>
-          <linearGradient id="rb" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#FF6B6B"/>
-            <stop offset="50%" stopColor="#9980FA"/>
-            <stop offset="100%" stopColor="#1289A7"/>
-          </linearGradient>
-        </defs>
-        <circle cx="12" cy="12" r="11" stroke="url(#rb)" strokeWidth="2" fill="none"/>
-        <path d="M5 14a7 7 0 0114 0" stroke="url(#rb)" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-        <path d="M7 14a5 5 0 0110 0" stroke="#9980FA" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-        <path d="M9 14a3 3 0 016 0" stroke="#FF6B6B" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+        <rect x="2" y="5" width="20" height="14" rx="2" stroke="#818CF8" strokeWidth="1.5"/>
+        <path d="M2 9h20" stroke="#818CF8" strokeWidth="1.5"/>
+        <rect x="15" y="12" width="4" height="3" rx="1" fill="#818CF8"/>
       </svg>
     ),
   },
