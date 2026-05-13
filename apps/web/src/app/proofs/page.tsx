@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Nav } from '@/components/landing/Nav';
 import { CONTRACTS, EXPLORER_URLS, CHAIN_NAMES, CONTRACT_NAMES } from '@/lib/contracts';
-import { ReceiptsFeed } from './_client';
+import { ReceiptsFeed, StorageProofsClient } from './_client';
 
 export const metadata: Metadata = { title: 'On-chain Proofs — Apogee Protocol' };
 export const revalidate = 30;
@@ -403,13 +403,6 @@ function OverviewTab({ proofs }: { proofs: ProofsApiResponse }) {
 // ── Storage Proofs tab ────────────────────────────────────────────────────────
 
 function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
-  const fmtTag = (tag: string): string => {
-    if (!tag) return '—';
-    if (tag.startsWith('0x')) return tag.slice(0, 10) + '…';
-    const parts = tag.split('.');
-    return parts[parts.length - 1] ?? tag;
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -441,82 +434,7 @@ function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
         storageRoot and payloadHash are content-addressed proofs, not transaction hashes — only the mint tx links to a block explorer.
       </p>
 
-      {/* Proof table or empty state */}
-      {proofSample.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-8 text-center space-y-2">
-          <p className="text-sm font-semibold text-white/50">No storage proofs yet</p>
-          <p className="text-xs text-white/30 max-w-md mx-auto leading-relaxed">
-            Heartbeats are running. Storage proofs appear once a heartbeat successfully
-            uploads its payload to 0G Storage and the receipt is anchored on-chain.
-          </p>
-          <p className="text-[10px] text-white/20 pt-1">
-            All receipts remain verifiable on-chain — see Overview → Receipt feed.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-white/[0.06] text-white/40 text-left">
-                <th className="px-4 py-3 font-medium">Agent</th>
-                <th className="px-4 py-3 font-medium">Action</th>
-                <th className="px-4 py-3 font-medium">Storage root (0G)</th>
-                <th className="px-4 py-3 font-medium">Payload hash</th>
-                <th className="px-4 py-3 font-medium">Storage tx (0G)</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Time</th>
-                <th className="px-4 py-3 font-medium">Mint tx (Aristotle)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.04]">
-              {proofSample.map(r => (
-                <tr key={r.receiptId} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-4 py-2.5 text-white/60 capitalize">{r.agentId}</td>
-                  <td className="px-4 py-2.5 font-mono text-violet-300" title={r.actionTag}>{fmtTag(r.actionTag)}</td>
-                  <td className="px-4 py-2.5 font-mono text-emerald-400 text-[10px]" title={r.storageRoot}>
-                    {r.storageRoot ? r.storageRoot.slice(0, 14) + '…' : '—'}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-white/35 text-[10px]" title={r.payloadHash}>
-                    {r.payloadHash ? r.payloadHash.slice(0, 14) + '…' : '—'}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {r.storageTxHash ? (
-                      <a
-                        href={`https://chainscan.0g.ai/tx/${r.storageTxHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-mono text-emerald-400 hover:text-emerald-300 text-[10px]"
-                        title={r.storageTxHash}
-                      >
-                        {r.storageTxHash.slice(0, 10)}…
-                      </a>
-                    ) : <span className="text-white/20">—</span>}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-white/40">{new Date(r.createdAt).toLocaleTimeString()}</td>
-                  <td className="px-4 py-2.5">
-                    {r.txHash ? (
-                      <a
-                        href={`https://chainscan.0g.ai/tx/${r.txHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-mono text-violet-400 hover:text-violet-300"
-                        title={r.txHash}
-                      >
-                        {r.txHash.slice(0, 10)}…
-                      </a>
-                    ) : <span className="text-white/20">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <StorageProofsClient proofSample={proofSample} />
     </div>
   );
 }

@@ -1,8 +1,10 @@
+// CLIENT: pagination state for receipt feed and storage proof table
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 
 const PAGE_SIZE = 9;
+const STORAGE_PAGE_SIZE = 10;
 
 type ReceiptIndexRow = {
   receiptId: string;
@@ -230,6 +232,112 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+// ── Storage proof paginated table ─────────────────────────────────────────────
+
+type StorageProofRow = {
+  receiptId: string;
+  agentId: string;
+  actionTag: string;
+  payloadHash: string;
+  storageRoot: string;
+  storageTxHash?: string | undefined;
+  txHash?: string | undefined;
+  status: string;
+  createdAt: string;
+};
+
+function fmtStorageTag(tag: string): string {
+  if (!tag) return '—';
+  if (tag.startsWith('0x')) return tag.slice(0, 10) + '…';
+  const parts = tag.split('.');
+  return parts[parts.length - 1] ?? tag;
+}
+
+export function StorageProofsClient({ proofSample }: { proofSample: StorageProofRow[] }) {
+  const [page, setPage] = useState(1);
+
+  useEffect(() => { setPage(1); }, [proofSample.length]);
+
+  const total = proofSample.length;
+  const totalPages = Math.max(1, Math.ceil(total / STORAGE_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = proofSample.slice((safePage - 1) * STORAGE_PAGE_SIZE, safePage * STORAGE_PAGE_SIZE);
+
+  if (total === 0) {
+    return (
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-8 text-center space-y-2">
+        <p className="text-sm font-semibold text-white/50">No storage proofs yet</p>
+        <p className="text-xs text-white/30 max-w-md mx-auto leading-relaxed">
+          Heartbeats are running. Storage proofs appear once a heartbeat successfully
+          uploads its payload to 0G Storage and the receipt is anchored on-chain.
+        </p>
+        <p className="text-[10px] text-white/20 pt-1">
+          All receipts remain verifiable on-chain — see Overview → Receipt feed.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-white/[0.06] text-white/40 text-left">
+              <th className="px-4 py-3 font-medium">Agent</th>
+              <th className="px-4 py-3 font-medium">Action</th>
+              <th className="px-4 py-3 font-medium">Storage root (0G)</th>
+              <th className="px-4 py-3 font-medium">Payload hash</th>
+              <th className="px-4 py-3 font-medium">Storage tx (0G)</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Time</th>
+              <th className="px-4 py-3 font-medium">Mint tx (Aristotle)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/[0.04]">
+            {pageRows.map(r => (
+              <tr key={r.receiptId} className="hover:bg-white/[0.02] transition-colors">
+                <td className="px-4 py-2.5 text-white/60 capitalize">{r.agentId}</td>
+                <td className="px-4 py-2.5 font-mono text-violet-300" title={r.actionTag}>{fmtStorageTag(r.actionTag)}</td>
+                <td className="px-4 py-2.5 font-mono text-emerald-400 text-[10px]" title={r.storageRoot}>
+                  {r.storageRoot ? r.storageRoot.slice(0, 14) + '…' : '—'}
+                </td>
+                <td className="px-4 py-2.5 font-mono text-white/35 text-[10px]" title={r.payloadHash}>
+                  {r.payloadHash ? r.payloadHash.slice(0, 14) + '…' : '—'}
+                </td>
+                <td className="px-4 py-2.5">
+                  {r.storageTxHash ? (
+                    <a href={`https://chainscan.0g.ai/tx/${r.storageTxHash}`} target="_blank" rel="noreferrer"
+                      className="font-mono text-emerald-400 hover:text-emerald-300 text-[10px]" title={r.storageTxHash}>
+                      {r.storageTxHash.slice(0, 10)}…
+                    </a>
+                  ) : <span className="text-white/20">—</span>}
+                </td>
+                <td className="px-4 py-2.5">
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
+                    {r.status}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-white/40">{new Date(r.createdAt).toLocaleTimeString()}</td>
+                <td className="px-4 py-2.5">
+                  {r.txHash ? (
+                    <a href={`https://chainscan.0g.ai/tx/${r.txHash}`} target="_blank" rel="noreferrer"
+                      className="font-mono text-violet-400 hover:text-violet-300" title={r.txHash}>
+                      {r.txHash.slice(0, 10)}…
+                    </a>
+                  ) : <span className="text-white/20">—</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <Pagination page={safePage} totalPages={totalPages} total={total} onChange={setPage} />
     </div>
   );
 }
