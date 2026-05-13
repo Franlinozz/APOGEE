@@ -15,6 +15,7 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(path: string, init?: RequestInit, token?: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
+    signal: AbortSignal.timeout(8000),
     ...init,
     headers: {
       'Content-Type': 'application/json',

@@ -18,7 +18,8 @@ function fmtWei(wei: string): string {
 }
 
 async function StatsRow() {
-  const stats = await serverGetDashboardStats();
+  let stats = { totalAgents: 0, totalReceipts: 0, totalVolumeWei: '0', activeAgents: 0 };
+  try { stats = await serverGetDashboardStats(); } catch {}
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatTile label="Total Agents" value={String(stats.totalAgents)} />
@@ -30,13 +31,18 @@ async function StatsRow() {
 }
 
 async function HeatmapSection() {
-  const cells = await serverGetReceiptHeatmap();
+  let cells: Awaited<ReturnType<typeof serverGetReceiptHeatmap>> = [];
+  try { cells = await serverGetReceiptHeatmap(); } catch {}
   return <DashboardHeatmap cells={cells} />;
 }
 
 async function ActivitySection() {
-  const result = await serverGetReceipts({ limit: 10 });
-  return <RecentActivity receipts={result.items} />;
+  let receipts: Awaited<ReturnType<typeof serverGetReceipts>>['items'] = [];
+  try {
+    const result = await serverGetReceipts({ limit: 10 });
+    receipts = result.items;
+  } catch {}
+  return <RecentActivity receipts={receipts} />;
 }
 
 export default function DashboardPage() {
