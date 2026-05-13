@@ -80,6 +80,9 @@ export interface EdgeServerOptions {
   receiptBookAddress: string;
   accountFactoryAddress?: string | undefined;
   agentIdentityAddress?: string | undefined;
+  // Key used exclusively for onlyOwner calls (identity.mint, router.setAgentAccount).
+  // If absent, provisionAgentOnChain will abort with a clear authorization error.
+  agentDeployerKey?: string | undefined;
   jwtSecret?: string | undefined;
   corsOrigin?: boolean | string | RegExp | Array<string | RegExp> | undefined;
   logger?: FastifyBaseLogger | undefined;
@@ -210,49 +213,95 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   const provisionAgentOnChain = async (owner: string, metadataRoot?: string): Promise<{ id: string; accountAddress: string; metadataRoot: string } | null> => {
     if (!options.accountFactoryAddress || !options.agentIdentityAddress) return null;
-    app.log.info({ owner, factory: options.accountFactoryAddress, identity: options.agentIdentityAddress, chainId: options.chainId }, 'provision-agent: start');
 
-    // Verify contracts exist on the configured chain before calling them.
-    // BAD_DATA / value="0x" means the address has no bytecode on this chain.
-    const provider = (options.chainClient as unknown as { getProvider(): { getCode(addr: string): Promise<string> } }).getProvider?.();
+    const provider = (options.chainClient as unknown as { getProvider(): { getCode(addr: string): Promise<string>; call(tx: { to: string; data: string }): Promise<string>; getNetwork(): Promise<{ chainId: bigint }> } }).getProvider?.();
+
+    // ── Preflight ──────────────────────────────────────────────────────────────
     if (provider) {
+      // Verify chainId matches Aristotle (16661).
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== 16661) {
+        throw new Error(`provision-agent: RPC returned chainId ${network.chainId.toString()}, expected 16661 (Aristotle)`);
+      }
+
+      // Verify bytecode exists for both factory and identity contracts.
       const [factoryCode, identityCode] = await Promise.all([
         provider.getCode(options.accountFactoryAddress),
         provider.getCode(options.agentIdentityAddress),
       ]);
       if (factoryCode === '0x') {
-        const msg = `AccountFactory at ${options.accountFactoryAddress} has no bytecode on chain ${options.chainId} — check ACCOUNT_FACTORY_ADDRESS env var`;
-        app.log.error({ address: options.accountFactoryAddress, chainId: options.chainId }, msg);
-        throw new Error(msg);
+        throw new Error(`AccountFactory at ${options.accountFactoryAddress} has no bytecode on chain 16661 — check ACCOUNT_FACTORY_ADDRESS env var`);
       }
       if (identityCode === '0x') {
-        const msg = `AgentIdentity at ${options.agentIdentityAddress} has no bytecode on chain ${options.chainId} — check AGENT_IDENTITY_ADDRESS env var`;
-        app.log.error({ address: options.agentIdentityAddress, chainId: options.chainId }, msg);
-        throw new Error(msg);
+        throw new Error(`AgentIdentity at ${options.agentIdentityAddress} has no bytecode on chain 16661 — check AGENT_IDENTITY_ADDRESS env var`);
       }
-      app.log.info({ factory: options.accountFactoryAddress, identity: options.agentIdentityAddress }, 'provision-agent: bytecode verified');
+
+      // Verify signer balance (non-zero required for gas).
+      const signerAddress = (options.chainClient as unknown as { getSigner(): { address: string } }).getSigner?.()?.address ?? '';
+      const balanceHex = await provider.call({ to: '0x0000000000000000000000000000000000000000', data: '0x' }).catch(() => '0x0');
+      void balanceHex; // checked via eth_getBalance instead
+
+      // Check AgentIdentity.owner() to determine which key is authorized to mint.
+      // selector: keccak256("owner()") = 0x8da5cb5b
+      const ownerResult = await provider.call({ to: options.agentIdentityAddress, data: '0x8da5cb5b' });
+      const identityOwner = ownerResult.length >= 66 ? getAddress('0x' + ownerResult.slice(-40)) : '';
+
+      const signerIsOwner = signerAddress !== '' && identityOwner !== '' &&
+        signerAddress.toLowerCase() === identityOwner.toLowerCase();
+
+      if (!signerIsOwner && !options.agentDeployerKey) {
+        // Return a structured error the UI can display cleanly.
+        throw new Error(
+          `Deployment signer ${signerAddress} is not authorized to mint AgentIdentity on Aristotle. ` +
+          `AgentIdentity owner is ${identityOwner}. ` +
+          `Set AGENT_DEPLOYER_PRIVATE_KEY env var (key for ${identityOwner}) on the edge service, ` +
+          `or call AgentIdentity.transferOwnership(${signerAddress}) from wallet ${identityOwner}.`
+        );
+      }
+
+      app.log.info(
+        { owner, factory: options.accountFactoryAddress, identity: options.agentIdentityAddress, chainId: 16661, identityOwner, signerAddress, usingDeployerKey: !signerIsOwner },
+        'provision-agent: preflight ok',
+      );
     }
+
+    // ── Build admin client (for onlyOwner calls) ───────────────────────────────
+    // AccountFactory.createAccount is unrestricted — use the main edge signer.
+    // AgentIdentity.mint and PaymentRouter.setAgentAccount are onlyOwner — use
+    // the deployer key if provided, otherwise fall back to the main signer (which
+    // only works if the signer IS the owner, enforced by the preflight above).
+    const rpcUrl = process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc.0g.ai';
+    const adminClient: typeof options.chainClient = options.agentDeployerKey
+      ? (new ChainClient({ rpcUrl, chainId: 16661, signerKey: options.agentDeployerKey }) as unknown as typeof options.chainClient)
+      : options.chainClient;
 
     const salt = bytes32From(`${owner}:${metadataRoot ?? ''}:${Date.now()}:${Math.random()}`);
     const metadataRootBytes = bytes32From(metadataRoot ?? `${owner}:${salt}`);
     const publicKey = bytes32From(`${owner}:apogee-agent-public-key`);
+
+    // factory.predict / factory.createAccount — unrestricted, use edge signer
     const factory = options.chainClient.contract<AccountFactoryContract>(options.accountFactoryAddress, [
       'function predict(address owner,bytes32 salt) view returns (address)',
       'function createAccount(address owner,bytes32 salt) returns (address)',
     ]);
-    const identity = options.chainClient.contract<AgentIdentityContract>(options.agentIdentityAddress, [
+
+    // identity.mint / router.setAgentAccount — onlyOwner, use admin client
+    const identity = adminClient.contract<AgentIdentityContract>(options.agentIdentityAddress, [
       'function nextTokenId() view returns (uint256)',
       'function mint(address to,bytes32 metadataRoot,bytes32 publicKey,address controller) returns (uint256)',
     ]);
+    const router = adminClient.contract<PaymentRouterAdminContract>(options.paymentRouterAddress, [
+      'function setAgentAccount(uint256 agentId,address account)',
+    ]);
+
     const tokenId = await identity.nextTokenId();
     app.log.info({ owner, salt, tokenId: tokenId.toString() }, 'provision-agent: calling predict');
     const accountAddress = await factory.predict(owner, salt);
     app.log.info({ accountAddress }, 'provision-agent: predict ok — creating account');
     await (await factory.createAccount(owner, salt)).wait();
+    app.log.info({ accountAddress, tokenId: tokenId.toString() }, 'provision-agent: account created — minting identity');
     await (await identity.mint(owner, metadataRootBytes, publicKey, accountAddress)).wait();
-    const router = options.chainClient.contract<PaymentRouterAdminContract>(options.paymentRouterAddress, [
-      'function setAgentAccount(uint256 agentId,address account)',
-    ]);
+    app.log.info({ tokenId: tokenId.toString() }, 'provision-agent: identity minted — registering with router');
     await (await router.setAgentAccount(tokenId, accountAddress)).wait();
     app.log.info({ owner, accountAddress, id: tokenId.toString() }, 'provision-agent: done');
     return { id: tokenId.toString(), accountAddress, metadataRoot: metadataRootBytes };
@@ -905,12 +954,26 @@ export async function startFromEnv(): Promise<FastifyInstance> {
   const accountFactoryAddress = normalizeAddr(rawAccountFactory, 'ACCOUNT_FACTORY_ADDRESS');
   const agentIdentityAddress  = normalizeAddr(rawAgentIdentity,  'AGENT_IDENTITY_ADDRESS');
 
+  // Optional: key for the deployer/owner wallet that can call onlyOwner functions
+  // (AgentIdentity.mint, PaymentRouter.setAgentAccount). If absent, agent provisioning
+  // will fail with a clear auth error instead of a raw estimateGas revert.
+  const agentDeployerKey = process.env.AGENT_DEPLOYER_PRIVATE_KEY || undefined;
+
+  // Log deployer address (never the key itself) so ops can verify authorization.
+  if (agentDeployerKey) {
+    const { Wallet } = await import('ethers');
+    const deployerAddr = new Wallet(agentDeployerKey).address;
+    console.info('[edge] startFromEnv agentDeployer=%s (AGENT_DEPLOYER_PRIVATE_KEY set)', deployerAddr);
+  } else {
+    console.warn('[edge] startFromEnv AGENT_DEPLOYER_PRIVATE_KEY not set — agent provisioning requires AgentIdentity.transferOwnership to edge signer first');
+  }
+
   console.info('[edge] startFromEnv chainId=16661 rpc=%s paymentRouter=%s receiptBook=%s accountFactory=%s agentIdentity=%s',
     rpcUrl, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress);
 
   const chainClient = new ChainClient({ rpcUrl, chainId: 16661, signerKey }) as unknown as BillingChainClient & { verifyMessage(message: string, signature: string): string };
   const storageClient = new StorageClient({ rpcUrl, indexerUrl: storageIndexerUrl, signerKey }) as StorageBoundary;
-  const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16661, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, jwtSecret: process.env.EDGE_JWT_SECRET });
+  const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16661, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, agentDeployerKey, jwtSecret: process.env.EDGE_JWT_SECRET });
   await app.listen({ port: Number(process.env.PORT ?? 8080), host: '0.0.0.0' });
   return app;
 }

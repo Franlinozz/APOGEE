@@ -49,8 +49,14 @@ function classifyError(title: string, detail?: string, status?: number): { messa
   if (status === 502 || title.toLowerCase().includes('unreachable') || title.toLowerCase().includes('network')) {
     return { message: 'API unavailable', detail: 'The Edge API did not respond. Please wait a moment and try again.' };
   }
+  if (title.toLowerCase().includes('not authorized to mint') || detail?.toLowerCase().includes('not authorized to mint')) {
+    return {
+      message: 'Deployment not authorized',
+      detail: 'The edge service signer is not the AgentIdentity contract owner. Set AGENT_DEPLOYER_PRIVATE_KEY on the Railway edge service, or call AgentIdentity.transferOwnership(edgeSigner) from the deployer wallet.',
+    };
+  }
   if (title.toLowerCase().includes('contract') || detail?.toLowerCase().includes('revert')) {
-    return { message: 'Contract call failed', detail: detail ?? 'The on-chain transaction reverted. Check that the Aristotle network is reachable and your wallet is funded.' };
+    return { message: 'Contract call failed', detail: detail ?? 'The on-chain transaction reverted. Check that the Aristotle network is reachable.' };
   }
   if (title.toLowerCase().includes('name') || detail?.toLowerCase().includes('name')) {
     return { message: 'Agent name required', detail: 'Go back to step 1 and enter a name for your agent.' };
