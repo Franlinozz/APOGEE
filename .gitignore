@@ -15,3 +15,4 @@ artifacts
 typechain-types
 *.tsbuildinfo
 packages/contracts/deployments/*.local.json
+.env*.local
