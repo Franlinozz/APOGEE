@@ -8,6 +8,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod';
+import { getAddress } from 'ethers';
 import { ChainClient } from '@apogee/chain-client';
 import { StorageClient } from '@apogee/storage-client';
 import { createBillingStack, InMemoryQuoteStore, type BillingChainClient, type ReceiptIndexRow, type StorageBoundary } from '@apogee/billing';
@@ -881,13 +882,32 @@ export async function startFromEnv(): Promise<FastifyInstance> {
   const rpcUrl = process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc.0g.ai';
   const signerKey = process.env.EDGE_SERVICE_PRIVATE_KEY;
   const storageIndexerUrl = process.env.ZERO_G_STORAGE_INDEXER_URL ?? 'https://indexer-storage-testnet-turbo.0g.ai';
-  const paymentRouterAddress = process.env.PAYMENT_ROUTER_ADDRESS;
-  const receiptBookAddress = process.env.RECEIPT_BOOK_ADDRESS;
-  const accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS;
-  const agentIdentityAddress = process.env.AGENT_IDENTITY_ADDRESS;
-  if (!signerKey || !paymentRouterAddress || !receiptBookAddress || !accountFactoryAddress || !agentIdentityAddress) {
+
+  const rawPaymentRouter   = process.env.PAYMENT_ROUTER_ADDRESS;
+  const rawReceiptBook     = process.env.RECEIPT_BOOK_ADDRESS;
+  const rawAccountFactory  = process.env.ACCOUNT_FACTORY_ADDRESS;
+  const rawAgentIdentity   = process.env.AGENT_IDENTITY_ADDRESS;
+
+  if (!signerKey || !rawPaymentRouter || !rawReceiptBook || !rawAccountFactory || !rawAgentIdentity) {
     throw new Error('Missing edge API environment: EDGE_SERVICE_PRIVATE_KEY, PAYMENT_ROUTER_ADDRESS, RECEIPT_BOOK_ADDRESS, ACCOUNT_FACTORY_ADDRESS, and AGENT_IDENTITY_ADDRESS are required');
   }
+
+  const normalizeAddr = (raw: string, label: string): string => {
+    try {
+      return getAddress(raw.trim().toLowerCase());
+    } catch {
+      throw new Error(`${label} is not a valid Ethereum address: "${raw}"`);
+    }
+  };
+
+  const paymentRouterAddress  = normalizeAddr(rawPaymentRouter,  'PAYMENT_ROUTER_ADDRESS');
+  const receiptBookAddress    = normalizeAddr(rawReceiptBook,    'RECEIPT_BOOK_ADDRESS');
+  const accountFactoryAddress = normalizeAddr(rawAccountFactory, 'ACCOUNT_FACTORY_ADDRESS');
+  const agentIdentityAddress  = normalizeAddr(rawAgentIdentity,  'AGENT_IDENTITY_ADDRESS');
+
+  console.info('[edge] startFromEnv chainId=16661 rpc=%s paymentRouter=%s receiptBook=%s accountFactory=%s agentIdentity=%s',
+    rpcUrl, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress);
+
   const chainClient = new ChainClient({ rpcUrl, chainId: 16661, signerKey }) as unknown as BillingChainClient & { verifyMessage(message: string, signature: string): string };
   const storageClient = new StorageClient({ rpcUrl, indexerUrl: storageIndexerUrl, signerKey }) as StorageBoundary;
   const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16661, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, jwtSecret: process.env.EDGE_JWT_SECRET });
