@@ -814,36 +814,38 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return receipt;
   });
 
-  app.get('/v1/stream/:agentId', { websocket: true }, (socket, request) => {
-    const token = bearerFromSubprotocol(request.headers['sec-websocket-protocol']);
-    if (!token) {
-      socket.close();
-      return;
-    }
-    try {
-      const user = app.jwt.verify<AuthUser>(token);
-      const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
-      const agent = store.agents.get(agentId);
-      if (!agent || !sameAddress(agent.owner, user.address)) {
+  app.after(() => {
+    app.get('/v1/stream/:agentId', { websocket: true }, (socket, request) => {
+      const token = bearerFromSubprotocol(request.headers['sec-websocket-protocol']);
+      if (!token) {
         socket.close();
         return;
       }
-      const client = { send: (payload: string) => socket.send(payload), close: () => socket.close() };
-      const clients = streamClients.get(agentId) ?? new Set<typeof client>();
-      clients.add(client);
-      streamClients.set(agentId, clients);
-      socket.on('close', () => clients.delete(client));
-    } catch {
-      socket.close();
-    }
-  });
+      try {
+        const user = app.jwt.verify<AuthUser>(token);
+        const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
+        const agent = store.agents.get(agentId);
+        if (!agent || !sameAddress(agent.owner, user.address)) {
+          socket.close();
+          return;
+        }
+        const client = { send: (payload: string) => socket.send(payload), close: () => socket.close() };
+        const clients = streamClients.get(agentId) ?? new Set<typeof client>();
+        clients.add(client);
+        streamClients.set(agentId, clients);
+        socket.on('close', () => clients.delete(client));
+      } catch {
+        socket.close();
+      }
+    });
 
-  app.get('/v1/stream', { websocket: true }, (socket) => {
-    const client = { send: (payload: string) => socket.send(payload), close: () => socket.close() };
-    const clients = streamClients.get(PUBLIC_STREAM_KEY) ?? new Set<typeof client>();
-    clients.add(client);
-    streamClients.set(PUBLIC_STREAM_KEY, clients);
-    socket.on('close', () => clients.delete(client));
+    app.get('/v1/stream', { websocket: true }, (socket) => {
+      const client = { send: (payload: string) => socket.send(payload), close: () => socket.close() };
+      const clients = streamClients.get(PUBLIC_STREAM_KEY) ?? new Set<typeof client>();
+      clients.add(client);
+      streamClients.set(PUBLIC_STREAM_KEY, clients);
+      socket.on('close', () => clients.delete(client));
+    });
   });
 
   // ── Pilot chat ────────────────────────────────────────────────────────────
