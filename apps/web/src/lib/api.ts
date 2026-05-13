@@ -2,6 +2,37 @@ import type { Agent, Policy, Receipt, MemoryEntry, SkillManifest, ServiceListing
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
+
+function normalizeReceipt(row: Record<string, unknown>): Receipt {
+  return {
+    id: String(row['id'] ?? row['receiptId'] ?? ''),
+    agentId: String(row['agentId'] ?? ''),
+    payerAddress: String(row['payerAddress'] ?? ''),
+    payeeAddress: String(row['payeeAddress'] ?? ''),
+    amountWei: String(row['amountWei'] ?? row['valueWei'] ?? '0'),
+    skillId: typeof row['skillId'] === 'string' ? row['skillId'] : typeof row['actionTag'] === 'string' ? row['actionTag'] : undefined,
+    txHash: typeof row['txHash'] === 'string' ? row['txHash'] : undefined,
+    storageRoot: typeof row['storageRoot'] === 'string' ? row['storageRoot'] : undefined,
+    attestationDigest: typeof row['attestationDigest'] === 'string' ? row['attestationDigest'] : typeof row['payloadHash'] === 'string' ? row['payloadHash'] : undefined,
+    status: row['status'] === 'failed' ? 'failed' : row['status'] === 'pending' ? 'pending' : 'confirmed',
+    createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : new Date().toISOString(),
+  };
+}
+
+function normalizeMemoryEntry(row: Record<string, unknown>, agentId: string): MemoryEntry {
+  const updatedAt = typeof row['updatedAt'] === 'string' ? row['updatedAt'] : new Date().toISOString();
+  return {
+    id: String(row['id'] ?? row['key'] ?? ''),
+    agentId: String(row['agentId'] ?? agentId),
+    key: String(row['key'] ?? row['id'] ?? ''),
+    value: row['value'],
+    version: typeof row['version'] === 'number' ? row['version'] : 1,
+    anchoredTxHash: typeof row['anchoredTxHash'] === 'string' ? row['anchoredTxHash'] : undefined,
+    createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : updatedAt,
+    updatedAt,
+  };
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -120,13 +151,15 @@ export function getReceipts(
   if (params?.page != null) qs.set('page', String(params.page));
   if (params?.limit != null) qs.set('limit', String(params.limit));
   const q = qs.toString() ? `?${qs}` : '';
-  return apiFetch<{ items: Receipt[]; total: number }>(`/v1/receipts${q}`, undefined, token);
+  return apiFetch<{ items: Record<string, unknown>[]; total?: number }>(`/v1/receipts${q}`, undefined, token)
+    .then((data) => ({ items: data.items.map(normalizeReceipt), total: data.total ?? data.items.length }));
 }
 
 // ── Memory ────────────────────────────────────────────────
 
 export function getMemory(agentId: string, token?: string): Promise<MemoryEntry[]> {
-  return apiFetch<MemoryEntry[]>(`/v1/agents/${agentId}/memory`, undefined, token);
+  return apiFetch<Record<string, unknown>[]>(`/v1/agents/${agentId}/memory`, undefined, token)
+    .then((rows) => rows.map((row) => normalizeMemoryEntry(row, agentId)));
 }
 
 export function searchMemory(agentId: string, query: string, token?: string): Promise<MemoryEntry[]> {

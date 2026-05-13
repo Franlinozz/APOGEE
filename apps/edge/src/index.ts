@@ -23,8 +23,23 @@ const nonceResponseSchema = z.object({ nonce: z.string(), message: z.string() })
 const siweNonceBodySchema = z.object({ address: addressSchema, domain: z.string().min(1).optional(), uri: z.string().url().optional(), chainId: z.number().int().positive().default(16661) });
 const siweVerifyBodySchema = z.object({ message: z.string().min(1), signature: z.string().min(1) });
 const jwtResponseSchema = z.object({ token: z.string(), address: addressSchema });
-const agentCreateSchema = z.object({ owner: addressSchema.optional(), metadataRoot: z.string().optional(), policyId: z.string().optional() });
-const agentSchema = z.object({ id: z.string(), owner: addressSchema, accountAddress: addressSchema.optional(), metadataRoot: z.string().optional(), policyId: z.string().optional(), balanceWei: z.string(), kpis: z.record(z.string(), z.number()) });
+const agentCreateSchema = z.object({ owner: addressSchema.optional(), name: z.string().min(1).max(120).optional(), metadataRoot: z.string().optional(), policyId: z.string().optional() });
+const agentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  owner: addressSchema,
+  ownerAddress: addressSchema,
+  accountAddress: addressSchema.optional(),
+  identityTokenId: z.string().optional(),
+  metadataRoot: z.string().optional(),
+  policyId: z.string().optional(),
+  balanceWei: z.string(),
+  kpis: z.record(z.string(), z.number()),
+  status: z.enum(['active', 'paused', 'deploying', 'error']),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+const skillManifestSchema = z.object({ id: z.string(), name: z.string(), version: z.string(), description: z.string(), category: z.string(), tier: z.enum(['free', 'premium']), pricePerCallWei: z.string(), authorAddress: addressSchema.optional(), tags: z.array(z.string()) });
 const policyPatchSchema = z.object({ maxPerTxWei: z.string().optional(), maxPerDayWei: z.string().optional(), active: z.boolean().optional(), summary: z.string().optional() });
 const skillBodySchema = z.object({ skillId: z.string().min(1), version: z.string().optional(), config: jsonValueSchema.optional() });
 const runBodySchema = z.object({ skillId: z.string().min(1), input: jsonValueSchema.optional(), idempotencyKey: z.string().optional() });
@@ -58,7 +73,7 @@ type SkillInstall = { agentId: string; skillId: string; version?: string | undef
 type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
-type TxResponse = { hash: string; wait(): Promise<unknown> };
+type TxResponse = { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<unknown> };
 type PilotMsg = { role: 'user' | 'assistant'; content: string; createdAt: string };
 type PilotConvo = { id: string; userAddress: string; messages: PilotMsg[]; createdAt: string };
 type AccountFactoryContract = { predict(owner: string, salt: string): Promise<string>; createAccount(owner: string, salt: string): Promise<TxResponse> };
@@ -87,6 +102,65 @@ export interface EdgeServerOptions {
   jwtSecret?: string | undefined;
   corsOrigin?: boolean | string | RegExp | Array<string | RegExp> | undefined;
   logger?: FastifyBaseLogger | undefined;
+}
+
+
+const DEFAULT_SKILLS = [
+  { id: 'chat.completion', name: 'Chat Completion', version: '1.0.0', description: 'LLM chat via 0G Compute', category: 'AI', tier: 'free' as const, pricePerCallWei: '0', tags: ['ai', 'compute'] },
+  { id: 'memory.write', name: 'Memory Write', version: '1.0.0', description: 'Persist encrypted memory state to 0G Storage', category: 'Memory', tier: 'free' as const, pricePerCallWei: '0', tags: ['memory', 'storage'] },
+  { id: 'memory.read', name: 'Memory Read', version: '1.0.0', description: 'Read agent memory entries', category: 'Memory', tier: 'free' as const, pricePerCallWei: '0', tags: ['memory'] },
+  { id: 'memory.search', name: 'Memory Search', version: '1.0.0', description: 'Search prior agent memory entries', category: 'Memory', tier: 'free' as const, pricePerCallWei: '0', tags: ['memory', 'search'] },
+  { id: 'chain.query', name: 'Chain Query', version: '1.0.0', description: 'Read Aristotle chain state', category: 'Chain', tier: 'free' as const, pricePerCallWei: '0', tags: ['chain'] },
+  { id: 'chain.send', name: 'Chain Send', version: '1.0.0', description: 'Submit approved on-chain transactions', category: 'Chain', tier: 'free' as const, pricePerCallWei: '0', tags: ['chain'] },
+  { id: 'web.search', name: 'Web Search', version: '1.0.0', description: 'Search the web from an agent run', category: 'Web', tier: 'free' as const, pricePerCallWei: '0', tags: ['web'] },
+  { id: 'web.fetch', name: 'Web Fetch', version: '1.0.0', description: 'Fetch and parse a URL', category: 'Web', tier: 'free' as const, pricePerCallWei: '0', tags: ['web'] },
+  { id: 'storage.upload', name: 'Storage Upload', version: '1.0.0', description: 'Upload artifacts to 0G Storage', category: 'Storage', tier: 'free' as const, pricePerCallWei: '0', tags: ['storage'] },
+];
+
+class Mutex {
+  private tail: Promise<void> = Promise.resolve();
+
+  async runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    let release!: () => void;
+    const slot = new Promise<void>((resolve) => { release = resolve; });
+    const prev = this.tail;
+    this.tail = prev.then(() => slot, () => slot);
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+}
+
+const deployMutex = new Mutex();
+const DEPLOY_LOCK_TIMEOUT_MS = 120_000;
+const DEPLOY_RETRY_BACKOFF_MS = [1_500, 4_000] as const;
+
+function isReplacementUnderpriced(error: unknown): boolean {
+  const value = error as { code?: unknown; shortMessage?: unknown; message?: unknown; info?: { error?: { message?: unknown; code?: unknown } } };
+  const text = [value?.code, value?.shortMessage, value?.message, value?.info?.error?.message, value?.info?.error?.code]
+    .filter((part) => part !== undefined)
+    .join(' ')
+    .toLowerCase();
+  return text.includes('replacement_underpriced') || text.includes('replacement transaction underpriced') || text.includes('replacement fee too low');
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 class InMemoryEdgeStore {
@@ -217,7 +291,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   const provisionAgentOnChain = async (owner: string, metadataRoot?: string): Promise<{ id: string; accountAddress: string; metadataRoot: string } | null> => {
     if (!options.accountFactoryAddress || !options.agentIdentityAddress) return null;
 
-    const provider = (options.chainClient as unknown as { getProvider(): { getCode(addr: string): Promise<string>; call(tx: { to: string; data: string }): Promise<string>; getNetwork(): Promise<{ chainId: bigint }> } }).getProvider?.();
+    const provider = (options.chainClient as unknown as { getProvider(): { getCode(addr: string): Promise<string>; call(tx: { to: string; data: string }): Promise<string>; getNetwork(): Promise<{ chainId: bigint }>; getTransactionCount(addr: string, blockTag: 'latest' | 'pending'): Promise<number>; getBalance(addr: string): Promise<bigint> } }).getProvider?.();
 
     // ── Preflight ──────────────────────────────────────────────────────────────
     if (provider) {
@@ -260,8 +334,27 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         );
       }
 
+      const [latestNonce, pendingNonce, balanceWei] = await Promise.all([
+        provider.getTransactionCount(signerAddress, 'latest'),
+        provider.getTransactionCount(signerAddress, 'pending'),
+        provider.getBalance(signerAddress),
+      ]);
+
       app.log.info(
-        { owner, factory: options.accountFactoryAddress, identity: options.agentIdentityAddress, chainId: 16661, identityOwner, signerAddress, usingDeployerKey: !signerIsOwner },
+        {
+          owner,
+          factory: options.accountFactoryAddress,
+          identity: options.agentIdentityAddress,
+          router: options.paymentRouterAddress,
+          chainId: 16661,
+          identityOwner,
+          signerAddress,
+          latestNonce,
+          pendingNonce,
+          pendingCount: pendingNonce - latestNonce,
+          balanceWei: balanceWei.toString(),
+          usingDeployerKey: !signerIsOwner,
+        },
         'provision-agent: preflight ok',
       );
     }
@@ -295,15 +388,36 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       'function setAgentAccount(uint256 agentId,address account)',
     ]);
 
+    async function submitLogged(method: string, signerAddress: string, submit: () => Promise<TxResponse>): Promise<void> {
+      let lastError: unknown;
+      for (let attempt = 0; attempt <= DEPLOY_RETRY_BACKOFF_MS.length; attempt += 1) {
+        try {
+          const tx = await submit();
+          app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce, gasPrice: tx.gasPrice?.toString() ?? null, maxFeePerGas: tx.maxFeePerGas?.toString() ?? null, maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString() ?? null }, 'provision-agent: tx submitted');
+          await tx.wait();
+          app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce }, 'provision-agent: tx confirmed');
+          return;
+        } catch (error) {
+          lastError = error;
+          if (!isReplacementUnderpriced(error) || attempt >= DEPLOY_RETRY_BACKOFF_MS.length) break;
+          const delayMs = DEPLOY_RETRY_BACKOFF_MS[attempt] ?? 1_500;
+          app.log.warn({ method, signerAddress, attempt, delayMs }, 'provision-agent: nonce collision/replacement underpriced; retrying with fresh pending nonce after backoff');
+          await sleep(delayMs);
+        }
+      }
+      throw lastError instanceof Error ? lastError : new Error(`${method} transaction failed`);
+    }
+
+    const signerAddress = (options.chainClient as unknown as { getSigner(): { address: string } }).getSigner?.()?.address ?? 'unknown';
     const tokenId = await identity.nextTokenId();
     app.log.info({ owner, salt, tokenId: tokenId.toString() }, 'provision-agent: calling predict');
     const accountAddress = await factory.predict(owner, salt);
     app.log.info({ accountAddress }, 'provision-agent: predict ok — creating account');
-    await (await factory.createAccount(owner, salt)).wait();
+    await submitLogged('AccountFactory.createAccount', signerAddress, () => factory.createAccount(owner, salt));
     app.log.info({ accountAddress, tokenId: tokenId.toString() }, 'provision-agent: account created — minting identity');
-    await (await identity.mint(owner, metadataRootBytes, publicKey, accountAddress)).wait();
+    await submitLogged('AgentIdentity.mint', signerAddress, () => identity.mint(owner, metadataRootBytes, publicKey, accountAddress));
     app.log.info({ tokenId: tokenId.toString() }, 'provision-agent: identity minted — registering with router');
-    await (await router.setAgentAccount(tokenId, accountAddress)).wait();
+    await submitLogged('PaymentRouter.setAgentAccount', signerAddress, () => router.setAgentAccount(tokenId, accountAddress));
     app.log.info({ owner, accountAddress, id: tokenId.toString() }, 'provision-agent: done');
     return { id: tokenId.toString(), accountAddress, metadataRoot: metadataRootBytes };
   };
@@ -605,7 +719,11 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     if (body.owner && !sameAddress(body.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Cannot provision an agent for a different owner');
     let provisioned: Awaited<ReturnType<typeof provisionAgentOnChain>>;
     try {
-      provisioned = await provisionAgentOnChain(user.address, body.metadataRoot);
+      provisioned = await withTimeout(
+        deployMutex.runExclusive(() => provisionAgentOnChain(user.address, body.metadataRoot)),
+        DEPLOY_LOCK_TIMEOUT_MS,
+        'Deployment lock timed out',
+      );
     } catch (err) {
       const e = err as { deployAuthError?: boolean; identityOwner?: string; signerAddress?: string };
       if (e.deployAuthError) {
@@ -616,9 +734,31 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
           `Action: Set AGENT_DEPLOYER_PRIVATE_KEY (key for ${e.identityOwner}) on the @apogee/edge Railway service.`,
         );
       }
+      if (isReplacementUnderpriced(err)) {
+        app.log.warn({ err }, 'provision-agent: replacement underpriced after retries');
+        return problem(reply, 409, 'Deployment transaction pending', 'A previous deployment transaction is still pending for the deployment signer. Wait for it to confirm before retrying.');
+      }
+      if (err instanceof Error && err.message === 'Deployment lock timed out') {
+        return problem(reply, 409, 'Deployment already running', 'A deployment is already running for this service. Wait for confirmation before retrying.');
+      }
       throw err;
     }
-    const agent: AgentRecord = { id: provisioned?.id ?? String(store.nextAgentId++), owner: user.address, accountAddress: provisioned?.accountAddress ?? user.address, balanceWei: '0', kpis: { runs: 0, receipts: 0 } };
+    const now = nowIso();
+    const id = provisioned?.id ?? String(store.nextAgentId++);
+    const displayName = body.name?.trim() || (body.metadataRoot && !body.metadataRoot.startsWith('0x') ? body.metadataRoot : `Agent #${id}`);
+    const agent: AgentRecord = {
+      id,
+      name: displayName,
+      owner: user.address,
+      ownerAddress: user.address,
+      identityTokenId: provisioned?.id,
+      accountAddress: provisioned?.accountAddress ?? user.address,
+      balanceWei: '0',
+      kpis: { runs: 0, receipts: 0 },
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    };
     if (provisioned?.metadataRoot ?? body.metadataRoot) agent.metadataRoot = provisioned?.metadataRoot ?? body.metadataRoot;
     if (body.policyId) agent.policyId = body.policyId;
     store.agents.set(agent.id, agent);
@@ -694,6 +834,14 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return run.receipts;
   });
 
+  app.get('/v1/skills', { schema: { tags: ['skills'], querystring: z.object({ tier: z.string().optional(), category: z.string().optional() }), response: { 200: z.array(skillManifestSchema) } } }, async (request) => {
+    const { tier, category } = z.object({ tier: z.string().optional(), category: z.string().optional() }).parse(request.query);
+    return DEFAULT_SKILLS.filter((skill) =>
+      (!tier || skill.tier === tier) &&
+      (!category || skill.category.toLowerCase() === category.toLowerCase()),
+    );
+  });
+
   app.post('/v1/services', { schema: { tags: ['services'], body: serviceBodySchema, response: { 200: serviceSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
     const body = serviceBodySchema.parse(request.body);
@@ -747,13 +895,18 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return stack.refundManager.refund(body);
   });
 
-  app.get('/v1/memory/:agentId', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }) } }, async (request, reply) => {
+  const listAgentMemory = async (request: FastifyRequest, reply: FastifyReply) => {
     const user = await requireAuth(request);
     const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
     const agent = ownedAgent(reply, user, agentId);
     if ('statusCode' in agent) return agent;
-    return [...store.memory.values()].filter((entry) => entry.agentId === agentId).map((entry) => ({ key: entry.key, tags: entry.tags, updatedAt: entry.updatedAt }));
-  });
+    return [...store.memory.values()]
+      .filter((entry) => entry.agentId === agentId)
+      .map((entry) => ({ id: entry.key, agentId: entry.agentId, key: entry.key, value: entry.value, version: 1, createdAt: entry.updatedAt, updatedAt: entry.updatedAt, tags: entry.tags }));
+  };
+
+  app.get('/v1/memory/:agentId', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }) } }, listAgentMemory);
+  app.get('/v1/agents/:agentId/memory', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }) } }, listAgentMemory);
 
   app.put('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }), body: memoryPutSchema } }, async (request, reply) => {
     const user = await requireAuth(request);
@@ -800,8 +953,10 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       if ('statusCode' in agent) return agent;
     }
     const ownedAgentIds = new Set([...store.agents.values()].filter((agent) => sameAddress(agent.owner, user.address)).map((agent) => agent.id));
-    const rows = [...store.receipts.values()].filter((receipt) => ownedAgentIds.has(receipt.agentId) && (!query.agentId || receipt.agentId === query.agentId)).slice(0, query.limit);
-    return { items: rows, nextCursor: null };
+    const rows = [...store.receipts.values()]
+      .filter((receipt) => ownedAgentIds.has(receipt.agentId) && (!query.agentId || receipt.agentId === query.agentId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return { items: rows.slice(0, query.limit), total: rows.length, nextCursor: null };
   });
 
   app.get('/v1/receipts/:id', { schema: { tags: ['receipts'], params: z.object({ id: idSchema }) } }, async (request, reply) => {

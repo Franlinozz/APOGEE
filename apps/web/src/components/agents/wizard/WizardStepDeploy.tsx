@@ -67,6 +67,9 @@ function classifyError(title: string, detail?: string, status?: number): { messa
   if (status === 403) {
     return { message: 'Not authorised', detail: detail ?? 'You can only deploy agents for your own wallet address.' };
   }
+  if (status === 409 || title.toLowerCase().includes('pending') || detail?.toLowerCase().includes('replacement transaction underpriced') || detail?.toLowerCase().includes('replacement fee too low')) {
+    return { message: 'Deployment transaction pending', detail: 'A previous deployment transaction is still pending. Please wait for confirmation before retrying.' };
+  }
   if (status === 502 || title.toLowerCase().includes('unreachable') || title.toLowerCase().includes('network')) {
     return { message: 'API unavailable', detail: 'The Edge API did not respond. Please wait a moment and try again.' };
   }

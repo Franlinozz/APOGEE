@@ -26,6 +26,24 @@ const BADGE_VARIANT: Record<Agent['status'], 'success' | 'warning' | 'danger' | 
 
 const col = createColumnHelper<Agent>();
 
+function formatCreatedAt(value: unknown): string {
+  if (value == null || value === '') return 'Pending index';
+  let date: Date;
+  if (typeof value === 'bigint') {
+    const n = Number(value);
+    date = new Date(n < 10_000_000_000 ? n * 1000 : n);
+  } else if (typeof value === 'number') {
+    date = new Date(value < 10_000_000_000 ? value * 1000 : value);
+  } else if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const n = Number(value);
+    date = new Date(n < 10_000_000_000 ? n * 1000 : n);
+  } else {
+    date = new Date(String(value));
+  }
+  if (Number.isNaN(date.getTime())) return 'Pending index';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 const COLUMNS = [
   col.accessor('id', {
     header: 'Agent',
@@ -70,8 +88,7 @@ const COLUMNS = [
   }),
   col.accessor('createdAt', {
     header: 'Created',
-    cell: (info) =>
-      new Date(info.getValue()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    cell: (info) => formatCreatedAt(info.getValue()),
   }),
 ];
 

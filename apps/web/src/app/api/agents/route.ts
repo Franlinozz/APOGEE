@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
   //   Other wizard fields (description, dailyCap, etc.) are stored server-side later
   const edgeBody: Record<string, unknown> = {};
   if (typeof body['name'] === 'string' && body['name']) {
+    edgeBody['name'] = body['name'];
     edgeBody['metadataRoot'] = body['name'];
   }
   if (typeof body['metadataRoot'] === 'string') {
