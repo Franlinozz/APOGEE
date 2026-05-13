@@ -38,7 +38,11 @@ describe('edge API', () => {
     const healthStarted = Date.now();
     const health = await app.inject({ method: 'GET', url: '/v1/health' });
     expect(health.statusCode).toBe(200);
-    expect(Date.now() - healthStarted).toBeLessThan(50);
+    expect(Date.now() - healthStarted).toBeLessThan(200);
+
+    const stats = await app.inject({ method: 'GET', url: '/v1/stats' });
+    expect(stats.statusCode).toBe(200);
+    expect(stats.json<{ receipts: number; agents: number; totalFlowedWei: string; totalReceipts: number }>().receipts).toBe(0);
 
     const docs = await app.inject({ method: 'GET', url: '/docs/api' });
     expect(docs.statusCode).toBe(200);

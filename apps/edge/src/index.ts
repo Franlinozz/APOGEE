@@ -20,7 +20,7 @@ const idSchema = z.string().min(1).max(128);
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(z.string(), jsonValueSchema)]));
 const problemSchema = z.object({ type: z.string(), title: z.string(), status: z.number().int(), detail: z.string(), instance: z.string().optional() });
 const nonceResponseSchema = z.object({ nonce: z.string(), message: z.string() });
-const siweNonceBodySchema = z.object({ address: addressSchema, domain: z.string().min(1).optional(), uri: z.string().url().optional(), chainId: z.number().int().positive().default(16602) });
+const siweNonceBodySchema = z.object({ address: addressSchema, domain: z.string().min(1).optional(), uri: z.string().url().optional(), chainId: z.number().int().positive().default(16661) });
 const siweVerifyBodySchema = z.object({ message: z.string().min(1), signature: z.string().min(1) });
 const jwtResponseSchema = z.object({ token: z.string(), address: addressSchema });
 const agentCreateSchema = z.object({ owner: addressSchema.optional(), metadataRoot: z.string().optional(), policyId: z.string().optional() });
@@ -57,6 +57,7 @@ type ServiceRecord = z.infer<typeof serviceSchema>;
 type SkillInstall = { agentId: string; skillId: string; version?: string | undefined; config?: JsonValue | undefined; installedAt: string };
 type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
+const PUBLIC_STREAM_KEY = '__public__';
 type TxResponse = { hash: string; wait(): Promise<unknown> };
 type PilotMsg = { role: 'user' | 'assistant'; content: string; createdAt: string };
 type PilotConvo = { id: string; userAddress: string; messages: PilotMsg[]; createdAt: string };
@@ -206,9 +207,11 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   } });
 
   const broadcast = (agentId: string, event: StreamEvent): void => {
-    const clients = streamClients.get(agentId);
-    if (!clients) return;
-    for (const client of clients) client.send(JSON.stringify(event));
+    for (const key of [agentId, PUBLIC_STREAM_KEY]) {
+      const clients = streamClients.get(key);
+      if (!clients) continue;
+      for (const client of clients) client.send(JSON.stringify(event));
+    }
   };
 
   const provisionAgentOnChain = async (owner: string, metadataRoot?: string): Promise<{ id: string; accountAddress: string; metadataRoot: string } | null> => {
@@ -463,7 +466,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   app.get('/v1/health', { schema: { tags: ['system'], response: { 200: healthSchema } } }, () => {
     return {
-      ok: chainCache.galileo.ok,
+      ok: chainCache.aristotle.ok,
       uptimeSec: Math.floor(process.uptime()),
       version: '0.5.0',
       db: { ok: true, note: 'in-memory store' },
@@ -474,10 +477,37 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   });
   app.get('/health', async () => ({ ok: true, uptimeSec: Math.floor(process.uptime()), version: '0.5.0' }));
 
+  app.get('/v1/stats', { schema: { tags: ['system'] } }, async () => {
+    const receipts = [...store.receipts.values()];
+    const demoAgentIds = new Set(receipts.map((receipt) => receipt.agentId));
+    const totalFlowed = receipts.reduce((sum, receipt) => {
+      try {
+        return sum + BigInt(receipt.valueWei ?? '0');
+      } catch {
+        return sum;
+      }
+    }, 0n);
+    const activeAgents = Object.values(store.lastHeartbeat).filter((heartbeat) => {
+      if (!heartbeat) return false;
+      return Date.now() - new Date(heartbeat).getTime() < 15 * 60_000;
+    }).length;
+    const agents = Math.max(store.agents.size, demoAgentIds.size);
+
+    return {
+      receipts: receipts.length,
+      agents,
+      totalFlowedWei: totalFlowed.toString(),
+      totalAgents: agents,
+      totalReceipts: receipts.length,
+      totalVolumeWei: totalFlowed.toString(),
+      activeAgents,
+    };
+  });
+
   // ── Public proofs data (no auth, ISR-friendly) ────────────────────────────
   app.get('/v1/proofs', { schema: { tags: ['system'] } }, async (request) => {
-    const chainParam = (request.query as Record<string, string>)['chain'] ?? 'galileo';
-    const chainId = chainParam === 'aristotle' ? 16661 : 16602;
+    const chainParam = (request.query as Record<string, string>)['chain'] ?? 'aristotle';
+    const chainId = chainParam === 'galileo' ? 16602 : 16661;
     const allReceipts = [...store.receipts.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     const last50 = allReceipts.slice(0, 50);
 
@@ -806,6 +836,14 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     } catch {
       socket.close();
     }
+  });
+
+  app.get('/v1/stream', { websocket: true }, (socket) => {
+    const client = { send: (payload: string) => socket.send(payload), close: () => socket.close() };
+    const clients = streamClients.get(PUBLIC_STREAM_KEY) ?? new Set<typeof client>();
+    clients.add(client);
+    streamClients.set(PUBLIC_STREAM_KEY, clients);
+    socket.on('close', () => clients.delete(client));
   });
 
   // ── Pilot chat ────────────────────────────────────────────────────────────
