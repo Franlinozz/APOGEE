@@ -1,8 +1,21 @@
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 
+// NavConnectButton uses wagmi/RainbowKit hooks — load client-only
+const NavConnectButton = dynamic(
+  () => import('./NavConnectButton').then((m) => m.NavConnectButton),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-8 w-32 animate-pulse rounded-[var(--radius)] bg-accent/30" />
+    ),
+  },
+);
+
+// Absolute paths so these work correctly from any sub-route (/docs, /proofs, etc.)
 const NAV_LINKS = [
-  { href: '#product',  label: 'Product' },
-  { href: '#skills',   label: 'Skills' },
+  { href: '/#product', label: 'Product' },
+  { href: '/#skills',  label: 'Skills' },
   { href: '/proofs',   label: 'Receipts' },
   { href: '/docs',     label: 'Docs' },
   {
@@ -20,7 +33,7 @@ export function Nav() {
         background: 'rgba(8,10,18,0.72)',
         backdropFilter: 'blur(16px) saturate(1.8)',
         WebkitBackdropFilter: 'blur(16px) saturate(1.8)',
-        borderBottom: 'var(--color-line)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
       }}
     >
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -53,12 +66,8 @@ export function Nav() {
           ))}
         </nav>
 
-        <Link
-          href="/connect"
-          className="inline-flex h-8 items-center rounded-[var(--radius)] bg-accent px-4 text-xs font-semibold text-white transition-colors hover:bg-accent/85"
-        >
-          Connect Wallet
-        </Link>
+        {/* Opens RainbowKit modal in-place; shows short address when connected */}
+        <NavConnectButton />
       </div>
     </header>
   );

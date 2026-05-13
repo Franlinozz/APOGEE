@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import dynamic from 'next/dynamic';
 import { cookies } from 'next/headers';
+import { WagmiProvider } from '@/components/providers/WagmiProvider';
 import './globals.css';
 
 const ApogeePilot = dynamic(
@@ -50,10 +51,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
     >
       <body>
-        {children}
-        {/* Pilot on every page: guest mode when unauthenticated, auth mode when signed in.
-            Single mount point — (app)/layout does NOT add a second instance. */}
-        <ApogeePilot isGuest={!isAuthenticated} />
+        <WagmiProvider>
+          {children}
+          {/* Pilot on every page: guest mode when unauthenticated, auth mode when signed in.
+              Single mount point — (app)/layout does NOT add a second instance. */}
+          <ApogeePilot isGuest={!isAuthenticated} />
+        </WagmiProvider>
       </body>
     </html>
   );

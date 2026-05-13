@@ -14,8 +14,8 @@ const NAV_COLS = [
     links: [
       { label: 'Docs',      href: '/docs' },
       { label: 'Receipts',  href: '/proofs' },
-      { label: 'Skills',    href: '/docs/skills' },
-      { label: 'SDK',       href: '/docs/sdk' },
+      { label: 'Skills',    href: '/docs' },
+      { label: 'SDK',       href: '/docs' },
     ],
   },
   {

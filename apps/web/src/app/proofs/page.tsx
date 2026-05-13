@@ -538,19 +538,24 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
       <main className="min-h-screen pt-28 pb-16 px-6 bg-bg">
       <section className="mx-auto max-w-5xl space-y-10">
 
-        {/* Hero */}
-        <div className="space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-400">Verification</p>
-          <h1 className="text-4xl font-bold tracking-tight text-white leading-tight">
-            On-chain proofs of<br />autonomous activity
+        {/* Hero — centered, matches /docs rhythm */}
+        <section className="text-center pb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-400 mb-4">
+            Verification
+          </p>
+          <h1
+            className="text-4xl font-semibold tracking-tight text-white mx-auto max-w-2xl"
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            On-chain proofs of autonomous activity
           </h1>
-          <p className="max-w-2xl text-white/55 leading-relaxed">
+          <p className="mt-4 text-white/50 text-base max-w-xl mx-auto leading-relaxed">
             Each agent action produces a receipt: the payload is hashed (keccak256), optionally
-            uploaded to 0G Storage for a Merkle root, then anchored on Aristotle mainnet via
-            <code className="mx-1 text-sm font-mono text-white/60">ReceiptBook.emitReceipt()</code>.
+            uploaded to 0G Storage for a Merkle root, then anchored on Aristotle mainnet via{' '}
+            <code className="text-sm font-mono text-white/60">ReceiptBook.emitReceipt()</code>.
             On-chain transactions auto-refresh every 30 s.
           </p>
-          <div className="flex flex-wrap items-center gap-4 pt-1 text-sm">
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-sm">
             <span className="text-white/40">
               <span className="text-white font-semibold">{proofs.totalReceipts.toLocaleString()}</span> receipts anchored
             </span>
@@ -559,7 +564,7 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
               Updated <span className="text-white/60">{new Date(proofs.generatedAt).toLocaleTimeString()}</span>
             </span>
           </div>
-        </div>
+        </section>
 
         {/* Tab navigation */}
         <TabNav current={tab} />

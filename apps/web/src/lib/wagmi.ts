@@ -1,8 +1,8 @@
 'use client';
 
-import { createConfig, http } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { defineChain } from 'viem';
+import { http } from 'wagmi';
 
 export const galileo = defineChain({
   id: 16602,
@@ -25,12 +25,13 @@ export const aristotle = defineChain({
   },
 });
 
-export const wagmiConfig = createConfig({
-  chains: [galileo, aristotle],
-  connectors: [injected()],
+export const wagmiConfig = getDefaultConfig({
+  appName: 'Apogee Protocol',
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '',
+  chains: [aristotle, galileo],
   transports: {
-    [galileo.id]: http(),
-    [aristotle.id]: http(),
+    [aristotle.id]: http('https://evmrpc.0g.ai'),
+    [galileo.id]: http('https://evmrpc-testnet.0g.ai'),
   },
   ssr: true,
 });

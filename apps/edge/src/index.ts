@@ -209,6 +209,29 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   const provisionAgentOnChain = async (owner: string, metadataRoot?: string): Promise<{ id: string; accountAddress: string; metadataRoot: string } | null> => {
     if (!options.accountFactoryAddress || !options.agentIdentityAddress) return null;
+    app.log.info({ owner, factory: options.accountFactoryAddress, identity: options.agentIdentityAddress, chainId: options.chainId }, 'provision-agent: start');
+
+    // Verify contracts exist on the configured chain before calling them.
+    // BAD_DATA / value="0x" means the address has no bytecode on this chain.
+    const provider = (options.chainClient as unknown as { getProvider(): { getCode(addr: string): Promise<string> } }).getProvider?.();
+    if (provider) {
+      const [factoryCode, identityCode] = await Promise.all([
+        provider.getCode(options.accountFactoryAddress),
+        provider.getCode(options.agentIdentityAddress),
+      ]);
+      if (factoryCode === '0x') {
+        const msg = `AccountFactory at ${options.accountFactoryAddress} has no bytecode on chain ${options.chainId} — check ACCOUNT_FACTORY_ADDRESS env var`;
+        app.log.error({ address: options.accountFactoryAddress, chainId: options.chainId }, msg);
+        throw new Error(msg);
+      }
+      if (identityCode === '0x') {
+        const msg = `AgentIdentity at ${options.agentIdentityAddress} has no bytecode on chain ${options.chainId} — check AGENT_IDENTITY_ADDRESS env var`;
+        app.log.error({ address: options.agentIdentityAddress, chainId: options.chainId }, msg);
+        throw new Error(msg);
+      }
+      app.log.info({ factory: options.accountFactoryAddress, identity: options.agentIdentityAddress }, 'provision-agent: bytecode verified');
+    }
+
     const salt = bytes32From(`${owner}:${metadataRoot ?? ''}:${Date.now()}:${Math.random()}`);
     const metadataRootBytes = bytes32From(metadataRoot ?? `${owner}:${salt}`);
     const publicKey = bytes32From(`${owner}:apogee-agent-public-key`);
@@ -221,13 +244,16 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       'function mint(address to,bytes32 metadataRoot,bytes32 publicKey,address controller) returns (uint256)',
     ]);
     const tokenId = await identity.nextTokenId();
+    app.log.info({ owner, salt, tokenId: tokenId.toString() }, 'provision-agent: calling predict');
     const accountAddress = await factory.predict(owner, salt);
+    app.log.info({ accountAddress }, 'provision-agent: predict ok — creating account');
     await (await factory.createAccount(owner, salt)).wait();
     await (await identity.mint(owner, metadataRootBytes, publicKey, accountAddress)).wait();
     const router = options.chainClient.contract<PaymentRouterAdminContract>(options.paymentRouterAddress, [
       'function setAgentAccount(uint256 agentId,address account)',
     ]);
     await (await router.setAgentAccount(tokenId, accountAddress)).wait();
+    app.log.info({ owner, accountAddress, id: tokenId.toString() }, 'provision-agent: done');
     return { id: tokenId.toString(), accountAddress, metadataRoot: metadataRootBytes };
   };
 
@@ -851,7 +877,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 }
 
 export async function startFromEnv(): Promise<FastifyInstance> {
-  const rpcUrl = process.env.ZERO_G_GALILEO_RPC_URL ?? 'https://evmrpc-testnet.0g.ai';
+  // Always use Aristotle mainnet (16661) — contracts are deployed there, not Galileo (16602).
+  const rpcUrl = process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc.0g.ai';
   const signerKey = process.env.EDGE_SERVICE_PRIVATE_KEY;
   const storageIndexerUrl = process.env.ZERO_G_STORAGE_INDEXER_URL ?? 'https://indexer-storage-testnet-turbo.0g.ai';
   const paymentRouterAddress = process.env.PAYMENT_ROUTER_ADDRESS;
@@ -861,9 +888,9 @@ export async function startFromEnv(): Promise<FastifyInstance> {
   if (!signerKey || !paymentRouterAddress || !receiptBookAddress || !accountFactoryAddress || !agentIdentityAddress) {
     throw new Error('Missing edge API environment: EDGE_SERVICE_PRIVATE_KEY, PAYMENT_ROUTER_ADDRESS, RECEIPT_BOOK_ADDRESS, ACCOUNT_FACTORY_ADDRESS, and AGENT_IDENTITY_ADDRESS are required');
   }
-  const chainClient = new ChainClient({ rpcUrl, chainId: 16602, signerKey }) as unknown as BillingChainClient & { verifyMessage(message: string, signature: string): string };
+  const chainClient = new ChainClient({ rpcUrl, chainId: 16661, signerKey }) as unknown as BillingChainClient & { verifyMessage(message: string, signature: string): string };
   const storageClient = new StorageClient({ rpcUrl, indexerUrl: storageIndexerUrl, signerKey }) as StorageBoundary;
-  const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16602, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, jwtSecret: process.env.EDGE_JWT_SECRET });
+  const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16661, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, jwtSecret: process.env.EDGE_JWT_SECRET });
   await app.listen({ port: Number(process.env.PORT ?? 8080), host: '0.0.0.0' });
   return app;
 }

@@ -10,7 +10,7 @@ const STACK_ITEMS = [
 
 export function ZeroGStack() {
   return (
-    <section id="skills" className="border-y border-[var(--color-line)] py-14">
+    <section id="stack" className="border-y border-[var(--color-line)] py-14">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <p className="mb-8 text-center text-xs font-semibold uppercase tracking-[0.25em] text-fg-faint">
           Powered by the 0G stack
