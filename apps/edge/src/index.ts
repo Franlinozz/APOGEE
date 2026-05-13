@@ -8,7 +8,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod';
-import { getAddress } from 'ethers';
+import { Contract, JsonRpcProvider, getAddress } from 'ethers';
 import { ChainClient } from '@apogee/chain-client';
 import { StorageClient } from '@apogee/storage-client';
 import { createBillingStack, InMemoryQuoteStore, type BillingChainClient, type ReceiptIndexRow, type StorageBoundary } from '@apogee/billing';
@@ -79,6 +79,8 @@ type PilotConvo = { id: string; userAddress: string; messages: PilotMsg[]; creat
 type AccountFactoryContract = { predict(owner: string, salt: string): Promise<string>; createAccount(owner: string, salt: string): Promise<TxResponse> };
 type AgentIdentityContract = { nextTokenId(): Promise<bigint>; mint(to: string, metadataRoot: string, publicKey: string, controller: string): Promise<TxResponse> };
 type PaymentRouterAdminContract = { setAgentAccount(agentId: bigint, account: string): Promise<TxResponse> };
+type AgentIdentityReadContract = { nextTokenId(): Promise<bigint>; ownerOf(tokenId: bigint): Promise<string> };
+type PaymentRouterReadContract = { agentAccounts(tokenId: bigint): Promise<string> };
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -198,7 +200,10 @@ const bigintFrom = (value: string | number | bigint | undefined): bigint | undef
 const json = (value: unknown): JsonValue => JSON.parse(JSON.stringify(value)) as JsonValue;
 const bytes32From = (value: string): string => /^0x[a-fA-F0-9]{64}$/.test(value) ? value : `0x${createHash('sha256').update(value).digest('hex')}`;
 
-const problem = (reply: FastifyReply, status: number, title: string, detail: string): FastifyReply => reply.status(status).type('application/problem+json').send({ type: 'about:blank', title, status, detail });
+const problem = (reply: FastifyReply, status: number, title: string, detail: string): FastifyReply => {
+  reply.status(status).type('application/problem+json').send({ type: 'about:blank', title, status, detail });
+  return reply;
+};
 const sameAddress = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 async function requireAuth(request: FastifyRequest): Promise<AuthUser> {
@@ -250,16 +255,79 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   void app.register(swaggerUi, { routePrefix: '/docs/api' });
   void app.register(websocket);
 
-  const ownedAgent = (reply: FastifyReply, user: AuthUser, agentId: string): AgentRecord | FastifyReply => {
+  let lastChainAgentSyncAt = 0;
+  let chainAgentSyncInFlight: Promise<void> | null = null;
+
+  const syncOnChainAgents = async (): Promise<void> => {
+    if (!options.agentIdentityAddress || !options.paymentRouterAddress) return;
+    const agentIdentityAddress = options.agentIdentityAddress;
+    const paymentRouterAddress = options.paymentRouterAddress;
+    if (Date.now() - lastChainAgentSyncAt < 30_000) return;
+    if (chainAgentSyncInFlight) return chainAgentSyncInFlight;
+
+    chainAgentSyncInFlight = (async () => {
+      const provider = new JsonRpcProvider(process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc.0g.ai', 16661, { staticNetwork: true });
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== 16661) throw new Error(`agent index sync expected Aristotle chainId 16661, got ${network.chainId.toString()}`);
+      const identity = new Contract(agentIdentityAddress, [
+        'function nextTokenId() view returns (uint256)',
+        'function ownerOf(uint256 tokenId) view returns (address)',
+      ], provider) as unknown as AgentIdentityReadContract;
+      const router = new Contract(paymentRouterAddress, [
+        'function agentAccounts(uint256 agentId) view returns (address)',
+      ], provider) as unknown as PaymentRouterReadContract;
+      const nextTokenId = await identity.nextTokenId();
+      const maxTokenId = nextTokenId > 200n ? 200n : nextTokenId;
+      const indexedAt = nowIso();
+      let synced = 0;
+      for (let tokenId = 1n; tokenId < maxTokenId; tokenId += 1n) {
+        try {
+          const [owner, accountAddress] = await Promise.all([
+            identity.ownerOf(tokenId),
+            router.agentAccounts(tokenId).catch(() => '0x0000000000000000000000000000000000000000'),
+          ]);
+          const id = tokenId.toString();
+          const existing = store.agents.get(id);
+          store.agents.set(id, {
+            id,
+            name: existing?.name ?? `Agent #${id}`,
+            owner,
+            ownerAddress: owner,
+            identityTokenId: id,
+            accountAddress: accountAddress === '0x0000000000000000000000000000000000000000' ? existing?.accountAddress : accountAddress,
+            metadataRoot: existing?.metadataRoot,
+            policyId: existing?.policyId,
+            balanceWei: existing?.balanceWei ?? '0',
+            kpis: existing?.kpis ?? { runs: 0, receipts: [...store.receipts.values()].filter((receipt) => receipt.agentId === id).length },
+            status: existing?.status ?? 'active',
+            createdAt: existing?.createdAt ?? indexedAt,
+            updatedAt: indexedAt,
+          });
+          synced += 1;
+        } catch {
+          // Burned/nonexistent token IDs are ignored; nextTokenId is authoritative.
+        }
+      }
+      lastChainAgentSyncAt = Date.now();
+      app.log.info({ nextTokenId: nextTokenId.toString(), synced }, 'agent index sync complete');
+    })().finally(() => {
+      chainAgentSyncInFlight = null;
+    });
+    return chainAgentSyncInFlight;
+  };
+
+  const ownedAgent = async (reply: FastifyReply, user: AuthUser, agentId: string): Promise<AgentRecord | FastifyReply> => {
+    await syncOnChainAgents();
     const agent = store.agents.get(agentId);
     if (!agent) return problem(reply, 404, 'Agent not found', agentId);
     if (!sameAddress(agent.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Agent is not owned by the caller');
     return agent;
   };
 
-  const ownedRun = (reply: FastifyReply, user: AuthUser, runId: string): RunRecord | FastifyReply => {
+  const ownedRun = async (reply: FastifyReply, user: AuthUser, runId: string): Promise<RunRecord | FastifyReply> => {
     const run = store.runs.get(runId);
     if (!run) return problem(reply, 404, 'Run not found', runId);
+    await syncOnChainAgents();
     const agent = store.agents.get(run.agentId);
     if (!agent || !sameAddress(agent.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Run is not owned by the caller');
     return run;
@@ -592,6 +660,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.get('/health', async () => ({ ok: true, uptimeSec: Math.floor(process.uptime()), version: '0.5.0' }));
 
   app.get('/v1/stats', { schema: { tags: ['system'] } }, async () => {
+    await syncOnChainAgents();
     const receipts = [...store.receipts.values()];
     const demoAgentIds = new Set(receipts.map((receipt) => receipt.agentId));
     const totalFlowed = receipts.reduce((sum, receipt) => {
@@ -767,20 +836,21 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   app.get('/v1/agents', { schema: { tags: ['agents'], response: { 200: z.array(agentSchema) } } }, async (request) => {
     const user = await requireAuth(request);
+    await syncOnChainAgents();
     return [...store.agents.values()].filter((agent) => agent.owner.toLowerCase() === user.address.toLowerCase());
   });
 
   app.get('/v1/agents/:id', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), response: { 200: agentSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    return ownedAgent(reply, user, id);
+    return await ownedAgent(reply, user, id);
   });
 
   app.patch('/v1/agents/:id/policy', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), body: policyPatchSchema } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, id);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
     agent.policyId = agent.policyId ?? newId('policy');
     broadcast(id, { event: 'policy.changed', payload: json(policyPatchSchema.parse(request.body)) });
     return { policyId: agent.policyId, ...policyPatchSchema.parse(request.body) };
@@ -789,8 +859,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.post('/v1/agents/:id/skills', { schema: { tags: ['skills'], params: z.object({ id: idSchema }), body: skillBodySchema } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, id);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
     const body = skillBodySchema.parse(request.body);
     const install: SkillInstall = { agentId: id, skillId: body.skillId, installedAt: nowIso() };
     if (body.version) install.version = body.version;
@@ -802,8 +872,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.delete('/v1/agents/:id/skills/:skillId', { schema: { tags: ['skills'], params: z.object({ id: idSchema, skillId: idSchema }) } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { id, skillId } = z.object({ id: idSchema, skillId: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, id);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
     store.skills.delete(`${id}:${skillId}`);
     return { ok: true };
   });
@@ -811,8 +881,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.post('/v1/agents/:id/run', { schema: { tags: ['runs'], params: z.object({ id: idSchema }), body: runBodySchema } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, id);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
     runBodySchema.parse(request.body);
     const run: RunRecord = { id: newId('run'), agentId: id, status: 'queued', createdAt: nowIso(), updatedAt: nowIso(), receipts: [], steps: [{ id: newId('step'), name: 'queued', status: 'succeeded', createdAt: nowIso() }] };
     store.runs.set(run.id, run);
@@ -823,14 +893,14 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.get('/v1/runs/:runId', { schema: { tags: ['runs'], params: z.object({ runId: idSchema }), response: { 200: runSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { runId } = z.object({ runId: idSchema }).parse(request.params);
-    return ownedRun(reply, user, runId);
+    return await ownedRun(reply, user, runId);
   });
 
   app.get('/v1/runs/:runId/receipts', { schema: { tags: ['runs'], params: z.object({ runId: idSchema }) } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { runId } = z.object({ runId: idSchema }).parse(request.params);
-    const run = ownedRun(reply, user, runId);
-    if ('statusCode' in run) return run;
+    const run = await ownedRun(reply, user, runId);
+    if (reply.sent || 'statusCode' in run) return run;
     return run.receipts;
   });
 
@@ -845,8 +915,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.post('/v1/services', { schema: { tags: ['services'], body: serviceBodySchema, response: { 200: serviceSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
     const body = serviceBodySchema.parse(request.body);
-    const agent = ownedAgent(reply, user, body.agentId);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, body.agentId);
+    if (reply.sent || 'statusCode' in agent) return agent;
     const service: ServiceRecord = { id: newId('svc'), agentId: body.agentId, serviceId: body.serviceId, tags: body.tags, priceWei: body.priceWei };
     if (body.description) service.description = body.description;
     store.services.set(service.id, service);
@@ -879,8 +949,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const { paymentId } = z.object({ paymentId: idSchema }).parse(request.params);
     const body = refundBodySchema.parse(request.body);
     if (body.agentId) {
-      const agent = ownedAgent(reply, user, body.agentId);
-      if ('statusCode' in agent) return agent;
+      const agent = await ownedAgent(reply, user, body.agentId);
+      if (reply.sent || 'statusCode' in agent) return agent;
     }
     return stack.refundManager.refund({ paymentId, ...body });
   });
@@ -889,8 +959,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const user = await requireAuth(request);
     const body = z.object({ paymentId: idSchema }).merge(refundBodySchema).parse(request.body);
     if (body.agentId) {
-      const agent = ownedAgent(reply, user, body.agentId);
-      if ('statusCode' in agent) return agent;
+      const agent = await ownedAgent(reply, user, body.agentId);
+      if (reply.sent || 'statusCode' in agent) return agent;
     }
     return stack.refundManager.refund(body);
   });
@@ -898,8 +968,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   const listAgentMemory = async (request: FastifyRequest, reply: FastifyReply) => {
     const user = await requireAuth(request);
     const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, agentId);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, agentId);
+    if (reply.sent || 'statusCode' in agent) return agent;
     return [...store.memory.values()]
       .filter((entry) => entry.agentId === agentId)
       .map((entry) => ({ id: entry.key, agentId: entry.agentId, key: entry.key, value: entry.value, version: 1, createdAt: entry.updatedAt, updatedAt: entry.updatedAt, tags: entry.tags }));
@@ -911,8 +981,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.put('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }), body: memoryPutSchema } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { agentId, key } = z.object({ agentId: idSchema, key: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, agentId);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, agentId);
+    if (reply.sent || 'statusCode' in agent) return agent;
     const body = memoryPutSchema.parse(request.body);
     const record: MemoryRecord = { agentId, key, value: body.value, tags: body.tags, updatedAt: nowIso() };
     store.memory.set(`${agentId}:${key}`, record);
@@ -922,16 +992,16 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.get('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }) } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { agentId, key } = z.object({ agentId: idSchema, key: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, agentId);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, agentId);
+    if (reply.sent || 'statusCode' in agent) return agent;
     return store.memory.get(`${agentId}:${key}`) ?? problem(reply, 404, 'Memory key not found', key);
   });
 
   app.delete('/v1/memory/:agentId/:key', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema, key: idSchema }) } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { agentId, key } = z.object({ agentId: idSchema, key: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, agentId);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, agentId);
+    if (reply.sent || 'statusCode' in agent) return agent;
     store.memory.delete(`${agentId}:${key}`);
     return { ok: true };
   });
@@ -939,8 +1009,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.post('/v1/memory/:agentId/search', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }), body: memorySearchSchema } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
-    const agent = ownedAgent(reply, user, agentId);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, agentId);
+    if (reply.sent || 'statusCode' in agent) return agent;
     const body = memorySearchSchema.parse(request.body);
     return [...store.memory.values()].filter((entry) => entry.agentId === agentId && JSON.stringify(entry.value).includes(body.query)).slice(0, body.limit);
   });
@@ -949,9 +1019,10 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const user = await requireAuth(request);
     const query = paginationSchema.parse(request.query);
     if (query.agentId) {
-      const agent = ownedAgent(reply, user, query.agentId);
-      if ('statusCode' in agent) return agent;
+      const agent = await ownedAgent(reply, user, query.agentId);
+      if (reply.sent || 'statusCode' in agent) return agent;
     }
+    await syncOnChainAgents();
     const ownedAgentIds = new Set([...store.agents.values()].filter((agent) => sameAddress(agent.owner, user.address)).map((agent) => agent.id));
     const rows = [...store.receipts.values()]
       .filter((receipt) => ownedAgentIds.has(receipt.agentId) && (!query.agentId || receipt.agentId === query.agentId))
@@ -964,8 +1035,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const receipt = store.receipts.get(id);
     if (!receipt) return problem(reply, 404, 'Receipt not found', id);
-    const agent = ownedAgent(reply, user, receipt.agentId);
-    if ('statusCode' in agent) return agent;
+    const agent = await ownedAgent(reply, user, receipt.agentId);
+    if (reply.sent || 'statusCode' in agent) return agent;
     return receipt;
   });
 
