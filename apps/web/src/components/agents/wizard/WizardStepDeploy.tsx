@@ -43,17 +43,32 @@ function classifyError(title: string, detail?: string, status?: number): { messa
   if (status === 402 || title.toLowerCase().includes('funds') || detail?.toLowerCase().includes('funds')) {
     return { message: 'Insufficient funds', detail: 'Your agent wallet needs 0G tokens to cover gas. Visit faucet.0g.ai to get testnet tokens.' };
   }
+  // Deploy authorization error — structured 403 from edge preflight, includes actual addresses.
+  // Must be checked before the generic 403 handler below.
+  if (
+    title === 'Deployment not authorized' ||
+    title.toLowerCase().includes('not authorized to mint') ||
+    detail?.toLowerCase().includes('not authorized to mint') ||
+    detail?.includes('Expected owner:')
+  ) {
+    const ownerMatch  = detail?.match(/Expected owner:\s*(0x[a-fA-F0-9]{40})/i);
+    const signerMatch = detail?.match(/Current edge signer:\s*(0x[a-fA-F0-9]{40})/i);
+    const identityOwner = ownerMatch?.[1];
+    const edgeSigner    = signerMatch?.[1];
+    return {
+      message: 'Deployment signer is not authorized',
+      detail: [
+        identityOwner ? `Expected owner/admin: ${identityOwner}` : null,
+        edgeSigner    ? `Current edge signer: ${edgeSigner}`    : null,
+        'Action needed: configure AGENT_DEPLOYER_PRIVATE_KEY on @apogee/edge or authorize the edge signer.',
+      ].filter(Boolean).join('\n'),
+    };
+  }
   if (status === 403) {
     return { message: 'Not authorised', detail: detail ?? 'You can only deploy agents for your own wallet address.' };
   }
   if (status === 502 || title.toLowerCase().includes('unreachable') || title.toLowerCase().includes('network')) {
     return { message: 'API unavailable', detail: 'The Edge API did not respond. Please wait a moment and try again.' };
-  }
-  if (title.toLowerCase().includes('not authorized to mint') || detail?.toLowerCase().includes('not authorized to mint')) {
-    return {
-      message: 'Deployment not authorized',
-      detail: 'The edge service signer is not the AgentIdentity contract owner. Set AGENT_DEPLOYER_PRIVATE_KEY on the Railway edge service, or call AgentIdentity.transferOwnership(edgeSigner) from the deployer wallet.',
-    };
   }
   if (title.toLowerCase().includes('contract') || detail?.toLowerCase().includes('revert')) {
     return { message: 'Contract call failed', detail: detail ?? 'The on-chain transaction reverted. Check that the Aristotle network is reachable.' };
@@ -184,7 +199,11 @@ export function WizardStepDeploy({ state, onBack, onDone }: Props) {
             <div className="space-y-1">
               <p className="text-sm font-semibold text-danger">{status.message}</p>
               {status.detail && (
-                <p className="text-xs text-danger/80 leading-relaxed">{status.detail}</p>
+                <div className="space-y-0.5">
+                  {status.detail.split('\n').map((line, i) => (
+                    <p key={i} className="text-xs text-danger/80 leading-relaxed font-mono">{line}</p>
+                  ))}
+                </div>
               )}
             </div>
           </div>

@@ -250,12 +250,10 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         signerAddress.toLowerCase() === identityOwner.toLowerCase();
 
       if (!signerIsOwner && !options.agentDeployerKey) {
-        // Return a structured error the UI can display cleanly.
-        throw new Error(
-          `Deployment signer ${signerAddress} is not authorized to mint AgentIdentity on Aristotle. ` +
-          `AgentIdentity owner is ${identityOwner}. ` +
-          `Set AGENT_DEPLOYER_PRIVATE_KEY env var (key for ${identityOwner}) on the edge service, ` +
-          `or call AgentIdentity.transferOwnership(${signerAddress}) from wallet ${identityOwner}.`
+        // Throw structured error — caught by /v1/agents route to return a clean 403 with address info.
+        throw Object.assign(
+          new Error('Deployment signer is not authorized to call AgentIdentity.mint()'),
+          { deployAuthError: true as const, identityOwner, signerAddress },
         );
       }
 
@@ -373,11 +371,90 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     } catch { /* runtime not reachable — keep stored state */ }
   }
 
+  // ── Startup authorization preflight ──────────────────────────────────────────
+  // Checks: chainId, bytecode for all 4 contracts, and whether the configured
+  // signer (edge or deployer) is authorized to call AgentIdentity.mint().
+  // Non-fatal — logs warnings; actual enforcement happens per-request in provisionAgentOnChain.
+  async function runDeployAuthPreflight(): Promise<void> {
+    if (!options.accountFactoryAddress || !options.agentIdentityAddress) return;
+    type P = { getCode(a: string): Promise<string>; call(t: { to: string; data: string }): Promise<string>; getNetwork(): Promise<{ chainId: bigint }> };
+    const provider = (options.chainClient as unknown as { getProvider?(): P }).getProvider?.();
+    if (!provider) {
+      app.log.warn('deploy-auth preflight: chainClient has no getProvider() — skipping');
+      return;
+    }
+    try {
+      const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
+      if (chainId !== 16661) {
+        app.log.error({ chainId, expected: 16661 }, 'deploy-auth preflight: RPC chainId mismatch — contracts are on Aristotle (16661)');
+        return;
+      }
+
+      const [factoryCode, identityCode, routerCode, bookCode] = await Promise.all([
+        provider.getCode(options.accountFactoryAddress),
+        provider.getCode(options.agentIdentityAddress),
+        provider.getCode(options.paymentRouterAddress),
+        provider.getCode(options.receiptBookAddress),
+      ]);
+      const missing = [
+        factoryCode  === '0x' && `AccountFactory(${options.accountFactoryAddress})`,
+        identityCode === '0x' && `AgentIdentity(${options.agentIdentityAddress})`,
+        routerCode   === '0x' && `PaymentRouter(${options.paymentRouterAddress})`,
+        bookCode     === '0x' && `ReceiptBook(${options.receiptBookAddress})`,
+      ].filter(Boolean as unknown as (x: unknown) => x is string);
+      if (missing.length > 0) {
+        app.log.error({ missing }, 'deploy-auth preflight: contracts missing bytecode — check env address vars');
+      }
+
+      // AgentIdentity.owner() — selector 0x8da5cb5b
+      const ownerResult = await provider.call({ to: options.agentIdentityAddress, data: '0x8da5cb5b' });
+      const identityOwner = ownerResult.length >= 66 ? getAddress('0x' + ownerResult.slice(-40)) : '';
+      const edgeSignerAddress = (options.chainClient as unknown as { getSigner?(): { address: string } }).getSigner?.()?.address ?? '';
+
+      let deployerAddress = '';
+      if (options.agentDeployerKey) {
+        const { Wallet } = await import('ethers');
+        deployerAddress = new Wallet(options.agentDeployerKey).address;
+      }
+
+      const signerIsOwner   = edgeSignerAddress !== '' && identityOwner !== '' && edgeSignerAddress.toLowerCase()  === identityOwner.toLowerCase();
+      const deployerIsOwner = deployerAddress   !== '' && identityOwner !== '' && deployerAddress.toLowerCase()    === identityOwner.toLowerCase();
+      const authorized = signerIsOwner || deployerIsOwner;
+
+      app.log.info({
+        chainId,
+        contractsOk: missing.length === 0,
+        identityOwner,
+        edgeSignerAddress,
+        deployerAddress: deployerAddress || null,
+        authorized,
+        usingDeployerKey: !signerIsOwner && deployerIsOwner,
+      }, authorized
+        ? 'deploy-auth preflight: OK — agent provisioning authorized'
+        : 'deploy-auth preflight: UNAUTHORIZED — set AGENT_DEPLOYER_PRIVATE_KEY on the @apogee/edge Railway service'
+      );
+
+      if (!authorized) {
+        app.log.warn(
+          `deploy-auth: Agent deployment will fail at runtime. ` +
+          `AgentIdentity(${options.agentIdentityAddress}).owner() = ${identityOwner}. ` +
+          `Edge signer ${edgeSignerAddress} is not the owner. ` +
+          `AGENT_DEPLOYER_PRIVATE_KEY is ${options.agentDeployerKey ? 'set but resolves to wrong address' : 'not set'}. ` +
+          `Fix: railway variables set AGENT_DEPLOYER_PRIVATE_KEY=<key for ${identityOwner}> --service @apogee/edge --environment production`,
+        );
+      }
+    } catch (err) {
+      app.log.warn({ err }, 'deploy-auth preflight: check failed (non-fatal)');
+    }
+  }
+
   // Start background refresh on server ready; clear on close
   let chainRefreshTimer: ReturnType<typeof setInterval> | undefined;
   app.addHook('onReady', () => {
     void refreshChainCache();
     void syncRuntimeHeartbeat();
+    if (options.accountFactoryAddress && options.agentIdentityAddress) void runDeployAuthPreflight();
     chainRefreshTimer = setInterval(() => {
       void refreshChainCache();
       void syncRuntimeHeartbeat();
@@ -496,7 +573,21 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const user = await requireAuth(request);
     const body = agentCreateSchema.parse(request.body);
     if (body.owner && !sameAddress(body.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Cannot provision an agent for a different owner');
-    const provisioned = await provisionAgentOnChain(user.address, body.metadataRoot);
+    let provisioned: Awaited<ReturnType<typeof provisionAgentOnChain>>;
+    try {
+      provisioned = await provisionAgentOnChain(user.address, body.metadataRoot);
+    } catch (err) {
+      const e = err as { deployAuthError?: boolean; identityOwner?: string; signerAddress?: string };
+      if (e.deployAuthError) {
+        return problem(reply, 403, 'Deployment not authorized',
+          `Deployment signer is not authorized to call AgentIdentity.mint(). ` +
+          `Expected owner: ${e.identityOwner} · ` +
+          `Current edge signer: ${e.signerAddress} · ` +
+          `Action: Set AGENT_DEPLOYER_PRIVATE_KEY (key for ${e.identityOwner}) on the @apogee/edge Railway service.`,
+        );
+      }
+      throw err;
+    }
     const agent: AgentRecord = { id: provisioned?.id ?? String(store.nextAgentId++), owner: user.address, accountAddress: provisioned?.accountAddress ?? user.address, balanceWei: '0', kpis: { runs: 0, receipts: 0 } };
     if (provisioned?.metadataRoot ?? body.metadataRoot) agent.metadataRoot = provisioned?.metadataRoot ?? body.metadataRoot;
     if (body.policyId) agent.policyId = body.policyId;
