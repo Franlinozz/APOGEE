@@ -665,9 +665,18 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     };
   };
 
-  const receiptRows = (agentId?: string): ReceiptIndexRow[] => [...store.receipts.values()]
-    .filter((receipt) => !agentId || receipt.agentId === agentId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const receiptRows = (agentId?: string): ReceiptIndexRow[] => {
+    const byKey = new Map<string, ReceiptIndexRow>();
+    const score = (row: ReceiptIndexRow): number => (row.clientReceiptId ? 4 : 0) + (row.txHash ? 2 : 0) + (/^0x[a-fA-F0-9]{8}$/.test(row.actionTag) ? 0 : 1);
+    for (const receipt of [...store.receipts.values()].filter((row) => !agentId || row.agentId === agentId)) {
+      const key = receipt.storageRoot && receipt.payloadHash
+        ? `${receipt.agentId}:${receipt.payloadHash}:${receipt.storageRoot}:${receipt.valueWei}`
+        : receipt.clientReceiptId ?? receipt.receiptId;
+      const current = byKey.get(key);
+      if (!current || score(receipt) > score(current) || (score(receipt) === score(current) && receipt.createdAt > current.createdAt)) byKey.set(key, receipt);
+    }
+    return [...byKey.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  };
 
   const deploymentForAgent = async (agent: AgentRecord): Promise<DeploymentRecord | null> => deploymentStore.get(agentTokenId(agent));
 
@@ -1096,7 +1105,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.get('/v1/stats', { schema: { tags: ['system'] } }, async () => {
     await syncOnChainAgents();
     await syncOnChainReceipts();
-    const receipts = [...store.receipts.values()];
+    const receipts = receiptRows();
     const demoAgentIds = new Set(receipts.map((receipt) => receipt.agentId));
     const totalFlowed = receipts.reduce((sum, receipt) => {
       try {
@@ -1207,7 +1216,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return {
       chainId,
       generatedAt: new Date().toISOString(),
-      totalReceipts: store.receipts.size,
+      totalReceipts: receiptRows().length,
       demoAgents,
       receipts: last50,
       heatmap,
@@ -1699,7 +1708,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       return [...store.memory.values()].filter(m => m.agentId === agentId).slice(0, 10).map(m => ({ key: m.key, tags: m.tags, updatedAt: m.updatedAt }));
     }
     if (name === 'getProtocolStats') {
-      return { totalAgents: store.agents.size, totalReceipts: store.receipts.size, totalServices: store.services.size };
+      return { totalAgents: store.agents.size, totalReceipts: receiptRows().length, totalServices: store.services.size };
     }
     if (name === 'explainConcept') {
       const concepts: Record<string, string> = {
