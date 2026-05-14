@@ -10,13 +10,15 @@ import {
   getDashboardStats,
   getReceiptHeatmap,
   getAgentSkills,
+  hideAgent,
+  unhideAgent,
 } from './api';
 
 function tok(): string | undefined {
   return cookies().get('apogee-jwt')?.value;
 }
 
-export const serverGetAgents = () => getAgents(tok());
+export const serverGetAgents = (params?: Parameters<typeof getAgents>[1]) => getAgents(tok(), params);
 export const serverGetAgent = (id: string) => getAgent(id, tok());
 export const serverCreateAgent = (data: Parameters<typeof createAgent>[0]) => createAgent(data, tok());
 export const serverGetPolicy = (id: string) => getPolicy(id, tok());
@@ -27,3 +29,5 @@ export const serverGetDashboardStats = () => getDashboardStats(tok());
 export const serverGetReceiptHeatmap = () => getReceiptHeatmap(tok());
 
 export const serverGetAgentSkills = (agentId: string) => getAgentSkills(agentId, tok());
+export const serverHideAgent = (agentId: string) => hideAgent(agentId, tok());
+export const serverUnhideAgent = (agentId: string) => unhideAgent(agentId, tok());

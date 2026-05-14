@@ -9,6 +9,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod';
 import { Contract, JsonRpcProvider, getAddress } from 'ethers';
+import { Redis, type Redis as RedisClient } from 'ioredis';
 import { ChainClient } from '@apogee/chain-client';
 import { StorageClient } from '@apogee/storage-client';
 import { createBillingStack, InMemoryQuoteStore, type BillingChainClient, type ReceiptIndexRow, type StorageBoundary } from '@apogee/billing';
@@ -49,6 +50,7 @@ const agentSchema = z.object({
   status: z.enum(['pending_deploy', 'deployed', 'activating', 'active', 'paused', 'failed', 'deploying', 'error']),
   createdAt: z.string(),
   updatedAt: z.string(),
+  hidden: z.boolean().optional(),
 });
 const skillManifestSchema = z.object({ id: z.string(), name: z.string(), version: z.string(), description: z.string(), category: z.string(), tier: z.enum(['free', 'premium']), pricePerCallWei: z.string(), authorAddress: addressSchema.optional(), tags: z.array(z.string()) });
 const policyPatchSchema = z.object({ maxPerTxWei: z.string().optional(), maxPerDayWei: z.string().optional(), active: z.boolean().optional(), summary: z.string().optional() });
@@ -74,6 +76,7 @@ const refundBodySchema = z.object({ reason: z.string(), agentId: z.string().opti
 const memoryPutSchema = z.object({ value: jsonValueSchema, tags: z.array(z.string()).default([]) });
 const memorySearchSchema = z.object({ query: z.string().min(1), limit: z.number().int().positive().max(50).default(10) });
 const paginationSchema = z.object({ cursor: z.string().optional(), limit: z.coerce.number().int().positive().max(100).default(25), tag: z.string().optional(), agentId: z.string().optional(), scope: z.enum(['owned', 'global']).default('owned') });
+const agentsQuerySchema = z.object({ includeHidden: z.coerce.boolean().default(false) });
 const chainStatusSchema = z.object({ ok: z.boolean(), chainId: z.number(), blockNumber: z.number().optional(), latencyMs: z.number().optional(), rpc: z.string() });
 const healthSchema = z.object({
   ok: z.boolean(),
@@ -92,6 +95,7 @@ type RunRecord = z.infer<typeof runSchema> & { receipts: ReceiptIndexRow[]; step
 type ServiceRecord = z.infer<typeof serviceSchema> & { agentId?: string; serviceId?: string; priceWei?: string };
 type SkillInstall = { agentId: string; skillId: string; version?: string | undefined; config?: JsonValue | undefined; installedAt: string };
 type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string };
+type HiddenAgentRecord = { chainId: number; ownerAddress: string; tokenId: string; hiddenAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
 type TxResponse = { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<unknown> };
@@ -209,6 +213,41 @@ class InMemoryEdgeStore {
   readonly lastHeartbeat = { aurora: null as string | null, vesper: null as string | null, helix: null as string | null };
 }
 
+interface HiddenAgentStore {
+  isHidden(chainId: number, ownerAddress: string, tokenId: string): Promise<boolean>;
+  setHidden(record: HiddenAgentRecord): Promise<void>;
+  unsetHidden(chainId: number, ownerAddress: string, tokenId: string): Promise<void>;
+}
+
+const hiddenAgentKey = (chainId: number, ownerAddress: string, tokenId: string): string =>
+  `hidden-agent:${chainId}:${ownerAddress.toLowerCase()}:${tokenId}`;
+
+class InMemoryHiddenAgentStore implements HiddenAgentStore {
+  private readonly hidden = new Map<string, HiddenAgentRecord>();
+  async isHidden(chainId: number, ownerAddress: string, tokenId: string): Promise<boolean> {
+    return this.hidden.has(hiddenAgentKey(chainId, ownerAddress, tokenId));
+  }
+  async setHidden(record: HiddenAgentRecord): Promise<void> {
+    this.hidden.set(hiddenAgentKey(record.chainId, record.ownerAddress, record.tokenId), record);
+  }
+  async unsetHidden(chainId: number, ownerAddress: string, tokenId: string): Promise<void> {
+    this.hidden.delete(hiddenAgentKey(chainId, ownerAddress, tokenId));
+  }
+}
+
+class RedisHiddenAgentStore implements HiddenAgentStore {
+  constructor(private readonly redis: RedisClient) {}
+  async isHidden(chainId: number, ownerAddress: string, tokenId: string): Promise<boolean> {
+    return (await this.redis.exists(hiddenAgentKey(chainId, ownerAddress, tokenId))) === 1;
+  }
+  async setHidden(record: HiddenAgentRecord): Promise<void> {
+    await this.redis.set(hiddenAgentKey(record.chainId, record.ownerAddress, record.tokenId), JSON.stringify(record));
+  }
+  async unsetHidden(chainId: number, ownerAddress: string, tokenId: string): Promise<void> {
+    await this.redis.del(hiddenAgentKey(chainId, ownerAddress, tokenId));
+  }
+}
+
 class FieldRateLimiter {
   private readonly hits = new Map<string, { count: number; resetAt: number }>();
   constructor(private readonly max: number, private readonly windowMs: number) {}
@@ -262,6 +301,10 @@ function parseSiweAddress(message: string): string | null {
 export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   const app = Fastify(options.logger ? { loggerInstance: options.logger } : { logger: true });
   const store = new InMemoryEdgeStore();
+  const hiddenAgentStore: HiddenAgentStore = process.env.REDIS_URL
+    ? new RedisHiddenAgentStore(new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true }))
+    : new InMemoryHiddenAgentStore();
+  if (!process.env.REDIS_URL) app.log.warn('hidden-agent store is in-memory; set REDIS_URL for durable production hides');
   const quoteByPayee = new FieldRateLimiter(30, 60_000);
   const settleByPayer = new FieldRateLimiter(30, 60_000);
   const streamClients = new Map<string, Set<{ send(payload: string): void; close(): void }>>();
@@ -466,6 +509,13 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     if (fallback === 'paused' || fallback === 'failed' || fallback === 'error' || fallback === 'deploying' || fallback === 'pending_deploy') return fallback;
     return hasRuntimeActivity(agentId) ? 'active' : 'activating';
   };
+
+  const agentTokenId = (agent: AgentRecord): string => agent.identityTokenId ?? agent.id;
+  const withAgentVisibility = async (agent: AgentRecord): Promise<AgentRecord> => ({
+    ...agent,
+    status: measurableStatus(agent.id, agent.status),
+    hidden: await hiddenAgentStore.isHidden(options.chainId, agent.owner, agentTokenId(agent)),
+  });
 
   const receiptRows = (agentId?: string): ReceiptIndexRow[] => [...store.receipts.values()]
     .filter((receipt) => !agentId || receipt.agentId === agentId)
@@ -1002,20 +1052,43 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return agent;
   });
 
-  app.get('/v1/agents', { schema: { tags: ['agents'], response: { 200: z.array(agentSchema) } } }, async (request) => {
+  app.get('/v1/agents', { schema: { tags: ['agents'], querystring: agentsQuerySchema, response: { 200: z.array(agentSchema) } } }, async (request) => {
     const user = await requireAuth(request);
+    const query = agentsQuerySchema.parse(request.query);
     await syncOnChainAgents();
-    return [...store.agents.values()]
+    const rows = await Promise.all([...store.agents.values()]
       .filter((agent) => agent.owner.toLowerCase() === user.address.toLowerCase())
-      .map((agent) => ({ ...agent, status: measurableStatus(agent.id, agent.status) }));
+      .map(withAgentVisibility));
+    return rows.filter((agent) => query.includeHidden || !agent.hidden);
   });
 
-  app.get('/v1/agents/:id', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), response: { 200: agentSchema } } }, async (request, reply) => {
+  app.get('/v1/agents/:id', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), querystring: agentsQuerySchema, response: { 200: agentSchema } } }, async (request, reply) => {
+    const user = await requireAuth(request);
+    const { id } = z.object({ id: idSchema }).parse(request.params);
+    const query = agentsQuerySchema.parse(request.query);
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
+    const visibleAgent = await withAgentVisibility(agent);
+    if (visibleAgent.hidden && !query.includeHidden) return problem(reply, 404, 'Agent hidden', 'This agent is hidden from your workspace. Restore it from the Hidden agents section.');
+    return visibleAgent;
+  });
+
+  app.post('/v1/agents/:id/hide', { schema: { tags: ['agents'], params: z.object({ id: idSchema }) } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const agent = await ownedAgent(reply, user, id);
     if (reply.sent || 'statusCode' in agent) return agent;
-    return { ...agent, status: measurableStatus(agent.id, agent.status) };
+    await hiddenAgentStore.setHidden({ chainId: options.chainId, ownerAddress: agent.owner.toLowerCase(), tokenId: agentTokenId(agent), hiddenAt: nowIso() });
+    return { ok: true };
+  });
+
+  app.post('/v1/agents/:id/unhide', { schema: { tags: ['agents'], params: z.object({ id: idSchema }) } }, async (request, reply) => {
+    const user = await requireAuth(request);
+    const { id } = z.object({ id: idSchema }).parse(request.params);
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
+    await hiddenAgentStore.unsetHidden(options.chainId, agent.owner, agentTokenId(agent));
+    return { ok: true };
   });
 
   app.patch('/v1/agents/:id/policy', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), body: policyPatchSchema } }, async (request, reply) => {

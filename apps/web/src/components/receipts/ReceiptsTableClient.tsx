@@ -12,6 +12,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Receipt } from '@/lib/types';
+import { buildChainscanUrl } from '@/lib/chainscan';
 import { Badge } from '@apogee/ui';
 import { Download, ArrowUpDown } from 'lucide-react';
 
@@ -56,9 +57,10 @@ const COLUMNS = [
     header: 'Tx',
     cell: (i) => {
       const hash = i.getValue();
-      return hash ? (
+      const href = buildChainscanUrl({ txHash: hash, chainId: 16661 });
+      return href && hash ? (
         <a
-          href={`https://chainscan.0g.ai/tx/${hash}`}
+          href={href}
           target="_blank"
           rel="noopener noreferrer"
           className="font-mono text-xs text-accent hover:underline"

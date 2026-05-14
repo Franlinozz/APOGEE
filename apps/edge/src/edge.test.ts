@@ -86,6 +86,20 @@ describe('edge API', () => {
 
     const read = await app.inject({ method: 'GET', url: `/v1/agents/${agent.id}`, headers: otherAuth });
     expect(read.statusCode).toBe(403);
+    const hideOther = await app.inject({ method: 'POST', url: `/v1/agents/${agent.id}/hide`, headers: otherAuth });
+    expect(hideOther.statusCode).toBe(403);
+    const hideOwner = await app.inject({ method: 'POST', url: `/v1/agents/${agent.id}/hide`, headers: ownerAuth });
+    expect(hideOwner.statusCode).toBe(200);
+    const defaultList = await app.inject({ method: 'GET', url: '/v1/agents', headers: ownerAuth });
+    expect(defaultList.json<unknown[]>()).toHaveLength(0);
+    const hiddenList = await app.inject({ method: 'GET', url: '/v1/agents?includeHidden=true', headers: ownerAuth });
+    expect(hiddenList.json<Array<{ hidden?: boolean }>>()[0]?.hidden).toBe(true);
+    const hiddenDirect = await app.inject({ method: 'GET', url: `/v1/agents/${agent.id}`, headers: ownerAuth });
+    expect(hiddenDirect.statusCode).toBe(404);
+    const hiddenDirectIncluded = await app.inject({ method: 'GET', url: `/v1/agents/${agent.id}?includeHidden=true`, headers: ownerAuth });
+    expect(hiddenDirectIncluded.json<{ hidden?: boolean }>().hidden).toBe(true);
+    const unhideOwner = await app.inject({ method: 'POST', url: `/v1/agents/${agent.id}/unhide`, headers: ownerAuth });
+    expect(unhideOwner.statusCode).toBe(200);
     const memory = await app.inject({ method: 'PUT', url: `/v1/memory/${agent.id}/private`, headers: otherAuth, payload: { value: 'nope', tags: [] } });
     expect(memory.statusCode).toBe(403);
     await app.close();

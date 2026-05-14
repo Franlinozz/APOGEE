@@ -4,6 +4,7 @@ export interface Agent {
   ownerAddress: string;
   identityTokenId?: string;
   accountAddress?: string;
+  hidden?: boolean;
   status: 'pending_deploy' | 'deployed' | 'activating' | 'active' | 'paused' | 'failed' | 'deploying' | 'error';
   createdAt: string;
   updatedAt: string;

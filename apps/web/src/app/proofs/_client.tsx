@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { buildChainscanUrl } from '@/lib/chainscan';
 
 const PAGE_SIZE = 9;
 const STORAGE_PAGE_SIZE = 10;
@@ -201,15 +202,15 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
                     </td>
                     <td className="px-4 py-2.5 text-white/40">{new Date(r.createdAt).toLocaleTimeString()}</td>
                     <td className="px-4 py-2.5">
-                      {r.txHash ? (
+                      {buildChainscanUrl({ txHash: r.txHash, chainId: 16661 }) ? (
                         <a
-                          href={`https://chainscan.0g.ai/tx/${r.txHash}`}
+                          href={buildChainscanUrl({ txHash: r.txHash, chainId: 16661 })!}
                           target="_blank"
                           rel="noreferrer"
                           className="font-mono text-violet-400 hover:text-violet-300"
                           title={r.txHash}
                         >
-                          {r.txHash.slice(0, 10)}…
+                          {r.txHash?.slice(0, 10)}…
                         </a>
                       ) : <span className="text-white/20">—</span>}
                     </td>
@@ -310,10 +311,10 @@ export function StorageProofsClient({ proofSample }: { proofSample: StorageProof
                   {r.payloadHash ? r.payloadHash.slice(0, 14) + '…' : '—'}
                 </td>
                 <td className="px-4 py-2.5">
-                  {r.storageTxHash ? (
-                    <a href={`https://chainscan.0g.ai/tx/${r.storageTxHash}`} target="_blank" rel="noreferrer"
+                  {buildChainscanUrl({ txHash: r.storageTxHash, chainId: 16661 }) ? (
+                    <a href={buildChainscanUrl({ txHash: r.storageTxHash, chainId: 16661 })!} target="_blank" rel="noreferrer"
                       className="font-mono text-emerald-400 hover:text-emerald-300 text-[10px]" title={r.storageTxHash}>
-                      {r.storageTxHash.slice(0, 10)}…
+                      {r.storageTxHash?.slice(0, 10)}…
                     </a>
                   ) : <span className="text-white/20">—</span>}
                 </td>
@@ -324,10 +325,10 @@ export function StorageProofsClient({ proofSample }: { proofSample: StorageProof
                 </td>
                 <td className="px-4 py-2.5 text-white/40">{new Date(r.createdAt).toLocaleTimeString()}</td>
                 <td className="px-4 py-2.5">
-                  {r.txHash ? (
-                    <a href={`https://chainscan.0g.ai/tx/${r.txHash}`} target="_blank" rel="noreferrer"
+                  {buildChainscanUrl({ txHash: r.txHash, chainId: 16661 }) ? (
+                    <a href={buildChainscanUrl({ txHash: r.txHash, chainId: 16661 })!} target="_blank" rel="noreferrer"
                       className="font-mono text-violet-400 hover:text-violet-300" title={r.txHash}>
-                      {r.txHash.slice(0, 10)}…
+                      {r.txHash?.slice(0, 10)}…
                     </a>
                   ) : <span className="text-white/20">—</span>}
                 </td>

@@ -123,8 +123,11 @@ export function siweVerify(message: string, signature: string) {
 
 // ── Agents ────────────────────────────────────────────────
 
-export function getAgents(token?: string): Promise<Agent[]> {
-  return apiFetch<Agent[]>('/v1/agents', undefined, token);
+export function getAgents(token?: string, params?: { includeHidden?: boolean }): Promise<Agent[]> {
+  const qs = new URLSearchParams();
+  if (params?.includeHidden) qs.set('includeHidden', 'true');
+  const q = qs.toString() ? `?${qs}` : '';
+  return apiFetch<Agent[]>(`/v1/agents${q}`, undefined, token);
 }
 
 export function getAgent(id: string, token?: string): Promise<Agent> {
@@ -137,6 +140,14 @@ export function createAgent(data: Partial<Agent>, token?: string): Promise<Agent
 
 export function updateAgent(id: string, data: Partial<Agent>, token?: string): Promise<Agent> {
   return apiFetch<Agent>(`/v1/agents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, token);
+}
+
+export function hideAgent(id: string, token?: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/v1/agents/${id}/hide`, { method: 'POST' }, token);
+}
+
+export function unhideAgent(id: string, token?: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/v1/agents/${id}/unhide`, { method: 'POST' }, token);
 }
 
 // ── Policies ──────────────────────────────────────────────

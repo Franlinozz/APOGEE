@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Agent, MemoryEntry, Receipt, Run, SkillManifest } from '@/lib/types';
+import { buildChainscanUrl } from '@/lib/chainscan';
 import { Badge } from '@apogee/ui';
 
 type InstalledSkill = { agentId: string; skillId: string; version?: string; installedAt: string };
@@ -88,7 +90,7 @@ function OverviewTab({ agent, receipts, runs, memoryEntries, installedSkills }: 
         {latestReceipt ? (
           <p className="mt-2 text-xs text-fg-muted">
             Latest receipt <code className="font-mono text-fg">{short(latestReceipt.id)}</code> for {latestReceipt.skillId ?? 'agent action'} at {fmtDate(latestReceipt.createdAt)}.
-            {latestReceipt.txHash && <a className="ml-2 text-accent hover:underline" href={`https://chainscan.0g.ai/tx/${latestReceipt.txHash}`} target="_blank" rel="noreferrer">tx ↗</a>}
+            {buildChainscanUrl({ txHash: latestReceipt.txHash, chainId: 16661 }) && <a className="ml-2 text-accent hover:underline" href={buildChainscanUrl({ txHash: latestReceipt.txHash, chainId: 16661 })!} target="_blank" rel="noreferrer">tx ↗</a>}
           </p>
         ) : latestRun ? (
           <p className="mt-2 text-xs text-fg-muted">Latest run: {latestRun.status} at {fmtDate(latestRun.createdAt)}.</p>
@@ -118,7 +120,12 @@ function ActivityTab({ receipts, runs }: { receipts: Receipt[]; runs: Run[] }) {
         <div key={`${event.type}:${event.id}`} className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-3 text-sm">
           <div>
             <p className="font-medium text-fg">{event.label}</p>
-            <p className="font-mono text-xs text-fg-faint">{short(event.id)}</p>
+            <p className="font-mono text-xs text-fg-faint">
+              {short(event.id)}
+              {buildChainscanUrl({ txHash: event.txHash, chainId: 16661 }) && (
+                <a className="ml-2 text-accent hover:underline" href={buildChainscanUrl({ txHash: event.txHash, chainId: 16661 })!} target="_blank" rel="noreferrer">tx ↗</a>
+              )}
+            </p>
           </div>
           <div className="text-right">
             <Badge variant={event.status === 'confirmed' || event.status === 'success' || event.status === 'succeeded' ? 'success' : event.status === 'failed' || event.status === 'error' ? 'danger' : 'warning'} className="capitalize">{event.status}</Badge>
@@ -188,6 +195,33 @@ function SplitsTab() {
 }
 
 function SettingsTab({ agent }: { agent: Agent }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const required = agent.identityTokenId ?? agent.id;
+  const canConfirm = typed.trim() === required || typed.trim() === agent.name;
+
+  async function hide() {
+    if (!canConfirm) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/hide`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { title?: string; detail?: string };
+        throw new Error(body.detail ?? body.title ?? 'Unable to hide agent');
+      }
+      router.push('/agents');
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to hide agent');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-4 text-sm">
       <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
@@ -195,13 +229,23 @@ function SettingsTab({ agent }: { agent: Agent }) {
         <p className="mt-1 text-xs text-fg-muted">Current status: <span className="capitalize text-fg">{agent.status.replace('_', ' ')}</span></p>
         <p className="mt-1 text-xs text-fg-faint">Pause/resume is not wired to an on-chain control yet, so these actions are intentionally disabled.</p>
       </div>
-      <div className="rounded-[var(--radius-lg)] border border-danger/30 bg-danger/5 p-4">
-        <p className="font-medium text-fg">Danger zone</p>
-        <p className="mt-1 text-xs text-fg-muted">On-chain deletion is not available. Local index removal is disabled until a safe backend action exists.</p>
-        <div className="mt-3 flex gap-2">
-          <button disabled className="rounded-[var(--radius)] border border-warning/40 px-3 py-1.5 text-xs text-warning opacity-50">Pause agent</button>
-          <button disabled className="rounded-[var(--radius)] border border-danger/40 px-3 py-1.5 text-xs text-danger opacity-50">Delete local index</button>
-        </div>
+      <div className="rounded-[var(--radius-lg)] border border-warning/30 bg-warning/5 p-4">
+        <p className="font-medium text-fg">Workspace visibility</p>
+        <p className="mt-1 text-xs text-fg-muted">Hide rushed or test agents from your local workspace without touching chain state.</p>
+        <p className="mt-1 text-xs text-fg-faint">This does not delete the on-chain agent or receipts. It only hides this agent from your Apogee workspace.</p>
+        {!confirming ? (
+          <button onClick={() => setConfirming(true)} className="mt-3 rounded-[var(--radius)] border border-warning/40 px-3 py-1.5 text-xs text-warning hover:bg-warning/10">Hide from my workspace</button>
+        ) : (
+          <div className="mt-3 space-y-3 rounded-[var(--radius)] border border-[var(--color-line)] bg-elevated p-3">
+            <p className="text-xs text-fg-muted">Type <span className="font-mono text-fg">{required}</span> or <span className="font-mono text-fg">{agent.name}</span> to confirm.</p>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} className="w-full rounded-[var(--radius)] border border-[var(--color-line)] bg-surface px-3 py-2 text-xs text-fg" />
+            {error && <p className="text-xs text-danger">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={hide} disabled={!canConfirm || saving} className="rounded-[var(--radius)] bg-warning px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50">{saving ? 'Hiding…' : 'Confirm hide'}</button>
+              <button onClick={() => { setConfirming(false); setTyped(''); setError(null); }} disabled={saving} className="rounded-[var(--radius)] border border-[var(--color-line)] px-3 py-1.5 text-xs text-fg-muted">Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

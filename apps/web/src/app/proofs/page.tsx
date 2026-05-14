@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Nav } from '@/components/landing/Nav';
-import { CONTRACTS, EXPLORER_URLS, CHAIN_NAMES, CONTRACT_NAMES } from '@/lib/contracts';
+import { CONTRACTS, CHAIN_NAMES, CONTRACT_NAMES } from '@/lib/contracts';
+import { buildChainscanUrl, chainscanBase } from '@/lib/chainscan';
 import { ReceiptsFeed, StorageProofsClient } from './_client';
 
 export const metadata: Metadata = { title: 'On-chain Proofs — Apogee Protocol' };
@@ -208,7 +209,7 @@ const DEFAULT_CHAIN = 16661 as const;
 function ContractsTab() {
   const chainId = DEFAULT_CHAIN;
   const contracts = CONTRACTS[chainId];
-  const explorer = EXPLORER_URLS[chainId] ?? '';
+  const explorer = chainscanBase({ chainId });
   const chainName = CHAIN_NAMES[chainId] ?? '';
   const deployedCount = contracts ? Object.values(contracts).filter(Boolean).length : 0;
 
@@ -237,8 +238,8 @@ function ContractsTab() {
                     {addr || <span className="text-white/20 italic">pending</span>}
                   </td>
                   <td className="px-5 py-3">
-                    {addr ? (
-                      <a href={`${explorer}/address/${addr}`} target="_blank" rel="noreferrer"
+                    {buildChainscanUrl({ address: addr, kind: 'address', chainId }) ? (
+                      <a href={buildChainscanUrl({ address: addr, kind: 'address', chainId })!} target="_blank" rel="noreferrer"
                         className="text-xs text-violet-400 hover:text-violet-300 underline">
                         View ↗
                       </a>
@@ -297,12 +298,12 @@ function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForH
         <div className="space-y-2.5 text-xs border-t border-white/[0.05] pt-4">
           <div className="flex justify-between items-center gap-2">
             <span className="text-white/35 shrink-0">Address</span>
-            {agentId ? (
-              <a href={`https://chainscan.0g.ai/address/${agentId}`} target="_blank" rel="noreferrer"
-                className={`font-mono hover:opacity-80 truncate ${accent}`} title={agentId}>
-                {agentId.slice(0, 6)}…{agentId.slice(-4)}
+            {buildChainscanUrl({ address: agentId, kind: 'address', chainId: 16661 }) ? (
+              <a href={buildChainscanUrl({ address: agentId, kind: 'address', chainId: 16661 })!} target="_blank" rel="noreferrer"
+                className={`font-mono hover:opacity-80 truncate ${accent}`} title={agentId ?? undefined}>
+                {agentId?.slice(0, 6)}…{agentId?.slice(-4)}
               </a>
-            ) : <span className="text-white/20">not seeded</span>}
+            ) : agentId ? <span className="font-mono text-white/35">{agentId}</span> : <span className="text-white/20">not seeded</span>}
           </div>
           <div className="flex justify-between items-center">
             <span className="text-white/35">Receipts minted</span>

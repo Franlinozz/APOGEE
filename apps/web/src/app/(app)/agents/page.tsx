@@ -11,7 +11,7 @@ export const revalidate = 30;
 async function AgentsList() {
   let agents: Agent[] = [];
   try {
-    agents = await serverGetAgents();
+    agents = await serverGetAgents({ includeHidden: true });
   } catch {}
   return <AgentsTable agents={agents} />;
 }

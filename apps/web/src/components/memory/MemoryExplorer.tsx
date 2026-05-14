@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { MemoryEntry } from '@/lib/types';
 import { searchMemory, anchorMemoryEntry } from '@/lib/api';
+import { buildChainscanUrl } from '@/lib/chainscan';
 import { ChevronRight, ChevronDown, Search, Anchor } from 'lucide-react';
 
 function buildTree(entries: MemoryEntry[]): Record<string, MemoryEntry[]> {
@@ -117,9 +118,9 @@ export function MemoryExplorer({ agentId, initialEntries }: Props) {
                   {anchoring === selected.id ? 'Anchoring…' : 'Anchor on-chain'}
                 </button>
               )}
-              {selected.anchoredTxHash && (
+              {buildChainscanUrl({ txHash: selected.anchoredTxHash, chainId: 16661 }) && (
                 <a
-                  href={`https://chainscan.0g.ai/tx/${selected.anchoredTxHash}`}
+                  href={buildChainscanUrl({ txHash: selected.anchoredTxHash, chainId: 16661 })!}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs text-success hover:underline"

@@ -97,12 +97,21 @@ const COLUMNS = [
 ];
 
 export function AgentsTable({ agents }: { agents: Agent[] }) {
+  const [allAgents, setAllAgents] = useState(agents);
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
   const parentRef = useRef<HTMLDivElement>(null);
 
+  const visibleAgents = useMemo(() => allAgents.filter((agent) => !agent.hidden), [allAgents]);
+  const hiddenAgents = useMemo(() => allAgents.filter((agent) => agent.hidden), [allAgents]);
+
+  async function restore(agent: Agent) {
+    const res = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/unhide`, { method: 'POST' });
+    if (res.ok) setAllAgents((prev) => prev.map((entry) => entry.id === agent.id ? { ...entry, hidden: false } : entry));
+  }
+
   const table = useReactTable({
-    data: agents,
+    data: visibleAgents,
     columns: COLUMNS,
     state: { globalFilter, sorting },
     onGlobalFilterChange: setGlobalFilter,
@@ -122,7 +131,7 @@ export function AgentsTable({ agents }: { agents: Agent[] }) {
     enabled: useVirtual,
   });
 
-  if (agents.length === 0) {
+  if (visibleAgents.length === 0 && hiddenAgents.length === 0) {
     return (
       <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface px-6 py-16 text-center">
         <p className="text-sm text-fg-muted">No agents yet.</p>
@@ -147,6 +156,11 @@ export function AgentsTable({ agents }: { agents: Agent[] }) {
       />
 
       {/* Table */}
+      {visibleAgents.length === 0 ? (
+        <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface px-6 py-12 text-center">
+          <p className="text-sm text-fg-muted">No visible agents. Restore a hidden agent below or create a new one.</p>
+        </div>
+      ) : (
       <div
         ref={useVirtual ? parentRef : undefined}
         className="overflow-auto rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface"
@@ -210,8 +224,29 @@ export function AgentsTable({ agents }: { agents: Agent[] }) {
           </tbody>
         </table>
       </div>
+      )}
 
-      <p className="text-xs text-fg-faint">{rows.length} agent{rows.length !== 1 ? 's' : ''}</p>
+      <p className="text-xs text-fg-faint">{rows.length} visible agent{rows.length !== 1 ? 's' : ''}</p>
+
+      {hiddenAgents.length > 0 && (
+        <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface p-4">
+          <div className="mb-3">
+            <p className="text-sm font-medium text-fg">Hidden agents</p>
+            <p className="text-xs text-fg-faint">Hidden only from your workspace UI. On-chain agents and global receipts remain unchanged.</p>
+          </div>
+          <div className="space-y-2">
+            {hiddenAgents.map((agent) => (
+              <div key={agent.id} className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--color-line)] bg-elevated px-3 py-2">
+                <div>
+                  <p className="text-sm text-fg">{agent.name}</p>
+                  <p className="font-mono text-xs text-fg-faint">{agent.id}</p>
+                </div>
+                <button onClick={() => restore(agent)} className="rounded-[var(--radius)] border border-accent/40 px-3 py-1.5 text-xs text-accent hover:bg-accent/10">Restore</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
