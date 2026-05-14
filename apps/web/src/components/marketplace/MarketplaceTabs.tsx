@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { SkillManifest, ServiceListing } from '@/lib/types';
 import { Badge } from '@apogee/ui';
+import { motion, AnimatePresence } from '@apogee/ui';
 import { Zap, Server } from 'lucide-react';
 
 type TabId = 'skills' | 'services';
@@ -56,54 +57,68 @@ export function MarketplaceTabs({ initialSkills, initialServices }: Props) {
         ))}
       </div>
 
-      {/* Skills tab */}
-      {tab === 'skills' && (
-        <div className="space-y-4">
-          <input
-            value={skillFilter}
-            onChange={(e) => setSkillFilter(e.target.value)}
-            placeholder="Search skills…"
-            className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--color-line)] bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
-          />
-          {filteredSkills.length === 0 ? (
-            <p className="py-12 text-center text-sm text-fg-muted">No skills found.</p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredSkills.map((skill) => (
-                <SkillCard key={skill.id} skill={skill} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {tab === 'skills' && (
+          <motion.div
+            key="skills"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-4"
+          >
+            <input
+              value={skillFilter}
+              onChange={(e) => setSkillFilter(e.target.value)}
+              placeholder="Search skills…"
+              className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--color-line)] bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
+            />
+            {filteredSkills.length === 0 ? (
+              <p className="py-12 text-center text-sm text-fg-muted">No skills found.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredSkills.map((skill) => (
+                  <SkillCard key={skill.id} skill={skill} />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
 
-      {/* Services tab */}
-      {tab === 'services' && (
-        <div className="space-y-4">
-          <input
-            value={serviceFilter}
-            onChange={(e) => setServiceFilter(e.target.value)}
-            placeholder="Search services…"
-            className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--color-line)] bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
-          />
-          {filteredServices.length === 0 ? (
-            <p className="py-12 text-center text-sm text-fg-muted">No services found.</p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredServices.map((svc) => (
-                <ServiceCard key={svc.id} service={svc} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        {tab === 'services' && (
+          <motion.div
+            key="services"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-4"
+          >
+            <input
+              value={serviceFilter}
+              onChange={(e) => setServiceFilter(e.target.value)}
+              placeholder="Search services…"
+              className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--color-line)] bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
+            />
+            {filteredServices.length === 0 ? (
+              <p className="py-12 text-center text-sm text-fg-muted">No services found.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredServices.map((svc) => (
+                  <ServiceCard key={svc.id} service={svc} />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function SkillCard({ skill }: { skill: SkillManifest }) {
   return (
-    <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface p-5 flex flex-col">
+    <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface p-5 flex flex-col transition-[border-color,box-shadow,transform] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[var(--color-line-accent)] hover:shadow-card hover:-translate-y-0.5">
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="font-medium text-sm text-fg">{skill.name}</p>
@@ -129,7 +144,7 @@ function SkillCard({ skill }: { skill: SkillManifest }) {
 
 function ServiceCard({ service }: { service: ServiceListing }) {
   return (
-    <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface p-5">
+    <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface p-5 transition-[border-color,box-shadow,transform] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[var(--color-line-accent)] hover:shadow-card hover:-translate-y-0.5">
       <p className="font-medium text-sm text-fg">{service.name}</p>
       <p className="mt-0.5 font-mono text-xs text-fg-faint">
         {service.providerAddress.slice(0, 6)}…{service.providerAddress.slice(-4)}

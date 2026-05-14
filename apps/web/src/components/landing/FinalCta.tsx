@@ -1,9 +1,11 @@
 import Link from 'next/link';
+import { InViewReveal } from '@/components/motion/InViewReveal';
 
 export function FinalCta() {
   return (
     <section className="py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <InViewReveal>
         <div
           className="relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--color-line-accent)] p-12 text-center"
           style={{
@@ -41,6 +43,7 @@ export function FinalCta() {
             </a>
           </div>
         </div>
+        </InViewReveal>
       </div>
     </section>
   );

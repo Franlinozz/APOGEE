@@ -52,15 +52,18 @@ export function Hero() {
       <div className="relative mx-auto w-full max-w-3xl px-4 py-32 text-center sm:px-6 lg:px-8">
 
         {/* Live status pill */}
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-line-accent)] bg-accent/[0.07] px-4 py-1.5">
+        <div
+          className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-line-accent)] bg-accent/[0.07] px-4 py-1.5 animate-fade-up"
+          style={{ animationDelay: '0ms' }}
+        >
           <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
           <span className="text-xs font-medium text-accent-light tracking-wide">Live on Aristotle Mainnet</span>
         </div>
 
         {/* H1 */}
         <h1
-          className="text-[clamp(2.5rem,6vw,4rem)] font-semibold leading-[1.08] tracking-tight text-fg"
-          style={{ letterSpacing: '-0.025em' }}
+          className="text-[clamp(2.5rem,6vw,4rem)] font-semibold leading-[1.08] tracking-tight text-fg animate-fade-up"
+          style={{ letterSpacing: '-0.025em', animationDelay: '90ms' }}
         >
           The runtime where{' '}
           <span
@@ -77,29 +80,38 @@ export function Hero() {
         </h1>
 
         {/* Subheadline */}
-        <p className="mx-auto mt-6 max-w-xl text-[1.0625rem] leading-[1.7] text-fg-muted">
+        <p
+          className="mx-auto mt-6 max-w-xl text-[1.0625rem] leading-[1.7] text-fg-muted animate-fade-up"
+          style={{ animationDelay: '170ms' }}
+        >
           Self-custodial wallets, encrypted memory, agent-to-agent payment
           rails&nbsp;&mdash; native to 0G.
         </p>
 
         {/* CTAs */}
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+        <div
+          className="mt-10 flex flex-wrap items-center justify-center gap-3 animate-fade-up"
+          style={{ animationDelay: '250ms' }}
+        >
           <Link
             href="/dashboard"
-            className="inline-flex h-11 items-center rounded-[var(--radius-lg)] bg-accent px-7 text-sm font-semibold text-white transition-colors hover:bg-accent/85"
+            className="inline-flex h-11 items-center rounded-[var(--radius-lg)] bg-accent px-7 text-sm font-semibold text-white transition-[background-color,transform] duration-[200ms] hover:bg-accent/85 active:scale-[0.97]"
           >
             Start building
           </Link>
           <Link
             href="/proofs"
-            className="inline-flex h-11 items-center rounded-[var(--radius-lg)] border border-[var(--color-line-bright)] px-7 text-sm font-medium text-fg/85 transition-colors hover:border-[var(--color-line-accent)] hover:bg-white/[0.04]"
+            className="inline-flex h-11 items-center rounded-[var(--radius-lg)] border border-[var(--color-line-bright)] px-7 text-sm font-medium text-fg/85 transition-[border-color,background-color,transform] duration-[200ms] hover:border-[var(--color-line-accent)] hover:bg-white/[0.04] active:scale-[0.97]"
           >
             View live receipts
           </Link>
         </div>
 
         {/* Trust indicators */}
-        <div className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+        <div
+          className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 animate-fade-up"
+          style={{ animationDelay: '330ms' }}
+        >
           {[
             { label: '0G Storage', value: 'Decentralised' },
             { label: 'Smart wallets', value: 'ERC-4337' },

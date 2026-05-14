@@ -51,23 +51,25 @@ export default function DashboardPage() {
       <Topbar title="Dashboard" />
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-6xl space-y-8">
-          <p className="text-xs text-fg-faint">Showing global Aristotle network activity. The Agents page shows agents owned by the connected wallet.</p>
+          <p className="animate-fade-up text-xs text-fg-faint">Showing global Aristotle network activity. The Agents page shows agents owned by the connected wallet.</p>
 
           {/* Stat tiles */}
-          <Suspense
-            fallback={
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {[0, 1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-24 rounded-[var(--radius-xl)]" />
-                ))}
-              </div>
-            }
-          >
-            <StatsRow />
-          </Suspense>
+          <div className="animate-fade-up" style={{ animationDelay: '55ms' }}>
+            <Suspense
+              fallback={
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {[0, 1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-24 rounded-[var(--radius-xl)]" />
+                  ))}
+                </div>
+              }
+            >
+              <StatsRow />
+            </Suspense>
+          </div>
 
           {/* Heatmap */}
-          <div>
+          <div className="animate-fade-up" style={{ animationDelay: '110ms' }}>
             <h2 className="mb-4 text-sm font-semibold text-fg">Receipt activity — last 7 days</h2>
             <Suspense fallback={<Skeleton className="h-[120px] rounded-[var(--radius-xl)]" />}>
               <HeatmapSection />
@@ -75,7 +77,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent activity */}
-          <div>
+          <div className="animate-fade-up" style={{ animationDelay: '165ms' }}>
             <h2 className="mb-4 text-sm font-semibold text-fg">Recent receipts</h2>
             <Suspense fallback={<Skeleton className="h-64 rounded-[var(--radius-xl)]" />}>
               <ActivitySection />

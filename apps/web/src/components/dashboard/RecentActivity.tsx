@@ -38,7 +38,7 @@ export function RecentActivity({ receipts }: { receipts: Receipt[] }) {
   }
 
   return (
-    <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface">
+    <div className="animate-fade-up rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--color-line)]">
@@ -54,7 +54,7 @@ export function RecentActivity({ receipts }: { receipts: Receipt[] }) {
             const receiptHref = buildChainscanUrl({ txHash: r.txHash, chainId: 16661 });
             const agentHref = buildChainscanUrl({ address: r.payeeAddress || undefined, kind: 'address', chainId: 16661 });
             return (
-              <tr key={r.id} className="border-b border-[var(--color-line)] last:border-0">
+              <tr key={r.id} className="hover-row border-b border-[var(--color-line)] last:border-0">
                 <td className="px-5 py-3 font-mono text-xs text-fg-muted">
                   {receiptHref ? (
                     <a href={receiptHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline" title={r.txHash}>

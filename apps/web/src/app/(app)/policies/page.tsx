@@ -52,7 +52,7 @@ export default function PoliciesPage() {
         <div className="mx-auto max-w-3xl space-y-8">
 
           {/* Header */}
-          <div className="space-y-2">
+          <div className="animate-fade-up space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/[0.07] px-3 py-1 text-xs font-semibold text-violet-400">
               <Shield className="h-3 w-3" />
               PolicyEngine · Aristotle mainnet
@@ -69,10 +69,11 @@ export default function PoliciesPage() {
 
           {/* Concept cards */}
           <div className="grid gap-4 sm:grid-cols-2">
-            {POLICY_CONCEPTS.map(({ icon: Icon, title, description, example, color, iconBg }) => (
+            {POLICY_CONCEPTS.map(({ icon: Icon, title, description, example, color, iconBg }, idx) => (
               <div
                 key={title}
-                className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-5 space-y-3"
+                className="animate-fade-up rounded-2xl border border-white/[0.06] bg-white/[0.025] p-5 space-y-3 transition-[border-color,box-shadow,transform] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/[0.12] hover:shadow-card hover:-translate-y-px"
+                style={{ animationDelay: `${idx * 65}ms` }}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${iconBg} ${color}`}>
@@ -87,7 +88,7 @@ export default function PoliciesPage() {
           </div>
 
           {/* How to set a policy */}
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-6 space-y-4">
+          <div className="animate-fade-up rounded-2xl border border-white/[0.06] bg-white/[0.025] p-6 space-y-4" style={{ animationDelay: '260ms' }}>
             <h2 className="text-base font-semibold text-fg">Set a policy</h2>
             <p className="text-sm text-fg-muted leading-relaxed">
               Policies are configured during agent deployment. Use the{' '}

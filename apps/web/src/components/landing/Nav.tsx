@@ -56,7 +56,7 @@ export function Nav() {
               key={label}
               href={href}
               {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-              className="text-sm text-fg-muted transition-colors hover:text-fg"
+              className="nav-link-underline text-sm text-fg-muted transition-colors duration-[180ms] hover:text-fg"
             >
               {label}
             </Link>

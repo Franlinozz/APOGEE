@@ -1,3 +1,5 @@
+import { InViewReveal } from '@/components/motion/InViewReveal';
+
 interface Stats {
   receipts: number;
   agents: number;
@@ -42,26 +44,25 @@ export async function NumbersSection() {
   return (
     <section className="py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-16 text-center">
+        <InViewReveal className="mb-16 text-center">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-accent">
             Network stats
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-fg" style={{ letterSpacing: '-0.02em' }}>
             Running live on Aristotle mainnet.
           </h2>
-        </div>
+        </InViewReveal>
 
         <div className="grid gap-5 sm:grid-cols-3">
-          {TILES.map(({ label, key }) => (
-            <div
-              key={key}
-              className="flex flex-col gap-2 rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface p-7"
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{label}</p>
-              <p className="font-mono text-3xl font-semibold tracking-tight text-fg">
-                {values[key] ?? '—'}
-              </p>
-            </div>
+          {TILES.map(({ label, key }, idx) => (
+            <InViewReveal key={key} delay={idx * 80}>
+              <div className="flex flex-col gap-2 rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface p-7 transition-[border-color,box-shadow] duration-[250ms] hover:border-[var(--color-line-accent)] hover:shadow-card">
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{label}</p>
+                <p className="font-mono text-3xl font-semibold tracking-tight text-fg">
+                  {values[key] ?? '—'}
+                </p>
+              </div>
+            </InViewReveal>
           ))}
         </div>
       </div>

@@ -1,4 +1,6 @@
-/* Static SVG diagram — zero JS, zero animations, server component */
+import { InViewReveal } from '@/components/motion/InViewReveal';
+
+/* Static SVG diagram — server component with scroll-triggered reveal */
 
 const STEPS = [
   { n: '01', title: 'Register Agent',   body: 'Deploy an ERC-4337 account via AccountFactory. Mint an ERC-7857 identity NFT anchored to your agent.' },
@@ -11,14 +13,14 @@ export function HowItWorks() {
   return (
     <section id="skills" className="py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-16 max-w-xl">
+        <InViewReveal className="mb-16 max-w-xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-accent">
             How it works
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-fg" style={{ letterSpacing: '-0.02em' }}>
             From agent registration to verifiable receipt in four steps.
           </h2>
-        </div>
+        </InViewReveal>
 
         {/* Desktop: horizontal connector SVG */}
         <div className="relative hidden lg:block" aria-hidden>
@@ -32,18 +34,16 @@ export function HowItWorks() {
         </div>
 
         <ol className="grid gap-8 lg:grid-cols-4">
-          {STEPS.map(({ n, title, body }) => (
-            <li key={n} className="flex flex-col gap-4">
+          {STEPS.map(({ n, title, body }, idx) => (
+            <InViewReveal key={n} delay={idx * 80} as="li" className="flex flex-col gap-4">
               <div className="flex items-center gap-3">
-                <span
-                  className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--color-line-accent)] bg-elevated font-mono text-xs font-bold text-accent"
-                >
+                <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--color-line-accent)] bg-elevated font-mono text-xs font-bold text-accent">
                   {n}
                 </span>
                 <h3 className="text-sm font-semibold text-fg">{title}</h3>
               </div>
               <p className="text-sm leading-relaxed text-fg-muted">{body}</p>
-            </li>
+            </InViewReveal>
           ))}
         </ol>
       </div>
