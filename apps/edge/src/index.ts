@@ -102,6 +102,7 @@ type AgentIdentityContract = { nextTokenId(): Promise<bigint>; mint(to: string, 
 type PaymentRouterAdminContract = { setAgentAccount(agentId: bigint, account: string): Promise<TxResponse> };
 type AgentIdentityReadContract = { nextTokenId(): Promise<bigint>; ownerOf(tokenId: bigint): Promise<string> };
 type PaymentRouterReadContract = { agentAccounts(tokenId: bigint): Promise<string> };
+type ReceiptBookReadContract = { nextReceiptId(): Promise<bigint>; receipts(receiptId: bigint): Promise<{ receiptId: bigint; agentId: bigint; actionTag: string; payloadHash: string; storageRoot: string; valueWei: bigint; timestamp: bigint } | [bigint, bigint, string, string, string, bigint, bigint]> };
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -287,6 +288,66 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   let lastChainAgentSyncAt = 0;
   let chainAgentSyncInFlight: Promise<void> | null = null;
+
+  let lastChainReceiptSyncAt = 0;
+  let chainReceiptSyncInFlight: Promise<void> | null = null;
+
+  const syncOnChainReceipts = async (): Promise<void> => {
+    if (!options.receiptBookAddress) return;
+    if (Date.now() - lastChainReceiptSyncAt < 30_000) return;
+    if (chainReceiptSyncInFlight) return chainReceiptSyncInFlight;
+
+    chainReceiptSyncInFlight = (async () => {
+      const provider = new JsonRpcProvider(process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc.0g.ai', 16661, { staticNetwork: true });
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== 16661) throw new Error(`receipt sync expected Aristotle chainId 16661, got ${network.chainId.toString()}`);
+      const code = await provider.getCode(options.receiptBookAddress);
+      if (code === '0x') {
+        lastChainReceiptSyncAt = Date.now();
+        app.log.warn({ receiptBookAddress: options.receiptBookAddress }, 'receipt index sync skipped — ReceiptBook has no bytecode');
+        return;
+      }
+      const book = new Contract(options.receiptBookAddress, [
+        'function nextReceiptId() view returns (uint256)',
+        'function receipts(uint256 receiptId) view returns (uint256 receiptId, uint256 agentId, bytes4 actionTag, bytes32 payloadHash, bytes32 storageRoot, uint256 valueWei, uint64 timestamp)',
+      ], provider) as unknown as ReceiptBookReadContract;
+      const nextReceiptId = await book.nextReceiptId();
+      const maxReceiptId = nextReceiptId > 500n ? 500n : nextReceiptId;
+      let synced = 0;
+      for (let id = 1n; id < maxReceiptId; id += 1n) {
+        if (store.receipts.has(id.toString())) continue;
+        try {
+          const receipt = await book.receipts(id);
+          const receiptId = Array.isArray(receipt) ? receipt[0] : receipt.receiptId;
+          const agentId = Array.isArray(receipt) ? receipt[1] : receipt.agentId;
+          const actionTag = Array.isArray(receipt) ? receipt[2] : receipt.actionTag;
+          const payloadHash = Array.isArray(receipt) ? receipt[3] : receipt.payloadHash;
+          const storageRoot = Array.isArray(receipt) ? receipt[4] : receipt.storageRoot;
+          const valueWei = Array.isArray(receipt) ? receipt[5] : receipt.valueWei;
+          const timestamp = Array.isArray(receipt) ? receipt[6] : receipt.timestamp;
+          if (receiptId === 0n || timestamp === 0n) continue;
+          store.receipts.set(receiptId.toString(), {
+            receiptId: receiptId.toString(),
+            agentId: agentId.toString(),
+            actionTag,
+            payloadHash,
+            storageRoot,
+            valueWei: valueWei.toString(),
+            status: 'minted',
+            createdAt: new Date(Number(timestamp) * 1000).toISOString(),
+          });
+          synced += 1;
+        } catch {
+          // Missing receipt IDs are ignored; nextReceiptId is authoritative.
+        }
+      }
+      lastChainReceiptSyncAt = Date.now();
+      if (synced > 0) app.log.info({ nextReceiptId: nextReceiptId.toString(), synced }, 'receipt index sync complete');
+    })().finally(() => {
+      chainReceiptSyncInFlight = null;
+    });
+    return chainReceiptSyncInFlight;
+  };
 
   const syncOnChainAgents = async (): Promise<void> => {
     if (!options.agentIdentityAddress || !options.paymentRouterAddress) return;
@@ -713,6 +774,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   app.get('/v1/stats', { schema: { tags: ['system'] } }, async () => {
     await syncOnChainAgents();
+    await syncOnChainReceipts();
     const receipts = [...store.receipts.values()];
     const demoAgentIds = new Set(receipts.map((receipt) => receipt.agentId));
     const totalFlowed = receipts.reduce((sum, receipt) => {
@@ -738,6 +800,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
 
   app.get('/v1/receipts/heatmap', { schema: { tags: ['receipts'], querystring: z.object({ days: z.coerce.number().int().positive().max(30).default(7), scope: z.enum(['owned', 'global']).default('global') }) } }, async (request) => {
+    await syncOnChainReceipts();
     const query = z.object({ days: z.coerce.number().int().positive().max(30).default(7), scope: z.enum(['owned', 'global']).default('global') }).parse(request.query);
     let rows = receiptRows();
     if (query.scope === 'owned') {
@@ -765,6 +828,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   // ── Public proofs data (no auth, ISR-friendly) ────────────────────────────
   app.get('/v1/proofs', { schema: { tags: ['system'] } }, async (request) => {
+    await syncOnChainReceipts();
     const chainParam = (request.query as Record<string, string>)['chain'] ?? 'aristotle';
     const chainId = chainParam === 'galileo' ? 16602 : 16661;
     const allReceipts = [...store.receipts.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -1152,6 +1216,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   });
 
   app.get('/v1/receipts', { schema: { tags: ['receipts'], querystring: paginationSchema } }, async (request, reply) => {
+    await syncOnChainReceipts();
     const query = paginationSchema.parse(request.query);
     let ownedAgentIds: Set<string> | null = null;
     if (query.scope !== 'global') {
