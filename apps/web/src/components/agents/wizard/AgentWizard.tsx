@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { AgentWizardState, AgentWizardStep } from '@/lib/types';
 import { WizardStepIdentity } from './WizardStepIdentity';
 import { WizardStepFunding } from './WizardStepFunding';
@@ -35,7 +35,9 @@ const INITIAL: AgentWizardState = {
 
 export function AgentWizard() {
   const router = useRouter();
-  const [state, setState] = useState<AgentWizardState>(INITIAL);
+  const searchParams = useSearchParams();
+  const initialSkill = searchParams.get('skill');
+  const [state, setState] = useState<AgentWizardState>(() => initialSkill ? { ...INITIAL, skills: [initialSkill], policy: { ...INITIAL.policy, allowedSkills: [initialSkill] } } : INITIAL);
 
   const currentIdx = STEPS.findIndex((s) => s.id === state.step);
 

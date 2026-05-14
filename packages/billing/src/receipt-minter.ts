@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { keccak256, toUtf8Bytes, zeroPadValue, type TransactionReceipt } from 'ethers';
+import { Redis, type Redis as RedisClient } from 'ioredis';
 import pino, { type Logger } from 'pino';
 import { z } from 'zod';
 
@@ -142,12 +143,20 @@ const tagToBytes4 = (tag: string): string => {
 };
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const lockToken = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+let sharedRedis: RedisClient | null | undefined;
+function redisForLocks(): RedisClient | null {
+  if (sharedRedis !== undefined) return sharedRedis ?? null;
+  sharedRedis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true }) : null;
+  return sharedRedis;
+}
 
 export class ReceiptMinter {
   private readonly index: ReceiptIndex;
   private readonly eventBus: ReceiptEventBus;
   private readonly fallbackDir: string;
   private readonly logger: Logger;
+  private readonly redisLock: RedisClient | null;
   // Serialises all mint() calls on this instance so the shared signer
   // never sends overlapping storage-upload or chain transactions.
   private mintTail: Promise<unknown> = Promise.resolve();
@@ -157,6 +166,7 @@ export class ReceiptMinter {
     this.eventBus = options.eventBus ?? new LocalReceiptEventBus();
     this.fallbackDir = options.fallbackDir ?? '.apogee-pending-receipts';
     this.logger = options.logger ?? pino({ name: 'apogee-receipt-minter' });
+    this.redisLock = redisForLocks();
   }
 
   subscribe(listener: (payload: ReceiptIndexRow) => void): () => void {
@@ -195,13 +205,36 @@ export class ReceiptMinter {
     this.mintTail = slot;
     await prev;
     try {
-      return await this.mintLocked(parsed);
+      return await this.withDistributedTxLock('ReceiptBook.emitReceipt', (lockWaitMs) => this.mintLocked(parsed, lockWaitMs));
     } finally {
       release();
     }
   }
 
-  private async mintLocked(parsed: ReturnType<typeof mintSchema.parse>): Promise<MintReceiptResult> {
+  private async withDistributedTxLock<T>(method: string, fn: (lockWaitMs: number) => Promise<T>): Promise<T> {
+    const signerAddress = (this.options.chainClient as unknown as { getSigner?(): { address: string } }).getSigner?.()?.address ?? 'unknown';
+    const chainId = process.env.ZERO_G_CHAIN_ID ?? process.env.CHAIN_ID ?? '16661';
+    const key = `tx:${chainId}:${signerAddress.toLowerCase()}`;
+    const started = Date.now();
+    if (!this.redisLock) return fn(0);
+    const token = lockToken();
+    while (Date.now() - started < 30_000) {
+      const ok = await this.redisLock.set(key, token, 'PX', 120_000, 'NX');
+      if (ok) {
+        const lockWaitMs = Date.now() - started;
+        try { return await fn(lockWaitMs); }
+        finally {
+          const current = await this.redisLock.get(key).catch(() => null);
+          if (current === token) await this.redisLock.del(key).catch(() => undefined);
+        }
+      }
+      await sleep(400);
+    }
+    this.logger.warn({ method, signerAddress, lockKey: key, lockWaitMs: Date.now() - started }, 'signer tx lock busy');
+    throw new Error('Signer transaction queue is busy; retry shortly.');
+  }
+
+  private async mintLocked(parsed: ReturnType<typeof mintSchema.parse>, lockWaitMs = 0): Promise<MintReceiptResult> {
     const payloadJson = stableJson(parsed.payload);
     const payloadHash = keccak256(toUtf8Bytes(payloadJson));
     const receiptId = parsed.clientReceiptId ?? keccak256(toUtf8Bytes(`${parsed.agentId}:${parsed.actionTag}:${payloadHash}`));
@@ -235,7 +268,7 @@ export class ReceiptMinter {
     // the receipt is verifiable; the reconciler will re-upload and update storageRoot later.
     const effectiveStorageRoot = storageRoot.startsWith('local://') ? payloadHash : storageRoot;
 
-    const receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei);
+    const receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei, lockWaitMs);
     const txHash = receipt.hash;
     await this.index.update(receiptId, { txHash, storageRoot: effectiveStorageRoot, storageTxHash, status: 'minted' });
 
@@ -306,18 +339,22 @@ export class ReceiptMinter {
     return { rootHash: `local://${localPath}`, txHash: '', isLocalFallback: true };
   }
 
-  private async submitReceiptWithRetry(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint): Promise<TransactionReceipt> {
+  private async submitReceiptWithRetry(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint, lockWaitMs = 0): Promise<TransactionReceipt> {
     const receiptBook = this.options.chainClient.contract<ReceiptBookContract>(this.options.receiptBookAddress, [
       'function emitReceipt(uint256 agentId,bytes4 actionTag,bytes32 payloadHash,bytes32 storageRoot,uint256 valueWei) returns (uint256)',
     ]);
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const tx = await receiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei);
-        return await tx.wait();
+        const tx = await receiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei) as { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<TransactionReceipt> };
+        const signerAddress = (this.options.chainClient as unknown as { getSigner?(): { address: string } }).getSigner?.()?.address ?? 'unknown';
+        this.logger.info({ method: 'ReceiptBook.emitReceipt', signerAddress, nonce: tx.nonce, txHash: tx.hash, gasPrice: tx.gasPrice?.toString() ?? null, maxFeePerGas: tx.maxFeePerGas?.toString() ?? null, maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString() ?? null, attempt, lockWaitMs }, 'receipt tx submitted');
+        const receipt = await tx.wait();
+        this.logger.info({ method: 'ReceiptBook.emitReceipt', signerAddress, txHash: tx.hash, nonce: tx.nonce, attempt, lockWaitMs }, 'receipt tx confirmed');
+        return receipt;
       } catch (error) {
         lastError = error;
-        this.logger.warn({ attempt, error }, 'receipt chain submission failed');
+        this.logger.warn({ attempt, lockWaitMs, error }, 'receipt chain submission failed');
         await sleep(500 * (attempt + 1));
       }
     }

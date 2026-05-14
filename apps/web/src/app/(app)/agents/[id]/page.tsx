@@ -16,6 +16,8 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
 }
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  initialized: 'success',
+  ready: 'success',
   active: 'success',
   activating: 'warning',
   deployed: 'neutral',

@@ -238,6 +238,68 @@ export function startMetricsServer(port = 9100): http.Server {
   return server;
 }
 
+
+type DiscoveredAgent = { tokenId: string; owner: string; accountAddress?: string | undefined };
+
+function uint256Arg(value: bigint): string { return value.toString(16).padStart(64, '0'); }
+function decodeAddress(result: string): string | null {
+  if (!/^0x[a-fA-F0-9]{64}$/.test(result)) return null;
+  const addr = `0x${result.slice(-40)}`;
+  return /^0x0{40}$/.test(addr) ? null : addr;
+}
+
+async function rpcCall(rpcUrl: string, to: string, data: string): Promise<string> {
+  const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }), signal: AbortSignal.timeout(5000) });
+  const body = await res.json() as { result?: string; error?: { message?: string } };
+  if (!body.result) throw new Error(body.error?.message ?? 'eth_call failed');
+  return body.result;
+}
+
+async function discoverAgentsFromChain(): Promise<DiscoveredAgent[]> {
+  const rpcUrl = process.env.ZERO_G_ARISTOTLE_RPC_URL ?? process.env.ZERO_G_GALILEO_RPC_URL ?? 'https://evmrpc.0g.ai';
+  const identity = process.env.AGENT_IDENTITY_ADDRESS;
+  const router = process.env.PAYMENT_ROUTER_ADDRESS;
+  if (!identity || !router) return [];
+  const nextRaw = await rpcCall(rpcUrl, identity, '0x75794a3c'); // nextTokenId()
+  const next = BigInt(nextRaw);
+  const max = next > 200n ? 200n : next;
+  const out: DiscoveredAgent[] = [];
+  for (let tokenId = 1n; tokenId < max; tokenId += 1n) {
+    try {
+      const [ownerRaw, accountRaw] = await Promise.all([
+        rpcCall(rpcUrl, identity, `0x6352211e${uint256Arg(tokenId)}`), // ownerOf(uint256)
+        rpcCall(rpcUrl, router, `0xb682f13c${uint256Arg(tokenId)}`).catch(() => '0x'), // agentAccounts(uint256)
+      ]);
+      const owner = decodeAddress(ownerRaw);
+      if (!owner) continue;
+      const accountAddress = decodeAddress(accountRaw) ?? undefined;
+      out.push({ tokenId: tokenId.toString(), owner, accountAddress });
+    } catch {
+      // Nonexistent/burned token IDs are skipped.
+    }
+  }
+  return out;
+}
+
+async function notifyDiscoveredAgents(log = logger): Promise<void> {
+  const base = process.env.EDGE_API_URL;
+  const secret = process.env.INTERNAL_SECRET;
+  if (!base || !secret) return;
+  const agents = await discoverAgentsFromChain();
+  for (const agent of agents) {
+    const res = await fetch(`${base}/internal/agent-discovered`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': secret }, body: JSON.stringify({ chainId: 16661, ...agent }) });
+    if (!res.ok) log.warn({ tokenId: agent.tokenId, status: res.status, body: await res.text().catch(() => '') }, 'agent discovery push failed');
+  }
+  log.info({ discovered: agents.length }, 'agent identity indexer tick complete');
+}
+
+function startAgentIdentityIndexer(): () => void {
+  if (process.env.AGENT_INDEXER_DISABLED === 'true') return () => undefined;
+  void notifyDiscoveredAgents().catch((err) => logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'agent identity indexer failed'));
+  const timer = setInterval(() => void notifyDiscoveredAgents().catch((err) => logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'agent identity indexer failed')), 60_000);
+  return () => clearInterval(timer);
+}
+
 export async function startRuntime(): Promise<{ worker: Worker<AgentRunJob>; queues: ReturnType<typeof createQueues>; metrics: http.Server }> {
   const connection = new Redis(requiredEnv('REDIS_URL'), { maxRetriesPerRequest: null });
   const prisma = new PrismaClient();
@@ -281,6 +343,8 @@ export async function startRuntime(): Promise<{ worker: Worker<AgentRunJob>; que
   const reconcilerWorker = createReconcilerWorker(connection, { receiptMinter, fallbackDir, logger });
   reconcilerWorker.on('failed', (job, error) => logger.error({ jobId: job?.id, error }, 'reconciler failed'));
 
+  const stopAgentIdentityIndexer = startAgentIdentityIndexer();
+  worker.on('closed', stopAgentIdentityIndexer);
   const metrics = startMetricsServer(Number(process.env.METRICS_PORT ?? 9100));
   logger.info({ heartbeatsPaused: process.env.HEARTBEATS_PAUSED !== 'false' }, 'apogee runtime started');
   return { worker, queues, metrics };

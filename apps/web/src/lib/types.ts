@@ -5,11 +5,27 @@ export interface Agent {
   identityTokenId?: string;
   accountAddress?: string;
   hidden?: boolean;
-  status: 'pending_deploy' | 'deployed' | 'activating' | 'active' | 'paused' | 'failed' | 'deploying' | 'error';
+  status: 'pending_deploy' | 'deployed' | 'activating' | 'initialized' | 'ready' | 'active' | 'paused' | 'failed' | 'deploying' | 'error';
   createdAt: string;
   updatedAt: string;
   policyId?: string;
   description?: string;
+  deployment?: {
+    chainId?: number;
+    tokenId?: string;
+    owner?: string;
+    accountAddress?: string;
+    controller?: string;
+    name?: string;
+    description?: string;
+    selectedSkillIds?: string[];
+    policy?: { maxPerTxWei?: string; dailyCapWei?: string; allowedSkills?: string[]; allowedActions?: string[] };
+    createdAt?: string;
+    identityMintTxHash?: string;
+    accountDeployTxHash?: string;
+    status?: string;
+    error?: string;
+  };
   avatarSeed?: string;
 }
 
@@ -48,6 +64,9 @@ export interface MemoryEntry {
   value: unknown;
   version: number;
   anchoredTxHash?: string;
+  visibility?: 'system' | 'bootstrap' | 'private';
+  tags?: string[];
+  storageRoot?: string;
   createdAt: string;
   updatedAt: string;
 }

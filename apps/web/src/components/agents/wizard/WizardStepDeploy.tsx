@@ -113,6 +113,7 @@ export function WizardStepDeploy({ state, onBack, onDone }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: state.identity.name.trim(),
+          description: state.identity.description.trim() || undefined,
           metadataRoot: state.identity.name.trim(),
           skills: state.skills,
           policy: {

@@ -1,5 +1,5 @@
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
@@ -8,11 +8,11 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod';
-import { Contract, JsonRpcProvider, getAddress } from 'ethers';
+import { Contract, JsonRpcProvider, getAddress, keccak256, toUtf8Bytes } from 'ethers';
 import { Redis, type Redis as RedisClient } from 'ioredis';
 import { ChainClient } from '@apogee/chain-client';
 import { StorageClient } from '@apogee/storage-client';
-import { createBillingStack, InMemoryQuoteStore, type BillingChainClient, type ReceiptIndexRow, type StorageBoundary } from '@apogee/billing';
+import { createBillingStack, InMemoryQuoteStore, type BillingChainClient, type ReceiptIndex, type ReceiptIndexRow, type StorageBoundary } from '@apogee/billing';
 import { z } from 'zod';
 
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
@@ -27,6 +27,7 @@ const jwtResponseSchema = z.object({ token: z.string(), address: addressSchema }
 const agentCreateSchema = z.object({
   owner: addressSchema.optional(),
   name: z.string().min(1).max(120).optional(),
+  description: z.string().max(1000).optional(),
   metadataRoot: z.string().optional(),
   policyId: z.string().optional(),
   skills: z.array(z.string().min(1)).optional(),
@@ -47,10 +48,12 @@ const agentSchema = z.object({
   policyId: z.string().optional(),
   balanceWei: z.string(),
   kpis: z.record(z.string(), z.number()),
-  status: z.enum(['pending_deploy', 'deployed', 'activating', 'active', 'paused', 'failed', 'deploying', 'error']),
+  status: z.enum(['pending_deploy', 'deployed', 'activating', 'initialized', 'ready', 'active', 'paused', 'failed', 'deploying', 'error']),
   createdAt: z.string(),
   updatedAt: z.string(),
   hidden: z.boolean().optional(),
+  description: z.string().optional(),
+  deployment: z.unknown().optional(),
 });
 const skillManifestSchema = z.object({ id: z.string(), name: z.string(), version: z.string(), description: z.string(), category: z.string(), tier: z.enum(['free', 'premium']), pricePerCallWei: z.string(), authorAddress: addressSchema.optional(), tags: z.array(z.string()) });
 const policyPatchSchema = z.object({ maxPerTxWei: z.string().optional(), maxPerDayWei: z.string().optional(), active: z.boolean().optional(), summary: z.string().optional() });
@@ -94,8 +97,27 @@ type AgentRecord = z.infer<typeof agentSchema>;
 type RunRecord = z.infer<typeof runSchema> & { receipts: ReceiptIndexRow[]; steps: Array<{ id: string; name: string; status: string; createdAt: string }> };
 type ServiceRecord = z.infer<typeof serviceSchema> & { agentId?: string; serviceId?: string; priceWei?: string };
 type SkillInstall = { agentId: string; skillId: string; version?: string | undefined; config?: JsonValue | undefined; installedAt: string };
-type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string };
+type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string; createdAt?: string | undefined; visibility?: 'system' | 'bootstrap' | 'private' | undefined; storageRoot?: string | undefined; txHash?: string | undefined };
 type HiddenAgentRecord = { chainId: number; ownerAddress: string; tokenId: string; hiddenAt: string };
+type DeploymentPolicyRecord = { maxPerTxWei?: string | undefined; dailyCapWei?: string | undefined; allowedSkills?: string[] | undefined; allowedActions?: string[] | undefined };
+type DeploymentRecord = {
+  chainId: number;
+  tokenId: string;
+  owner: string;
+  accountAddress?: string | undefined;
+  controller?: string | undefined;
+  name?: string | undefined;
+  description?: string | undefined;
+  selectedSkillIds: string[];
+  policy?: DeploymentPolicyRecord | undefined;
+  createdAt: string;
+  identityMintTxHash?: string | undefined;
+  accountDeployTxHash?: string | undefined;
+  status: 'activating' | 'initialized' | 'ready' | 'active' | 'failed';
+  error?: string | undefined;
+  bootstrapMemory?: MemoryRecord | undefined;
+};
+type OnboardingRecord = { key: string; chainId: number; tokenId: string; stages: Record<string, boolean>; status: 'pending' | 'running' | 'complete' | 'failed'; attempts: number; error?: string | undefined; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
 type TxResponse = { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<unknown> };
@@ -248,6 +270,104 @@ class RedisHiddenAgentStore implements HiddenAgentStore {
   }
 }
 
+
+interface DeploymentStore {
+  get(tokenId: string): Promise<DeploymentRecord | null>;
+  set(record: DeploymentRecord): Promise<void>;
+  update(tokenId: string, patch: Partial<DeploymentRecord>): Promise<void>;
+  getOnboarding(tokenId: string): Promise<OnboardingRecord | null>;
+  setOnboarding(record: OnboardingRecord): Promise<void>;
+}
+
+class InMemoryDeploymentStore implements DeploymentStore {
+  private readonly deployments = new Map<string, DeploymentRecord>();
+  private readonly onboardings = new Map<string, OnboardingRecord>();
+  async get(tokenId: string): Promise<DeploymentRecord | null> { return this.deployments.get(tokenId) ?? null; }
+  async set(record: DeploymentRecord): Promise<void> { this.deployments.set(record.tokenId, record); }
+  async update(tokenId: string, patch: Partial<DeploymentRecord>): Promise<void> {
+    const current = this.deployments.get(tokenId);
+    if (current) this.deployments.set(tokenId, { ...current, ...patch });
+  }
+  async getOnboarding(tokenId: string): Promise<OnboardingRecord | null> { return this.onboardings.get(tokenId) ?? null; }
+  async setOnboarding(record: OnboardingRecord): Promise<void> { this.onboardings.set(record.tokenId, record); }
+}
+
+const deploymentKey = (chainId: number, tokenId: string): string => `deployment:${chainId}:${tokenId}`;
+const onboardingKey = (chainId: number, tokenId: string): string => `onboarding:${chainId}:${tokenId}`;
+
+class RedisDeploymentStore implements DeploymentStore {
+  constructor(private readonly redis: RedisClient, private readonly chainId: number) {}
+  async get(tokenId: string): Promise<DeploymentRecord | null> {
+    const raw = await this.redis.get(deploymentKey(this.chainId, tokenId));
+    return raw ? JSON.parse(raw) as DeploymentRecord : null;
+  }
+  async set(record: DeploymentRecord): Promise<void> {
+    await this.redis.set(deploymentKey(record.chainId, record.tokenId), JSON.stringify(record));
+  }
+  async update(tokenId: string, patch: Partial<DeploymentRecord>): Promise<void> {
+    const current = await this.get(tokenId);
+    if (current) await this.set({ ...current, ...patch });
+  }
+  async getOnboarding(tokenId: string): Promise<OnboardingRecord | null> {
+    const raw = await this.redis.get(onboardingKey(this.chainId, tokenId));
+    return raw ? JSON.parse(raw) as OnboardingRecord : null;
+  }
+  async setOnboarding(record: OnboardingRecord): Promise<void> {
+    await this.redis.set(onboardingKey(record.chainId, record.tokenId), JSON.stringify(record));
+  }
+}
+
+class RedisReceiptIndex implements ReceiptIndex {
+  constructor(private readonly redis: RedisClient) {}
+  async findByClientReceiptId(clientReceiptId: string): Promise<ReceiptIndexRow | null> {
+    const receiptId = await this.redis.get(`receipt-client:${clientReceiptId}`);
+    if (!receiptId) return null;
+    const raw = await this.redis.get(`receipt:${receiptId}`);
+    return raw ? JSON.parse(raw) as ReceiptIndexRow : null;
+  }
+  async insert(row: ReceiptIndexRow): Promise<void> {
+    await this.redis.set(`receipt:${row.receiptId}`, JSON.stringify(row));
+    await this.redis.sadd('receipts:index', row.receiptId);
+    if (row.clientReceiptId) await this.redis.set(`receipt-client:${row.clientReceiptId}`, row.receiptId);
+  }
+  async update(receiptId: string, patch: Partial<ReceiptIndexRow>): Promise<void> {
+    const raw = await this.redis.get(`receipt:${receiptId}`);
+    if (!raw) return;
+    await this.redis.set(`receipt:${receiptId}`, JSON.stringify({ ...JSON.parse(raw) as ReceiptIndexRow, ...patch }));
+    await this.redis.sadd('receipts:index', receiptId);
+  }
+  async list(): Promise<ReceiptIndexRow[]> {
+    const ids = await this.redis.smembers('receipts:index');
+    if (ids.length === 0) return [];
+    const rows = await this.redis.mget(ids.map((id) => `receipt:${id}`));
+    return rows.filter(Boolean).map((raw) => JSON.parse(raw as string) as ReceiptIndexRow);
+  }
+}
+
+class RedisTxLock {
+  constructor(private readonly redis: RedisClient | null, private readonly logger: FastifyBaseLogger) {}
+  async run<T>(key: string, method: string, signerAddress: string, fn: (lockWaitMs: number) => Promise<T>): Promise<T> {
+    const started = Date.now();
+    if (!this.redis) return fn(0);
+    const token = randomUUID();
+    const ttlMs = 120_000;
+    while (Date.now() - started < 30_000) {
+      const ok = await this.redis.set(key, token, 'PX', ttlMs, 'NX');
+      if (ok) {
+        const lockWaitMs = Date.now() - started;
+        try { return await fn(lockWaitMs); }
+        finally {
+          const current = await this.redis.get(key).catch(() => null);
+          if (current === token) await this.redis.del(key).catch(() => undefined);
+        }
+      }
+      await sleep(400);
+    }
+    this.logger.warn({ method, signerAddress, lockKey: key, lockWaitMs: Date.now() - started }, 'signer tx lock busy');
+    throw Object.assign(new Error('Signer transaction queue is busy; retry shortly.'), { txLockBusy: true as const });
+  }
+}
+
 class FieldRateLimiter {
   private readonly hits = new Map<string, { count: number; resetAt: number }>();
   constructor(private readonly max: number, private readonly windowMs: number) {}
@@ -301,10 +421,17 @@ function parseSiweAddress(message: string): string | null {
 export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   const app = Fastify(options.logger ? { loggerInstance: options.logger } : { logger: true });
   const store = new InMemoryEdgeStore();
-  const hiddenAgentStore: HiddenAgentStore = process.env.REDIS_URL
-    ? new RedisHiddenAgentStore(new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true }))
+  const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true }) : null;
+  const hiddenAgentStore: HiddenAgentStore = redis
+    ? new RedisHiddenAgentStore(redis)
     : new InMemoryHiddenAgentStore();
-  if (!process.env.REDIS_URL) app.log.warn('hidden-agent store is in-memory; set REDIS_URL for durable production hides');
+  const deploymentStore: DeploymentStore = redis
+    ? new RedisDeploymentStore(redis, options.chainId)
+    : new InMemoryDeploymentStore();
+  const redisReceiptIndex = redis ? new RedisReceiptIndex(redis) : undefined;
+  const receiptIndex: ReceiptIndex | undefined = redisReceiptIndex;
+  const txLock = new RedisTxLock(redis, app.log);
+  if (!redis) app.log.warn('durable edge stores/locks are in-memory; set REDIS_URL for production bootstrap, hides, and tx locks');
   const quoteByPayee = new FieldRateLimiter(30, 60_000);
   const settleByPayer = new FieldRateLimiter(30, 60_000);
   const streamClients = new Map<string, Set<{ send(payload: string): void; close(): void }>>();
@@ -384,6 +511,9 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
           // Missing receipt IDs are ignored; nextReceiptId is authoritative.
         }
       }
+      if (redisReceiptIndex) {
+        for (const row of await redisReceiptIndex.list()) store.receipts.set(row.receiptId, row);
+      }
       lastChainReceiptSyncAt = Date.now();
       if (synced > 0) app.log.info({ nextReceiptId: nextReceiptId.toString(), synced }, 'receipt index sync complete');
     })().finally(() => {
@@ -422,7 +552,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
           ]);
           const id = tokenId.toString();
           const existing = store.agents.get(id);
-          store.agents.set(id, {
+          const indexedAgent: AgentRecord = {
             id,
             name: existing?.name ?? `Agent #${id}`,
             owner,
@@ -436,7 +566,23 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
             status: measurableStatus(id, existing?.status ?? 'deployed'),
             createdAt: existing?.createdAt ?? indexedAt,
             updatedAt: indexedAt,
-          });
+          };
+          store.agents.set(id, indexedAgent);
+          if (!await deploymentStore.get(id)) {
+            const derived: DeploymentRecord = {
+              chainId: options.chainId,
+              tokenId: id,
+              owner,
+              accountAddress: indexedAgent.accountAddress,
+              controller: indexedAgent.accountAddress,
+              name: indexedAgent.name,
+              selectedSkillIds: [],
+              createdAt: indexedAgent.createdAt,
+              status: 'activating',
+            };
+            await deploymentStore.set(derived);
+            void enqueueOnboarding(derived).catch((err) => app.log.warn({ tokenId: id, err }, 'bootstrap backfill enqueue failed'));
+          }
           synced += 1;
         } catch {
           // Burned/nonexistent token IDs are ignored; nextTokenId is authoritative.
@@ -467,7 +613,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return run;
   };
 
-  const stack = createBillingStack({ ...options, quoteStore: new InMemoryQuoteStore(), payeeResolver: async (payeeAgentId, serviceId) => {
+  const stack = createBillingStack({ ...options, quoteStore: new InMemoryQuoteStore(), receiptIndex, payeeResolver: async (payeeAgentId, serviceId) => {
     const service = [...store.services.values()].find((entry) => entry.agentId === payeeAgentId && entry.serviceId === serviceId);
     if (!service) throw new Error(`Service ${serviceId} for payee agent ${payeeAgentId} was not found`);
     const agent = store.agents.get(payeeAgentId);
@@ -511,17 +657,136 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   };
 
   const agentTokenId = (agent: AgentRecord): string => agent.identityTokenId ?? agent.id;
-  const withAgentVisibility = async (agent: AgentRecord): Promise<AgentRecord> => ({
-    ...agent,
-    status: measurableStatus(agent.id, agent.status),
-    hidden: await hiddenAgentStore.isHidden(options.chainId, agent.owner, agentTokenId(agent)),
-  });
+  const withAgentVisibility = async (agent: AgentRecord): Promise<AgentRecord> => {
+    const decorated = await decorateAgent(agent);
+    return {
+      ...decorated,
+      hidden: await hiddenAgentStore.isHidden(options.chainId, agent.owner, agentTokenId(agent)),
+    };
+  };
 
   const receiptRows = (agentId?: string): ReceiptIndexRow[] => [...store.receipts.values()]
     .filter((receipt) => !agentId || receipt.agentId === agentId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  const provisionAgentOnChain = async (owner: string, metadataRoot?: string): Promise<{ id: string; accountAddress: string; metadataRoot: string } | null> => {
+  const deploymentForAgent = async (agent: AgentRecord): Promise<DeploymentRecord | null> => deploymentStore.get(agentTokenId(agent));
+
+  const decorateAgent = async (agent: AgentRecord): Promise<AgentRecord> => {
+    const deployment = await deploymentForAgent(agent);
+    const receiptCount = receiptRows(agent.id).length;
+    const memoryCount = [...store.memory.values()].filter((entry) => entry.agentId === agent.id).length;
+    const lifecycleStatus = deployment?.status;
+    return {
+      ...agent,
+      description: agent.description ?? deployment?.description,
+      status: lifecycleStatus === 'initialized' || lifecycleStatus === 'ready' ? lifecycleStatus : measurableStatus(agent.id, agent.status),
+      kpis: { ...agent.kpis, receipts: receiptCount, memory: memoryCount, skills: deployment?.selectedSkillIds.length ?? [...store.skills.values()].filter((skill) => skill.agentId === agent.id).length },
+      deployment: deployment ? json(deployment) : undefined,
+    };
+  };
+
+  const hasBootstrapReceipt = (tokenId: string, actionTag: string, skillId?: string): boolean => [...store.receipts.values()].some((receipt) => {
+    if (receipt.agentId !== tokenId || receipt.actionTag !== actionTag) return false;
+    if (!skillId) return true;
+    return receipt.clientReceiptId === `onboarding:${options.chainId}:${tokenId}:skill:${skillId}`;
+  });
+
+  async function runOnboarding(record: DeploymentRecord): Promise<void> {
+    const key = onboardingKey(record.chainId, record.tokenId);
+    const current = await deploymentStore.getOnboarding(record.tokenId) ?? { key, chainId: record.chainId, tokenId: record.tokenId, stages: {}, status: 'pending' as const, attempts: 0, updatedAt: nowIso() };
+    if (current.status === 'complete') return;
+    const onboarding: OnboardingRecord = { ...current, status: 'running', attempts: current.attempts + 1, updatedAt: nowIso() };
+    await deploymentStore.setOnboarding(onboarding);
+
+    try {
+      if (!onboarding.stages['agent.created'] && !hasBootstrapReceipt(record.tokenId, 'agent.created')) {
+        const payload = {
+          event: 'agent.created',
+          tokenId: record.tokenId,
+          owner: record.owner,
+          accountAddress: record.accountAddress,
+          name: record.name,
+          description: record.description,
+          installedSkills: record.selectedSkillIds,
+          policy: record.policy,
+          createdAt: record.createdAt,
+          identityMintTxHash: record.identityMintTxHash,
+        };
+        await stack.receiptMinter.mint({
+          agentId: record.tokenId,
+          actionTag: 'agent.created',
+          payload,
+          valueWei: 0n,
+          clientReceiptId: `onboarding:${record.chainId}:${record.tokenId}:agent.created`,
+        });
+        onboarding.stages['agent.created'] = true;
+        await deploymentStore.setOnboarding({ ...onboarding, updatedAt: nowIso() });
+      }
+
+      if (!onboarding.stages['system/init']) {
+        const createdAt = nowIso();
+        const value = {
+          event: 'agent.bootstrap',
+          message: 'Agent initialized. Awaiting first task.',
+          installedSkills: record.selectedSkillIds,
+          createdAt,
+          visibility: 'system/bootstrap',
+        };
+        const memoryRecord: MemoryRecord = {
+          agentId: record.tokenId,
+          key: 'system/init',
+          value: json(value),
+          tags: ['system', 'bootstrap'],
+          visibility: 'bootstrap',
+          createdAt,
+          updatedAt: createdAt,
+        };
+        store.memory.set(`${record.tokenId}:system/init`, memoryRecord);
+        await deploymentStore.update(record.tokenId, { bootstrapMemory: memoryRecord });
+        onboarding.stages['system/init'] = true;
+        await deploymentStore.setOnboarding({ ...onboarding, updatedAt: nowIso() });
+      }
+
+      for (const skillId of record.selectedSkillIds) {
+        const stage = `skill.installed:${skillId}`;
+        if (onboarding.stages[stage] || hasBootstrapReceipt(record.tokenId, 'skill.installed', skillId)) continue;
+        const installedAt = nowIso();
+        await stack.receiptMinter.mint({
+          agentId: record.tokenId,
+          actionTag: 'skill.installed',
+          payload: { event: 'skill.installed', tokenId: record.tokenId, skillId, installedAt, source: 'deployment' },
+          valueWei: 0n,
+          clientReceiptId: `onboarding:${record.chainId}:${record.tokenId}:skill:${skillId}`,
+        });
+        store.skills.set(`${record.tokenId}:${skillId}`, { agentId: record.tokenId, skillId, installedAt });
+        onboarding.stages[stage] = true;
+        await deploymentStore.setOnboarding({ ...onboarding, updatedAt: nowIso() });
+      }
+
+      onboarding.stages['status.finalized'] = true;
+      onboarding.status = 'complete';
+      onboarding.updatedAt = nowIso();
+      await deploymentStore.setOnboarding(onboarding);
+      await deploymentStore.update(record.tokenId, { status: 'initialized' });
+      const agent = store.agents.get(record.tokenId);
+      if (agent) store.agents.set(record.tokenId, { ...agent, status: 'initialized', updatedAt: nowIso() });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await deploymentStore.setOnboarding({ ...onboarding, status: onboarding.attempts >= 3 ? 'failed' : 'pending', error: message, updatedAt: nowIso() });
+      if (onboarding.attempts >= 3) await deploymentStore.update(record.tokenId, { status: 'failed', error: message });
+      app.log.warn({ tokenId: record.tokenId, err: message }, 'agent onboarding failed');
+      throw err;
+    }
+  }
+
+  async function enqueueOnboarding(record: DeploymentRecord): Promise<void> {
+    const existing = await deploymentStore.getOnboarding(record.tokenId);
+    if (existing?.status === 'complete' || existing?.status === 'running') return;
+    await deploymentStore.setOnboarding(existing ?? { key: onboardingKey(record.chainId, record.tokenId), chainId: record.chainId, tokenId: record.tokenId, stages: {}, status: 'pending', attempts: 0, updatedAt: nowIso() });
+    void runOnboarding(record).catch((err) => app.log.warn({ tokenId: record.tokenId, err }, 'onboarding background job failed'));
+  }
+
+  const provisionAgentOnChain = async (owner: string, metadataRoot?: string): Promise<{ id: string; accountAddress: string; metadataRoot: string; accountDeployTxHash?: string; identityMintTxHash?: string } | null> => {
     if (!options.accountFactoryAddress || !options.agentIdentityAddress) return null;
 
     const provider = (options.chainClient as unknown as { getProvider(): { getCode(addr: string): Promise<string>; call(tx: { to: string; data: string }): Promise<string>; getNetwork(): Promise<{ chainId: bigint }>; getTransactionCount(addr: string, blockTag: 'latest' | 'pending'): Promise<number>; getBalance(addr: string): Promise<bigint> } }).getProvider?.();
@@ -621,38 +886,42 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       'function setAgentAccount(uint256 agentId,address account)',
     ]);
 
-    async function submitLogged(method: string, signerAddress: string, submit: () => Promise<TxResponse>): Promise<void> {
+    async function submitLogged(method: string, signerAddress: string, submit: () => Promise<TxResponse>): Promise<string> {
       let lastError: unknown;
-      for (let attempt = 0; attempt <= DEPLOY_RETRY_BACKOFF_MS.length; attempt += 1) {
-        try {
-          const tx = await submit();
-          app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce, gasPrice: tx.gasPrice?.toString() ?? null, maxFeePerGas: tx.maxFeePerGas?.toString() ?? null, maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString() ?? null }, 'provision-agent: tx submitted');
-          await tx.wait();
-          app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce }, 'provision-agent: tx confirmed');
-          return;
-        } catch (error) {
-          lastError = error;
-          if (!isReplacementUnderpriced(error) || attempt >= DEPLOY_RETRY_BACKOFF_MS.length) break;
-          const delayMs = DEPLOY_RETRY_BACKOFF_MS[attempt] ?? 1_500;
-          app.log.warn({ method, signerAddress, attempt, delayMs }, 'provision-agent: nonce collision/replacement underpriced; retrying with fresh pending nonce after backoff');
-          await sleep(delayMs);
+      const lockKey = `tx:${options.chainId}:${signerAddress.toLowerCase()}`;
+      return txLock.run(lockKey, method, signerAddress, async (lockWaitMs) => {
+        for (let attempt = 0; attempt <= DEPLOY_RETRY_BACKOFF_MS.length; attempt += 1) {
+          try {
+            const tx = await submit();
+            app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce, gasPrice: tx.gasPrice?.toString() ?? null, maxFeePerGas: tx.maxFeePerGas?.toString() ?? null, maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString() ?? null, attempt, lockWaitMs }, 'provision-agent: tx submitted');
+            await tx.wait();
+            app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce, attempt, lockWaitMs }, 'provision-agent: tx confirmed');
+            return tx.hash;
+          } catch (error) {
+            lastError = error;
+            if (!isReplacementUnderpriced(error) || attempt >= DEPLOY_RETRY_BACKOFF_MS.length) break;
+            const delayMs = DEPLOY_RETRY_BACKOFF_MS[attempt] ?? 1_500;
+            app.log.warn({ method, signerAddress, attempt, delayMs, lockWaitMs }, 'provision-agent: nonce collision/replacement underpriced; retrying with fresh pending nonce after backoff');
+            await sleep(delayMs);
+          }
         }
-      }
-      throw lastError instanceof Error ? lastError : new Error(`${method} transaction failed`);
+        throw lastError instanceof Error ? lastError : new Error(`${method} transaction failed`);
+      });
     }
 
     const signerAddress = (options.chainClient as unknown as { getSigner(): { address: string } }).getSigner?.()?.address ?? 'unknown';
+    const adminSignerAddress = (adminClient as unknown as { getSigner(): { address: string } }).getSigner?.()?.address ?? signerAddress;
     const tokenId = await identity.nextTokenId();
     app.log.info({ owner, salt, tokenId: tokenId.toString() }, 'provision-agent: calling predict');
     const accountAddress = await factory.predict(owner, salt);
     app.log.info({ accountAddress }, 'provision-agent: predict ok — creating account');
-    await submitLogged('AccountFactory.createAccount', signerAddress, () => factory.createAccount(owner, salt));
+    const accountDeployTxHash = await submitLogged('AccountFactory.createAccount', signerAddress, () => factory.createAccount(owner, salt));
     app.log.info({ accountAddress, tokenId: tokenId.toString() }, 'provision-agent: account created — minting identity');
-    await submitLogged('AgentIdentity.mint', signerAddress, () => identity.mint(owner, metadataRootBytes, publicKey, accountAddress));
+    const identityMintTxHash = await submitLogged('AgentIdentity.mint', adminSignerAddress, () => identity.mint(owner, metadataRootBytes, publicKey, accountAddress));
     app.log.info({ tokenId: tokenId.toString() }, 'provision-agent: identity minted — registering with router');
-    await submitLogged('PaymentRouter.setAgentAccount', signerAddress, () => router.setAgentAccount(tokenId, accountAddress));
+    await submitLogged('PaymentRouter.setAgentAccount', adminSignerAddress, () => router.setAgentAccount(tokenId, accountAddress));
     app.log.info({ owner, accountAddress, id: tokenId.toString() }, 'provision-agent: done');
-    return { id: tokenId.toString(), accountAddress, metadataRoot: metadataRootBytes };
+    return { id: tokenId.toString(), accountAddress, metadataRoot: metadataRootBytes, accountDeployTxHash, identityMintTxHash };
   };
 
   app.post('/v1/auth/siwe/nonce', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } }, schema: { tags: ['auth'], body: siweNonceBodySchema, response: { 200: nonceResponseSchema } } }, async (request) => {
@@ -816,8 +1085,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       ok: chainCache.aristotle.ok,
       uptimeSec: Math.floor(process.uptime()),
       version: '0.5.0',
-      db: { ok: true, note: 'in-memory store' },
-      redis: { ok: false, note: 'not used by edge' },
+      db: { ok: true, note: redis ? 'edge memory store plus Redis lifecycle indexes' : 'in-memory store' },
+      redis: { ok: Boolean(redis), note: redis ? 'used for hidden agents, lifecycle records, receipt idempotency, and tx locks' : 'not configured' },
       chain: { galileo: chainCache.galileo, aristotle: chainCache.aristotle },
       runtime: { workers: store.agents.size, lastHeartbeat: store.lastHeartbeat },
     };
@@ -960,6 +1229,46 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return { ok: true };
   });
 
+  const agentDiscoveredSchema = z.object({
+    chainId: z.number().int().positive().default(options.chainId),
+    tokenId: z.string().min(1),
+    owner: addressSchema,
+    accountAddress: addressSchema.optional(),
+    controller: addressSchema.optional(),
+    createdAt: z.string().optional(),
+  });
+
+  app.post('/internal/agent-discovered', { schema: { hide: true, body: agentDiscoveredSchema } }, async (request, reply) => {
+    const secret = request.headers['x-internal-secret'];
+    if (secret !== process.env.INTERNAL_SECRET) return problem(reply, 401, 'Unauthorized', 'Invalid internal secret.');
+    const body = agentDiscoveredSchema.parse(request.body);
+    const now = nowIso();
+    const existing = store.agents.get(body.tokenId);
+    const agent: AgentRecord = {
+      id: body.tokenId,
+      name: existing?.name ?? `Agent #${body.tokenId}`,
+      owner: body.owner,
+      ownerAddress: body.owner,
+      identityTokenId: body.tokenId,
+      accountAddress: body.accountAddress ?? body.controller ?? existing?.accountAddress,
+      metadataRoot: existing?.metadataRoot,
+      policyId: existing?.policyId,
+      balanceWei: existing?.balanceWei ?? '0',
+      kpis: existing?.kpis ?? { runs: 0, receipts: receiptRows(body.tokenId).length },
+      status: existing?.status ?? 'activating',
+      createdAt: body.createdAt ?? existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    store.agents.set(body.tokenId, agent);
+    let deployment = await deploymentStore.get(body.tokenId);
+    if (!deployment) {
+      deployment = { chainId: body.chainId, tokenId: body.tokenId, owner: body.owner, accountAddress: agent.accountAddress, controller: body.controller ?? agent.accountAddress, name: agent.name, selectedSkillIds: [], createdAt: agent.createdAt, status: 'activating' };
+      await deploymentStore.set(deployment);
+    }
+    await enqueueOnboarding(deployment);
+    return { ok: true, agent: await withAgentVisibility(agent) };
+  });
+
   // Internal endpoint for runtime to push minted heartbeat receipts into the edge store
   app.post('/internal/receipt', {
     config: { rateLimit: { max: 600, timeWindow: '1 minute' } },
@@ -999,6 +1308,9 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         app.log.warn({ err }, 'provision-agent: replacement underpriced after retries');
         return problem(reply, 409, 'Deployment transaction pending', 'A previous deployment transaction is still pending for the deployment signer. Wait for it to confirm before retrying.');
       }
+      if ((err as { txLockBusy?: boolean }).txLockBusy) {
+        return problem(reply, 409, 'Signer transaction queue busy', 'A signer transaction is already running. Wait briefly before retrying.');
+      }
       if (err instanceof Error && err.message === 'Deployment lock timed out') {
         return problem(reply, 409, 'Deployment already running', 'A deployment is already running for this service. Wait for confirmation before retrying.');
       }
@@ -1007,6 +1319,22 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const now = nowIso();
     const id = provisioned?.id ?? String(store.nextAgentId++);
     const displayName = body.name?.trim() || (body.metadataRoot && !body.metadataRoot.startsWith('0x') ? body.metadataRoot : `Agent #${id}`);
+    const selectedSkills = [...new Set(body.skills ?? body.policy?.allowedSkills ?? ['memory.write'])];
+    const deployment: DeploymentRecord = {
+      chainId: options.chainId,
+      tokenId: id,
+      owner: user.address,
+      accountAddress: provisioned?.accountAddress ?? user.address,
+      controller: provisioned?.accountAddress ?? user.address,
+      name: displayName,
+      description: body.description,
+      selectedSkillIds: selectedSkills,
+      policy: body.policy ? { maxPerTxWei: body.policy.maxPerTxWei, dailyCapWei: body.policy.dailyCapWei, allowedSkills: body.policy.allowedSkills ?? selectedSkills, allowedActions: body.policy.allowedSkills ?? selectedSkills } : { allowedSkills: selectedSkills, allowedActions: selectedSkills },
+      createdAt: now,
+      identityMintTxHash: provisioned?.identityMintTxHash,
+      accountDeployTxHash: provisioned?.accountDeployTxHash,
+      status: 'activating',
+    };
     const agent: AgentRecord = {
       id,
       name: displayName,
@@ -1015,41 +1343,26 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       identityTokenId: provisioned?.id,
       accountAddress: provisioned?.accountAddress ?? user.address,
       balanceWei: '0',
-      kpis: { runs: 1, receipts: 0 },
+      kpis: { runs: 0, receipts: 0, memory: 0, skills: selectedSkills.length },
       status: 'activating',
       createdAt: now,
       updatedAt: now,
+      description: body.description,
+      deployment: json(deployment),
     };
     if (provisioned?.metadataRoot ?? body.metadataRoot) agent.metadataRoot = provisioned?.metadataRoot ?? body.metadataRoot;
     if (body.policyId) agent.policyId = body.policyId;
     if (body.policy) agent.policyId = agent.policyId ?? newId('policy');
     store.agents.set(agent.id, agent);
+    await deploymentStore.set(deployment);
 
-    const selectedSkills = [...new Set(body.skills ?? body.policy?.allowedSkills ?? ['memory.write'])];
     for (const skillId of selectedSkills) {
       const install: SkillInstall = { agentId: agent.id, skillId, installedAt: now };
       store.skills.set(`${agent.id}:${skillId}`, install);
     }
 
-    const initRun: RunRecord = {
-      id: newId('run'),
-      agentId: agent.id,
-      status: 'succeeded',
-      createdAt: now,
-      updatedAt: now,
-      receipts: [],
-      steps: [{ id: newId('step'), name: 'agent.created', status: 'succeeded', createdAt: now }],
-    };
-    store.runs.set(initRun.id, initRun);
-    store.memory.set(`${agent.id}:system/initialized`, {
-      agentId: agent.id,
-      key: 'system/initialized',
-      value: { event: 'agent.created', name: agent.name, skills: selectedSkills, status: 'waiting_for_first_runtime_run' },
-      tags: ['system', 'created'],
-      updatedAt: now,
-    });
-    broadcast(agent.id, { event: 'run.step', payload: json(initRun.steps[0]) });
-    return agent;
+    await enqueueOnboarding(deployment);
+    return await withAgentVisibility(agent);
   });
 
   app.get('/v1/agents', { schema: { tags: ['agents'], querystring: agentsQuerySchema, response: { 200: z.array(agentSchema) } } }, async (request) => {
@@ -1151,7 +1464,12 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const agent = await ownedAgent(reply, user, id);
     if (reply.sent || 'statusCode' in agent) return agent;
-    return [...store.skills.values()].filter((skill) => skill.agentId === id);
+    const skills = [...store.skills.values()].filter((skill) => skill.agentId === id);
+    const deployment = await deploymentStore.get(agentTokenId(agent));
+    for (const skillId of deployment?.selectedSkillIds ?? []) {
+      if (!skills.some((skill) => skill.skillId === skillId)) skills.push({ agentId: id, skillId, installedAt: deployment?.createdAt ?? agent.createdAt });
+    }
+    return skills;
   });
 
   app.get('/v1/runs/:runId', { schema: { tags: ['runs'], params: z.object({ runId: idSchema }), response: { 200: runSchema } } }, async (request, reply) => {
@@ -1245,9 +1563,10 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const { agentId } = z.object({ agentId: idSchema }).parse(request.params);
     const agent = await ownedAgent(reply, user, agentId);
     if (reply.sent || 'statusCode' in agent) return agent;
-    return [...store.memory.values()]
-      .filter((entry) => entry.agentId === agentId)
-      .map((entry) => ({ id: entry.key, agentId: entry.agentId, key: entry.key, value: entry.value, version: 1, createdAt: entry.updatedAt, updatedAt: entry.updatedAt, tags: entry.tags }));
+    const entries = [...store.memory.values()].filter((entry) => entry.agentId === agentId);
+    const deployment = await deploymentStore.get(agentTokenId(agent));
+    if (deployment?.bootstrapMemory && !entries.some((entry) => entry.key === deployment.bootstrapMemory?.key)) entries.push(deployment.bootstrapMemory);
+    return entries.map((entry) => ({ id: entry.key, agentId: entry.agentId, key: entry.key, value: entry.value, version: 1, createdAt: entry.createdAt ?? entry.updatedAt, updatedAt: entry.updatedAt, tags: entry.tags, visibility: entry.visibility, storageRoot: entry.storageRoot, anchoredTxHash: entry.txHash }));
   };
 
   app.get('/v1/memory/:agentId', { schema: { tags: ['memory'], params: z.object({ agentId: idSchema }) } }, listAgentMemory);

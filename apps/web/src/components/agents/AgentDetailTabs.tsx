@@ -30,6 +30,23 @@ interface Props {
   skillCatalog: SkillManifest[];
 }
 
+function runtimeLabel(agent: Agent, receipts: Receipt[], runs: Run[]): string {
+  const latestRun = runs.find((run) => run.status === 'success' || run.status === 'succeeded' || run.status === 'running');
+  if (latestRun && agent.status === 'active') return `Active — last runtime run ${fmtDate(latestRun.createdAt)}`;
+  if (agent.status === 'failed' || agent.status === 'error') return `Failed — ${agent.deployment?.error ?? 'bootstrap or runtime failed'}`;
+  if (agent.status === 'activating') return 'Activating — bootstrap pending';
+  if (agent.status === 'initialized' || agent.status === 'ready' || receipts.some((r) => r.skillId === 'agent.created')) return 'Initialized — awaiting first scheduled task';
+  return 'Indexed — awaiting bootstrap';
+}
+
+function latestEvent(receipts: Receipt[], runs: Run[]): string {
+  const rows = [
+    ...receipts.map((receipt) => ({ label: receipt.skillId ?? 'receipt.minted', time: receipt.createdAt })),
+    ...runs.map((run) => ({ label: `run.${run.status}`, time: run.createdAt })),
+  ].sort((a, b) => b.time.localeCompare(a.time));
+  return rows[0] ? `${rows[0].label} · ${fmtDate(rows[0].time)}` : 'No lifecycle events indexed';
+}
+
 export function AgentDetailTabs({ agent, receipts, runs, memoryEntries, installedSkills, skillCatalog }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
 
@@ -66,53 +83,43 @@ export function AgentDetailTabs({ agent, receipts, runs, memoryEntries, installe
 }
 
 function OverviewTab({ agent, receipts, runs, memoryEntries, installedSkills }: Pick<Props, 'agent' | 'receipts' | 'runs' | 'memoryEntries' | 'installedSkills'>) {
-  const latestReceipt = receipts[0];
-  const latestRun = runs[0];
   const totalVolume = receipts.reduce((sum, receipt) => sum + BigInt(receipt.amountWei), 0n);
-  const runtimeAttached = agent.status === 'active' || receipts.length > 0 || runs.some((run) => run.status === 'success' || run.status === 'succeeded');
+  const tokenId = agent.identityTokenId ?? agent.deployment?.tokenId ?? agent.id;
 
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Info label="Agent ID" value={agent.id} mono />
+        <Info label="Token ID" value={tokenId} mono />
         <Info label="Owner" value={short(agent.ownerAddress)} mono />
         <Info label="Agent account" value={agent.accountAddress ? short(agent.accountAddress) : 'Not indexed yet'} mono />
         <Info label="Status" value={agent.status.replace('_', ' ')} />
-        <Info label="Created" value={fmtDate(agent.createdAt)} />
-        <Info label="Runtime" value={runtimeAttached ? 'Attached / has activity' : 'Waiting for first runtime run'} />
-        <Info label="Installed skills" value={String(installedSkills.length)} />
+        <Info label="Created" value={fmtDate(agent.deployment?.createdAt ?? agent.createdAt)} />
+        <Info label="Runtime" value={runtimeLabel(agent, receipts, runs)} />
+        <Info label="Selected skills" value={String(agent.deployment?.selectedSkillIds?.length ?? installedSkills.length)} />
         <Info label="Receipts" value={String(receipts.length)} />
+        <Info label="Memory entries" value={String(memoryEntries.length)} />
+        <Info label="Latest event" value={latestEvent(receipts, runs)} />
         <Info label="Total volume" value={fmtWei(totalVolume.toString())} />
       </div>
 
       <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
-        <p className="text-sm font-medium text-fg">Latest activity</p>
-        {latestReceipt ? (
-          <p className="mt-2 text-xs text-fg-muted">
-            Latest receipt <code className="font-mono text-fg">{short(latestReceipt.id)}</code> for {latestReceipt.skillId ?? 'agent action'} at {fmtDate(latestReceipt.createdAt)}.
-            {buildChainscanUrl({ txHash: latestReceipt.txHash, chainId: 16661 }) && <a className="ml-2 text-accent hover:underline" href={buildChainscanUrl({ txHash: latestReceipt.txHash, chainId: 16661 })!} target="_blank" rel="noreferrer">tx ↗</a>}
-          </p>
-        ) : latestRun ? (
-          <p className="mt-2 text-xs text-fg-muted">Latest run: {latestRun.status} at {fmtDate(latestRun.createdAt)}.</p>
-        ) : (
-          <p className="mt-2 text-xs text-fg-muted">No scheduled task has executed for this agent yet. It is indexed on-chain, but runtime activity will appear after the first attached job runs.</p>
-        )}
+        <p className="text-sm font-medium text-fg">Lifecycle honesty</p>
+        <p className="mt-2 text-xs text-fg-muted">
+          Deployment/bootstrap receipts are real lifecycle records. They do not mean this agent has an autonomous runtime loop yet.
+          User-created agents become <span className="text-fg">active</span> only after a real scheduled task or heartbeat exists.
+        </p>
       </div>
-
-      {memoryEntries.length === 0 && (
-        <p className="text-xs text-fg-faint">Memory is created by real memory.write/search actions. Empty memory is expected until those skills run.</p>
-      )}
     </div>
   );
 }
 
 function ActivityTab({ receipts, runs }: { receipts: Receipt[]; runs: Run[] }) {
   const events = [
-    ...receipts.map((receipt) => ({ id: receipt.id, type: 'receipt', label: receipt.skillId ?? 'receipt.minted', status: receipt.status, time: receipt.createdAt, txHash: receipt.txHash })),
-    ...runs.map((run) => ({ id: run.id, type: 'run', label: run.steps[0]?.type ?? 'agent.run', status: run.status, time: run.createdAt, txHash: undefined })),
+    ...receipts.map((receipt) => ({ id: receipt.id, type: 'receipt', label: receipt.skillId ?? 'receipt.minted', status: receipt.status, time: receipt.createdAt, txHash: receipt.txHash, storageRoot: receipt.storageRoot })),
+    ...runs.map((run) => ({ id: run.id, type: 'run', label: run.steps[0]?.type ?? 'agent.run', status: run.status, time: run.createdAt, txHash: undefined, storageRoot: undefined })),
   ].sort((a, b) => b.time.localeCompare(a.time));
 
-  if (events.length === 0) return <Empty title="No runs yet" body="This agent has not executed a scheduled task. Once runtime attaches a job, run steps and receipts will show here." />;
+  if (events.length === 0) return <Empty title="No lifecycle events yet" body="No deployment, bootstrap, memory, heartbeat, or runtime receipts are indexed for this agent yet." />;
 
   return (
     <div className="space-y-2">
@@ -125,6 +132,7 @@ function ActivityTab({ receipts, runs }: { receipts: Receipt[]; runs: Run[] }) {
               {buildChainscanUrl({ txHash: event.txHash, chainId: 16661 }) && (
                 <a className="ml-2 text-accent hover:underline" href={buildChainscanUrl({ txHash: event.txHash, chainId: 16661 })!} target="_blank" rel="noreferrer">tx ↗</a>
               )}
+              {event.storageRoot && /^0x[a-fA-F0-9]{64}$/.test(event.storageRoot) && <span className="ml-2 text-fg-faint">storage {short(event.storageRoot)}</span>}
             </p>
           </div>
           <div className="text-right">
@@ -146,8 +154,8 @@ function MemoryTab({ agentId, entries }: { agentId: string; entries: MemoryEntry
         <div className="space-y-2">
           {entries.slice(0, 8).map((entry) => (
             <div key={entry.id} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-3">
-              <p className="font-mono text-xs text-fg">{entry.key}</p>
-              <p className="mt-1 text-xs text-fg-muted">Updated {fmtDate(entry.updatedAt)}</p>
+              <div className="flex items-center justify-between gap-3"><p className="font-mono text-xs text-fg">{entry.key}</p>{(entry.visibility === 'system' || entry.visibility === 'bootstrap' || entry.tags?.includes('bootstrap')) && <Badge variant="neutral">System bootstrap memory</Badge>}</div>
+              <p className="mt-1 text-xs text-fg-muted">Updated {fmtDate(entry.updatedAt)} · not labeled private/encrypted unless written by a private memory skill</p>
             </div>
           ))}
         </div>
@@ -180,12 +188,14 @@ function SkillsTab({ installedSkills, skillCatalog }: { installedSkills: Install
 }
 
 function PolicyTab({ agent, installedSkills }: { agent: Agent; installedSkills: InstalledSkill[] }) {
+  const policy = agent.deployment?.policy;
   return (
     <div className="space-y-3">
-      <Info label="Policy record" value={agent.policyId ?? 'Not connected yet'} mono />
-      <Info label="Allowed skills/actions" value={installedSkills.map((skill) => skill.skillId).join(', ') || 'Not indexed'} />
+      <Info label="Daily cap" value={policy?.dailyCapWei ?? 'Not indexed'} mono />
+      <Info label="Max per tx" value={policy?.maxPerTxWei ?? 'Not indexed'} mono />
+      <Info label="Allowed skills/actions" value={policy?.allowedSkills?.join(', ') || installedSkills.map((skill) => skill.skillId).join(', ') || 'Not available for pre-bootstrap deployment'} />
       <Info label="Owner/admin" value={short(agent.ownerAddress)} mono />
-      <p className="text-xs text-fg-faint">Daily cap, max per tx, and spend-today will show here once policy persistence is connected to the deployment record.</p>
+      <p className="text-xs text-fg-faint">Deployment policy record indexed locally; on-chain policy reader not connected yet.</p>
     </div>
   );
 }

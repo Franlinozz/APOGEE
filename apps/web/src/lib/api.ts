@@ -28,6 +28,9 @@ function normalizeMemoryEntry(row: Record<string, unknown>, agentId: string): Me
     value: row['value'],
     version: typeof row['version'] === 'number' ? row['version'] : 1,
     anchoredTxHash: typeof row['anchoredTxHash'] === 'string' ? row['anchoredTxHash'] : undefined,
+    visibility: row['visibility'] === 'system' || row['visibility'] === 'bootstrap' || row['visibility'] === 'private' ? row['visibility'] : undefined,
+    tags: Array.isArray(row['tags']) ? row['tags'].map(String) : undefined,
+    storageRoot: typeof row['storageRoot'] === 'string' ? row['storageRoot'] : undefined,
     createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : updatedAt,
     updatedAt,
   };

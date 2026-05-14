@@ -21,6 +21,8 @@ const BADGE_VARIANT: Record<Agent['status'], 'success' | 'warning' | 'danger' | 
   pending_deploy: 'warning',
   deployed: 'neutral',
   activating: 'warning',
+  initialized: 'success',
+  ready: 'success',
   active: 'success',
   paused: 'neutral',
   failed: 'danger',

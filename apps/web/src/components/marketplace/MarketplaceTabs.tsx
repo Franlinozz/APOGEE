@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { SkillManifest, ServiceListing } from '@/lib/types';
 import { Badge } from '@apogee/ui';
 import { Zap, Server } from 'lucide-react';
@@ -101,16 +102,6 @@ export function MarketplaceTabs({ initialSkills, initialServices }: Props) {
 }
 
 function SkillCard({ skill }: { skill: SkillManifest }) {
-  const [installing, setInstalling] = useState(false);
-  const [installed, setInstalled] = useState(false);
-
-  async function install() {
-    setInstalling(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setInstalled(true);
-    setInstalling(false);
-  }
-
   return (
     <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface p-5 flex flex-col">
       <div className="flex items-start justify-between mb-3">
@@ -125,18 +116,12 @@ function SkillCard({ skill }: { skill: SkillManifest }) {
       <p className="flex-1 text-xs text-fg-muted leading-relaxed">{skill.description}</p>
       <div className="mt-4 flex items-center justify-between">
         <span className="text-xs font-medium text-fg-muted">{fmtWei(skill.pricePerCallWei)}</span>
-        <button
-          onClick={install}
-          disabled={installing || installed}
-          className={[
-            'rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium transition-colors',
-            installed
-              ? 'bg-success/10 text-success'
-              : 'bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50',
-          ].join(' ')}
+        <Link
+          href={`/agents/new?skill=${encodeURIComponent(skill.id)}`}
+          className="rounded-[var(--radius)] bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
         >
-          {installing ? 'Installing…' : installed ? 'Installed ✓' : 'Install'}
-        </button>
+          Add during deploy
+        </Link>
       </div>
     </div>
   );
