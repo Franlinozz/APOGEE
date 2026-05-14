@@ -683,7 +683,9 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   const decorateAgent = async (agent: AgentRecord): Promise<AgentRecord> => {
     const deployment = await deploymentForAgent(agent);
     const receiptCount = receiptRows(agent.id).length;
-    const memoryCount = [...store.memory.values()].filter((entry) => entry.agentId === agent.id).length;
+    const storedMemoryCount = [...store.memory.values()].filter((entry) => entry.agentId === agent.id).length;
+    const deploymentBootstrapMemory = deployment?.bootstrapMemory ? 1 : 0;
+    const memoryCount = Math.max(storedMemoryCount, deploymentBootstrapMemory);
     const lifecycleStatus = deployment?.status;
     return {
       ...agent,
@@ -1378,6 +1380,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const user = await requireAuth(request);
     const query = agentsQuerySchema.parse(request.query);
     await syncOnChainAgents();
+    await syncOnChainReceipts();
     const rows = await Promise.all([...store.agents.values()]
       .filter((agent) => agent.owner.toLowerCase() === user.address.toLowerCase())
       .map(withAgentVisibility));
@@ -1388,6 +1391,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
     const query = agentsQuerySchema.parse(request.query);
+    await syncOnChainAgents();
+    await syncOnChainReceipts();
     const agent = await ownedAgent(reply, user, id);
     if (reply.sent || 'statusCode' in agent) return agent;
     const visibleAgent = await withAgentVisibility(agent);
