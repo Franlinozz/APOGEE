@@ -454,10 +454,12 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   };
 
   const hasRuntimeActivity = (agentId: string): boolean => {
-    if (agentId === '1') return isRecent(store.lastHeartbeat.aurora);
-    if (agentId === '2') return isRecent(store.lastHeartbeat.vesper);
-    if (agentId === '3') return isRecent(store.lastHeartbeat.helix);
-    return [...store.runs.values()].some((run) => run.agentId === agentId) || [...store.receipts.values()].some((receipt) => receipt.agentId === agentId);
+    const hasRecentRun = [...store.runs.values()].some((run) => run.agentId === agentId && isRecent(run.updatedAt ?? run.createdAt));
+    const hasRecentReceipt = [...store.receipts.values()].some((receipt) => receipt.agentId === agentId && isRecent(receipt.createdAt));
+    if (agentId === '1') return isRecent(store.lastHeartbeat.aurora) || hasRecentRun || hasRecentReceipt;
+    if (agentId === '2') return isRecent(store.lastHeartbeat.vesper) || hasRecentRun || hasRecentReceipt;
+    if (agentId === '3') return isRecent(store.lastHeartbeat.helix) || hasRecentRun || hasRecentReceipt;
+    return hasRecentRun || hasRecentReceipt;
   };
 
   const measurableStatus = (agentId: string, fallback: AgentRecord['status']): AgentRecord['status'] => {
