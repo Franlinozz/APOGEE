@@ -1,5 +1,5 @@
 import Fastify, { type FastifyBaseLogger, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
@@ -8,10 +8,11 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod';
-import { Contract, JsonRpcProvider, getAddress, keccak256, toUtf8Bytes } from 'ethers';
+import { Contract, JsonRpcProvider, TypedDataEncoder, getAddress, keccak256, toUtf8Bytes, verifyTypedData } from 'ethers';
 import { Redis, type Redis as RedisClient } from 'ioredis';
 import { ChainClient } from '@apogee/chain-client';
 import { StorageClient } from '@apogee/storage-client';
+import { DEPLOY_AUTH_DOMAIN, DEPLOY_AUTH_TYPES, buildDeployAuthorizationMessage, type DeployPolicyInput } from '@apogee/core';
 import { createBillingStack, InMemoryQuoteStore, type BillingChainClient, type ReceiptIndex, type ReceiptIndexRow, type StorageBoundary } from '@apogee/billing';
 import { z } from 'zod';
 
@@ -31,11 +32,12 @@ const agentCreateSchema = z.object({
   metadataRoot: z.string().optional(),
   policyId: z.string().optional(),
   skills: z.array(z.string().min(1)).optional(),
-  policy: z.object({
-    maxPerTxWei: z.string().optional(),
-    dailyCapWei: z.string().optional(),
-    allowedSkills: z.array(z.string()).optional(),
-  }).optional(),
+  policy: z.record(z.string(), jsonValueSchema).optional(),
+});
+const deployNonceResponseSchema = z.object({ owner: addressSchema, nonce: z.string(), deadline: z.number().int().positive(), chainId: z.literal(16661) });
+const deployAuthorizedSchema = z.object({
+  form: agentCreateSchema.omit({ owner: true }).extend({ name: z.string().min(1).max(120) }),
+  authorization: z.object({ owner: addressSchema, nonce: z.string().min(1), deadline: z.number().int().positive(), signature: z.string().min(1) }),
 });
 const agentSchema = z.object({
   id: z.string(),
@@ -54,6 +56,7 @@ const agentSchema = z.object({
   hidden: z.boolean().optional(),
   description: z.string().optional(),
   deployment: z.unknown().optional(),
+  authorizationProof: z.unknown().optional(),
 });
 const skillManifestSchema = z.object({ id: z.string(), name: z.string(), version: z.string(), description: z.string(), category: z.string(), tier: z.enum(['free', 'premium']), pricePerCallWei: z.string(), authorAddress: addressSchema.optional(), tags: z.array(z.string()) });
 const policyPatchSchema = z.object({ maxPerTxWei: z.string().optional(), maxPerDayWei: z.string().optional(), active: z.boolean().optional(), summary: z.string().optional() });
@@ -100,6 +103,7 @@ type SkillInstall = { agentId: string; skillId: string; version?: string | undef
 type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string; createdAt?: string | undefined; visibility?: 'system' | 'bootstrap' | 'private' | undefined; storageRoot?: string | undefined; txHash?: string | undefined };
 type HiddenAgentRecord = { chainId: number; ownerAddress: string; tokenId: string; hiddenAt: string };
 type DeploymentPolicyRecord = { maxPerTxWei?: string | undefined; dailyCapWei?: string | undefined; allowedSkills?: string[] | undefined; allowedActions?: string[] | undefined };
+type AuthorizationProof = { type: 'eip712'; owner: string; signer: string; nonce: string; deadline: number; digest: string; signature: string; createdAt: string; tokenId?: string | undefined; agentId?: string | undefined };
 type DeploymentRecord = {
   chainId: number;
   tokenId: string;
@@ -116,7 +120,9 @@ type DeploymentRecord = {
   status: 'activating' | 'initialized' | 'ready' | 'active' | 'failed';
   error?: string | undefined;
   bootstrapMemory?: MemoryRecord | undefined;
+  authorizationProof?: AuthorizationProof | undefined;
 };
+type DeployNonceRecord = { ownerLower: string; nonce: string; deadline: number; status: 'issued' | 'consumed' | 'expired'; createdAt: string; consumedAt?: string | undefined; deploymentKey?: string | undefined; tokenId?: string | undefined };
 type OnboardingRecord = { key: string; chainId: number; tokenId: string; stages: Record<string, boolean>; status: 'pending' | 'running' | 'complete' | 'failed'; attempts: number; error?: string | undefined; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
@@ -270,6 +276,68 @@ class RedisHiddenAgentStore implements HiddenAgentStore {
   }
 }
 
+interface DeployNonceStore {
+  issue(owner: string, now: string, deadline: number): Promise<DeployNonceRecord>;
+  get(owner: string, nonce: string): Promise<DeployNonceRecord | null>;
+  consume(owner: string, nonce: string, deploymentKey: string): Promise<DeployNonceRecord>;
+  attachToken(owner: string, nonce: string, tokenId: string): Promise<void>;
+}
+
+const deployNonceKey = (owner: string, nonce: string): string => `deploy-auth-nonce:${owner.toLowerCase()}:${nonce}`;
+const randomUint256String = (): string => BigInt(`0x${randomBytes(32).toString('hex')}`).toString();
+
+class InMemoryDeployNonceStore implements DeployNonceStore {
+  private readonly nonces = new Map<string, DeployNonceRecord>();
+  async issue(owner: string, now: string, deadline: number): Promise<DeployNonceRecord> {
+    const record: DeployNonceRecord = { ownerLower: owner.toLowerCase(), nonce: randomUint256String(), deadline, status: 'issued', createdAt: now };
+    this.nonces.set(deployNonceKey(owner, record.nonce), record);
+    return record;
+  }
+  async get(owner: string, nonce: string): Promise<DeployNonceRecord | null> { return this.nonces.get(deployNonceKey(owner, nonce)) ?? null; }
+  async consume(owner: string, nonce: string, deploymentKeyValue: string): Promise<DeployNonceRecord> {
+    const key = deployNonceKey(owner, nonce);
+    const current = this.nonces.get(key);
+    if (!current) throw Object.assign(new Error('Deployment authorization nonce was not issued.'), { nonceMissing: true as const });
+    if (current.status !== 'issued') return current;
+    const consumed: DeployNonceRecord = { ...current, status: 'consumed', consumedAt: nowIso(), deploymentKey: deploymentKeyValue };
+    this.nonces.set(key, consumed);
+    return consumed;
+  }
+  async attachToken(owner: string, nonce: string, tokenId: string): Promise<void> {
+    const key = deployNonceKey(owner, nonce);
+    const current = this.nonces.get(key);
+    if (current) this.nonces.set(key, { ...current, tokenId });
+  }
+}
+
+class RedisDeployNonceStore implements DeployNonceStore {
+  constructor(private readonly redis: RedisClient) {}
+  async issue(owner: string, now: string, deadline: number): Promise<DeployNonceRecord> {
+    const record: DeployNonceRecord = { ownerLower: owner.toLowerCase(), nonce: randomUint256String(), deadline, status: 'issued', createdAt: now };
+    await this.redis.set(deployNonceKey(owner, record.nonce), JSON.stringify(record), 'EX', 60 * 60 * 24);
+    return record;
+  }
+  async get(owner: string, nonce: string): Promise<DeployNonceRecord | null> {
+    const raw = await this.redis.get(deployNonceKey(owner, nonce));
+    return raw ? JSON.parse(raw) as DeployNonceRecord : null;
+  }
+  async consume(owner: string, nonce: string, deploymentKeyValue: string): Promise<DeployNonceRecord> {
+    const key = deployNonceKey(owner, nonce);
+    const raw = await this.redis.get(key);
+    if (!raw) throw Object.assign(new Error('Deployment authorization nonce was not issued.'), { nonceMissing: true as const });
+    const current = JSON.parse(raw) as DeployNonceRecord;
+    if (current.status !== 'issued') return current;
+    const consumed: DeployNonceRecord = { ...current, status: 'consumed', consumedAt: nowIso(), deploymentKey: deploymentKeyValue };
+    await this.redis.set(key, JSON.stringify(consumed), 'EX', 60 * 60 * 24 * 7);
+    return consumed;
+  }
+  async attachToken(owner: string, nonce: string, tokenId: string): Promise<void> {
+    const key = deployNonceKey(owner, nonce);
+    const raw = await this.redis.get(key);
+    if (!raw) return;
+    await this.redis.set(key, JSON.stringify({ ...JSON.parse(raw) as DeployNonceRecord, tokenId }), 'EX', 60 * 60 * 24 * 7);
+  }
+}
 
 interface DeploymentStore {
   get(tokenId: string): Promise<DeploymentRecord | null>;
@@ -428,6 +496,9 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   const deploymentStore: DeploymentStore = redis
     ? new RedisDeploymentStore(redis, options.chainId)
     : new InMemoryDeploymentStore();
+  const deployNonceStore: DeployNonceStore = redis
+    ? new RedisDeployNonceStore(redis)
+    : new InMemoryDeployNonceStore();
   const redisReceiptIndex = redis ? new RedisReceiptIndex(redis) : undefined;
   const receiptIndex: ReceiptIndex | undefined = redisReceiptIndex;
   const txLock = new RedisTxLock(redis, app.log);
@@ -693,6 +764,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       status: lifecycleStatus === 'initialized' || lifecycleStatus === 'ready' ? lifecycleStatus : measurableStatus(agent.id, agent.status),
       kpis: { ...agent.kpis, receipts: receiptCount, memory: memoryCount, skills: deployment?.selectedSkillIds.length ?? [...store.skills.values()].filter((skill) => skill.agentId === agent.id).length },
       deployment: deployment ? json(deployment) : undefined,
+      authorizationProof: deployment?.authorizationProof ? json(deployment.authorizationProof) : agent.authorizationProof,
     };
   };
 
@@ -710,6 +782,27 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     await deploymentStore.setOnboarding(onboarding);
 
     try {
+      if (record.authorizationProof && !onboarding.stages['deployment.authorized'] && !hasBootstrapReceipt(record.tokenId, 'deployment.authorized')) {
+        await stack.receiptMinter.mint({
+          agentId: record.tokenId,
+          actionTag: 'deployment.authorized',
+          payload: {
+            event: 'deployment.authorized',
+            tokenId: record.tokenId,
+            owner: record.authorizationProof.owner,
+            digest: record.authorizationProof.digest,
+            nonce: record.authorizationProof.nonce,
+            deadline: record.authorizationProof.deadline,
+            signature: record.authorizationProof.signature,
+            createdAt: record.authorizationProof.createdAt,
+          },
+          valueWei: 0n,
+          clientReceiptId: `onboarding:${record.chainId}:${record.tokenId}:deployment.authorized`,
+        });
+        onboarding.stages['deployment.authorized'] = true;
+        await deploymentStore.setOnboarding({ ...onboarding, updatedAt: nowIso() });
+      }
+
       if (!onboarding.stages['agent.created'] && !hasBootstrapReceipt(record.tokenId, 'agent.created')) {
         const payload = {
           event: 'agent.created',
@@ -722,6 +815,11 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
           policy: record.policy,
           createdAt: record.createdAt,
           identityMintTxHash: record.identityMintTxHash,
+          authorizationType: record.authorizationProof?.type,
+          authorizationSigner: record.authorizationProof?.signer,
+          authorizationDigest: record.authorizationProof?.digest,
+          authorizationSignature: record.authorizationProof?.signature,
+          authorizationDeadline: record.authorizationProof?.deadline,
         };
         await stack.receiptMinter.mint({
           agentId: record.tokenId,
@@ -955,6 +1053,15 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     if (nonce) store.nonces.delete(nonce);
     const token = app.jwt.sign({ address }, { expiresIn: '12h' });
     return { token, address };
+  });
+
+
+  app.get('/v1/auth/deploy-nonce', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } }, schema: { tags: ['auth'], response: { 200: deployNonceResponseSchema } } }, async (request) => {
+    const user = await requireAuth(request);
+    const now = nowIso();
+    const deadline = Math.floor(Date.now() / 1000) + 10 * 60;
+    const record = await deployNonceStore.issue(user.address, now, deadline);
+    return { owner: user.address, nonce: record.nonce, deadline: record.deadline, chainId: 16661 as const };
   });
 
   // Background-cached chain status — refreshed every 30s so health endpoint is instant
@@ -1294,9 +1401,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return { ok: true };
   });
 
-  app.post('/v1/agents', { schema: { tags: ['agents'], body: agentCreateSchema, response: { 200: agentSchema } } }, async (request, reply) => {
-    const user = await requireAuth(request);
-    const body = agentCreateSchema.parse(request.body);
+  async function deployAgentForUser(user: AuthUser, body: z.infer<typeof agentCreateSchema>, reply: FastifyReply, authorizationProof?: AuthorizationProof): Promise<AgentRecord | FastifyReply> {
     if (body.owner && !sameAddress(body.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Cannot provision an agent for a different owner');
     let provisioned: Awaited<ReturnType<typeof provisionAgentOnChain>>;
     try {
@@ -1330,7 +1435,15 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const now = nowIso();
     const id = provisioned?.id ?? String(store.nextAgentId++);
     const displayName = body.name?.trim() || (body.metadataRoot && !body.metadataRoot.startsWith('0x') ? body.metadataRoot : `Agent #${id}`);
-    const selectedSkills = [...new Set(body.skills ?? body.policy?.allowedSkills ?? ['memory.write'])];
+    const policyAllowedSkills = Array.isArray(body.policy?.['allowedSkills']) ? body.policy['allowedSkills'].filter((value): value is string => typeof value === 'string') : undefined;
+    const policyAllowedActions = Array.isArray(body.policy?.['allowedActions']) ? body.policy['allowedActions'].filter((value): value is string => typeof value === 'string') : undefined;
+    const selectedSkills = [...new Set(body.skills ?? policyAllowedSkills ?? ['memory.write'])];
+    const policyMaxPerTxWei = typeof body.policy?.['maxPerTxWei'] === 'string' ? body.policy['maxPerTxWei'] : undefined;
+    const policyDailyCapWei = typeof body.policy?.['dailyCapWei'] === 'string' ? body.policy['dailyCapWei'] : undefined;
+    const deploymentPolicy: DeploymentPolicyRecord = body.policy
+      ? { maxPerTxWei: policyMaxPerTxWei, dailyCapWei: policyDailyCapWei, allowedSkills: policyAllowedSkills ?? selectedSkills, allowedActions: policyAllowedActions ?? policyAllowedSkills ?? selectedSkills }
+      : { allowedSkills: selectedSkills, allowedActions: selectedSkills };
+    const proof = authorizationProof ? { ...authorizationProof, tokenId: id, agentId: id } : undefined;
     const deployment: DeploymentRecord = {
       chainId: options.chainId,
       tokenId: id,
@@ -1340,11 +1453,12 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       name: displayName,
       description: body.description,
       selectedSkillIds: selectedSkills,
-      policy: body.policy ? { maxPerTxWei: body.policy.maxPerTxWei, dailyCapWei: body.policy.dailyCapWei, allowedSkills: body.policy.allowedSkills ?? selectedSkills, allowedActions: body.policy.allowedSkills ?? selectedSkills } : { allowedSkills: selectedSkills, allowedActions: selectedSkills },
+      policy: deploymentPolicy,
       createdAt: now,
       identityMintTxHash: provisioned?.identityMintTxHash,
       accountDeployTxHash: provisioned?.accountDeployTxHash,
       status: 'activating',
+      authorizationProof: proof,
     };
     const agent: AgentRecord = {
       id,
@@ -1360,12 +1474,14 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       updatedAt: now,
       description: body.description,
       deployment: json(deployment),
+      authorizationProof: proof ? json(proof) : undefined,
     };
     if (provisioned?.metadataRoot ?? body.metadataRoot) agent.metadataRoot = provisioned?.metadataRoot ?? body.metadataRoot;
     if (body.policyId) agent.policyId = body.policyId;
     if (body.policy) agent.policyId = agent.policyId ?? newId('policy');
     store.agents.set(agent.id, agent);
     await deploymentStore.set(deployment);
+    if (proof) await deployNonceStore.attachToken(proof.owner, proof.nonce, id);
 
     for (const skillId of selectedSkills) {
       const install: SkillInstall = { agentId: agent.id, skillId, installedAt: now };
@@ -1374,6 +1490,56 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
     await enqueueOnboarding(deployment);
     return await withAgentVisibility(agent);
+  }
+
+  app.post('/v1/agents', { schema: { tags: ['agents'], body: agentCreateSchema, response: { 200: agentSchema } } }, async (request, reply) => {
+    const user = await requireAuth(request);
+    const body = agentCreateSchema.parse(request.body);
+    return deployAgentForUser(user, body, reply);
+  });
+
+
+  app.post('/v1/agents/deploy-authorized', { schema: { tags: ['agents'], body: deployAuthorizedSchema, response: { 200: agentSchema } } }, async (request, reply) => {
+    const user = await requireAuth(request);
+    const body = deployAuthorizedSchema.parse(request.body);
+    const owner = body.authorization.owner;
+    if (!sameAddress(owner, user.address)) return problem(reply, 403, 'Authorization owner mismatch', 'The deployment authorization must be signed by the authenticated wallet.');
+    const issued = await deployNonceStore.get(owner, body.authorization.nonce);
+    if (!issued) return problem(reply, 401, 'Authorization nonce missing', 'Request a new deployment authorization and sign again.');
+    if (issued.deadline !== body.authorization.deadline) return problem(reply, 401, 'Authorization deadline mismatch', 'Request a new deployment authorization and sign again.');
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (issued.status === 'issued' && issued.deadline <= nowSec) return problem(reply, 401, 'Authorization expired', 'Your deployment authorization expired. Please sign again.');
+    if (issued.status === 'consumed') {
+      if (issued.tokenId) {
+        const existing = store.agents.get(issued.tokenId);
+        if (existing && sameAddress(existing.owner, user.address)) return await withAgentVisibility(existing);
+      }
+      return problem(reply, 409, 'deployment_in_progress', 'This signed deployment authorization is already being processed. Wait a moment and refresh the agent list.');
+    }
+    if (issued.status === 'expired') return problem(reply, 401, 'Authorization expired', 'Your deployment authorization expired. Please sign again.');
+
+    const message = buildDeployAuthorizationMessage({
+      owner,
+      name: body.form.name,
+      description: body.form.description ?? '',
+      skills: body.form.skills ?? [],
+      policy: (body.form.policy ?? {}) as DeployPolicyInput,
+      nonce: body.authorization.nonce,
+      deadline: body.authorization.deadline,
+    });
+    const recovered = verifyTypedData(DEPLOY_AUTH_DOMAIN, DEPLOY_AUTH_TYPES, message, body.authorization.signature);
+    if (!sameAddress(recovered, owner)) return problem(reply, 401, 'Invalid deployment signature', 'The wallet signature did not match the authenticated owner.');
+    const digest = TypedDataEncoder.hash(DEPLOY_AUTH_DOMAIN, DEPLOY_AUTH_TYPES, message);
+    const deploymentKeyValue = `deploy-auth:${options.chainId}:${owner.toLowerCase()}:${body.authorization.nonce}`;
+    const consumed = await deployNonceStore.consume(owner, body.authorization.nonce, deploymentKeyValue);
+    if (consumed.status === 'consumed' && consumed.tokenId) {
+      const existing = store.agents.get(consumed.tokenId);
+      if (existing && sameAddress(existing.owner, user.address)) return await withAgentVisibility(existing);
+    }
+    if (consumed.status !== 'consumed' && consumed.status !== 'issued') return problem(reply, 409, 'deployment_in_progress', 'This signed deployment authorization is already being processed.');
+    const createdAt = nowIso();
+    const proof: AuthorizationProof = { type: 'eip712', owner, signer: recovered, nonce: body.authorization.nonce, deadline: body.authorization.deadline, digest, signature: body.authorization.signature, createdAt };
+    return deployAgentForUser(user, { ...body.form, metadataRoot: body.form.metadataRoot ?? body.form.name }, reply, proof);
   });
 
   app.get('/v1/agents', { schema: { tags: ['agents'], querystring: agentsQuerySchema, response: { 200: z.array(agentSchema) } } }, async (request) => {

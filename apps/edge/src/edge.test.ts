@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { Wallet, TypedDataEncoder } from 'ethers';
+import { buildDeployAuthorizationTypedData } from '@apogee/core';
 import { buildEdgeServer } from './index.js';
 import type { BillingChainClient, StorageBoundary } from '@apogee/billing';
 
@@ -115,6 +117,33 @@ describe('edge API', () => {
     expect(agent.id).toBe('7');
     expect(agent.accountAddress).toBe('0x0000000000000000000000000000000000000007');
     expect(agent.metadataRoot).toMatch(/^0x[a-f0-9]{64}$/);
+    await app.close();
+  });
+
+  it('requires EIP-712 wallet authorization for the authorized deploy endpoint', async () => {
+    const wallet = Wallet.createRandom();
+    const owner = wallet.address as `0x${string}`;
+    const app = buildEdgeServer({ chainClient: new FakeChain(), storageClient: new FakeStorage(), signerKey, chainId: 16661, paymentRouterAddress: address, receiptBookAddress: address, accountFactoryAddress: address, agentIdentityAddress: address, jwtSecret: 'test-secret' });
+    await app.ready();
+    const auth = { authorization: `Bearer ${app.jwt.sign({ address: owner })}` };
+
+    const nonceRes = await app.inject({ method: 'GET', url: '/v1/auth/deploy-nonce', headers: auth });
+    expect(nonceRes.statusCode).toBe(200);
+    const nonce = nonceRes.json<{ owner: string; nonce: string; deadline: number; chainId: number }>();
+    const form = { name: 'Signed Agent', description: 'Wallet-authorized deployment', skills: ['memory.write'], policy: { allowedSkills: ['memory.write'], allowedActions: ['memory.write'] } };
+    const typedData = buildDeployAuthorizationTypedData({ owner, ...form, nonce: nonce.nonce, deadline: nonce.deadline });
+    const signature = await wallet.signTypedData(typedData.domain, typedData.types, typedData.message);
+    const digest = TypedDataEncoder.hash(typedData.domain, typedData.types, typedData.message);
+
+    const created = await app.inject({ method: 'POST', url: '/v1/agents/deploy-authorized', headers: auth, payload: { form, authorization: { owner, nonce: nonce.nonce, deadline: nonce.deadline, signature } } });
+    expect(created.statusCode).toBe(200);
+    const agent = created.json<{ id: string; authorizationProof?: { digest: string; signer: string }; deployment?: { authorizationProof?: { digest: string } } }>();
+    expect(agent.authorizationProof?.digest ?? agent.deployment?.authorizationProof?.digest).toBe(digest);
+    expect(agent.authorizationProof?.signer.toLowerCase()).toBe(owner.toLowerCase());
+
+    const replay = await app.inject({ method: 'POST', url: '/v1/agents/deploy-authorized', headers: auth, payload: { form, authorization: { owner, nonce: nonce.nonce, deadline: nonce.deadline, signature } } });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json<{ id: string }>().id).toBe(agent.id);
     await app.close();
   });
 });

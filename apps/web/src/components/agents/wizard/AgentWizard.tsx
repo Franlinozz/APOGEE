@@ -127,7 +127,7 @@ export function AgentWizard() {
             onBack={() => goTo('skills')}
             onDone={(txHash) => {
               patch({ deployTxHash: txHash });
-              router.push('/agents');
+              router.push(`/agents/${encodeURIComponent(txHash)}`);
             }}
           />
         )}

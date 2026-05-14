@@ -1,3 +1,16 @@
+export interface AuthorizationProof {
+  type: 'eip712';
+  owner: string;
+  signer: string;
+  nonce: string;
+  deadline: number;
+  digest: string;
+  signature?: string;
+  createdAt: string;
+  tokenId?: string;
+  agentId?: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -25,7 +38,9 @@ export interface Agent {
     accountDeployTxHash?: string;
     status?: string;
     error?: string;
+    authorizationProof?: AuthorizationProof;
   };
+  authorizationProof?: AuthorizationProof;
   avatarSeed?: string;
 }
 

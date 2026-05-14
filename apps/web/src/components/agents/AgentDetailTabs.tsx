@@ -102,6 +102,8 @@ function OverviewTab({ agent, receipts, runs, memoryEntries, installedSkills }: 
         <Info label="Total volume" value={fmtWei(totalVolume.toString())} />
       </div>
 
+      <AuthorizationProofTile agent={agent} />
+
       <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
         <p className="text-sm font-medium text-fg">Lifecycle honesty</p>
         <p className="mt-2 text-xs text-fg-muted">
@@ -109,6 +111,36 @@ function OverviewTab({ agent, receipts, runs, memoryEntries, installedSkills }: 
           User-created agents become <span className="text-fg">active</span> only after a real scheduled task or heartbeat exists.
         </p>
       </div>
+    </div>
+  );
+}
+
+function AuthorizationProofTile({ agent }: { agent: Agent }) {
+  const proof = agent.authorizationProof ?? agent.deployment?.authorizationProof;
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-fg">Authorization Proof</p>
+        <Badge variant={proof ? 'success' : 'neutral'}>{proof ? 'EIP-712' : 'legacy'}</Badge>
+      </div>
+      {proof ? (
+        <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+          <Info label="Signer" value={short(proof.signer ?? proof.owner)} mono />
+          <Info label="Signed" value={fmtDate(proof.createdAt)} />
+          <Info label="Digest" value={short(proof.digest)} mono />
+          <Info label="Nonce" value={short(proof.nonce)} mono />
+          <Info label="Deadline" value={fmtDate(new Date(proof.deadline * 1000).toISOString())} />
+          <button
+            type="button"
+            onClick={() => navigator.clipboard?.writeText(proof.digest).catch(() => undefined)}
+            className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3 text-left text-xs text-accent hover:border-[var(--color-line-accent)]"
+          >
+            Copy digest
+          </button>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-fg-muted">Legacy deployment — no wallet authorization signature recorded.</p>
+      )}
     </div>
   );
 }
