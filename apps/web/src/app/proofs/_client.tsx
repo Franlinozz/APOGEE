@@ -190,7 +190,7 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
               </thead>
               <tbody className="divide-y divide-[var(--color-line)]">
                 {pageRows.map(r => (
-                  <tr key={r.receiptId} className="hover:bg-elevated transition-colors">
+                  <tr key={r.receiptId} className="hover-row">
                     <td className="px-4 py-2.5 font-mono text-accent" title={r.actionTag}>{formatTag(r.actionTag)}</td>
                     <td className="px-4 py-2.5 text-fg-muted capitalize">{r.agentId}</td>
                     <td className="px-4 py-2.5 text-fg-muted">{formatValue(r.valueWei)}</td>
@@ -300,7 +300,7 @@ export function StorageProofsClient({ proofSample }: { proofSample: StorageProof
           </thead>
           <tbody className="divide-y divide-[var(--color-line)]">
             {pageRows.map(r => (
-              <tr key={r.receiptId} className="hover:bg-elevated transition-colors">
+              <tr key={r.receiptId} className="hover-row">
                 <td className="px-4 py-2.5 text-fg-muted capitalize">{r.agentId}</td>
                 <td className="px-4 py-2.5 font-mono text-accent" title={r.actionTag}>{fmtStorageTag(r.actionTag)}</td>
                 <td className="px-4 py-2.5 font-mono text-success text-[10px]" title={r.storageRoot}>

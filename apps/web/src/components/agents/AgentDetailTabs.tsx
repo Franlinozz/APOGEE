@@ -124,7 +124,7 @@ function ActivityTab({ receipts, runs }: { receipts: Receipt[]; runs: Run[] }) {
   return (
     <div className="space-y-2">
       {events.map((event) => (
-        <div key={`${event.type}:${event.id}`} className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-3 text-sm">
+        <div key={`${event.type}:${event.id}`} className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-3 text-sm transition-[background-color] duration-100 hover:bg-accent/[0.04]">
           <div>
             <p className="font-medium text-fg">{event.label}</p>
             <p className="font-mono text-xs text-fg-faint">
@@ -263,7 +263,7 @@ function SettingsTab({ agent }: { agent: Agent }) {
 
 function Info({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-3">
+    <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-3 transition-[border-color] duration-[150ms] hover:border-[var(--color-line-accent)]">
       <p className="text-[11px] uppercase tracking-wide text-fg-faint">{label}</p>
       <p className={`mt-1 text-sm text-fg ${mono ? 'font-mono' : ''}`}>{value}</p>
     </div>
@@ -272,9 +272,9 @@ function Info({ label, value, mono = false }: { label: string; value: string; mo
 
 function Empty({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-[var(--radius-xl)] border border-[var(--color-line)] bg-surface px-6 py-12 text-center">
-      <p className="text-sm font-medium text-fg">{title}</p>
-      <p className="mx-auto mt-2 max-w-lg text-xs text-fg-muted">{body}</p>
+    <div className="rounded-[var(--radius-xl)] border border-dashed border-[var(--color-line)] bg-surface px-8 py-14 text-center">
+      <p className="text-sm font-semibold text-fg">{title}</p>
+      <p className="mx-auto mt-2 max-w-md text-xs text-fg-muted leading-relaxed">{body}</p>
     </div>
   );
 }

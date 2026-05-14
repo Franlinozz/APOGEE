@@ -35,7 +35,7 @@ export function Topbar({ title }: { title?: string }) {
           New agent
         </Link>
         {address && (
-          <span className="font-mono text-xs text-fg-muted">
+          <span className="rounded-full border border-[var(--color-line)] bg-elevated px-3 py-1 font-mono text-xs text-fg-muted">
             {address.slice(0, 6)}…{address.slice(-4)}
           </span>
         )}

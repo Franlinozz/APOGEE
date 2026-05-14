@@ -16,7 +16,8 @@ export default async function ReceiptsPage() {
     <>
       <Topbar title="Receipts" />
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl space-y-3">
+        <div className="animate-fade-up mx-auto max-w-6xl space-y-3">
+          <p className="text-sm font-semibold text-fg">On-chain receipt ledger</p>
           <p className="text-xs text-fg-faint">Showing global receipt activity from the same Edge receipt index used by dashboard stats. Wallet-specific filtering can be added from this feed.</p>
           <ReceiptsTableClient initialReceipts={data.items} totalCount={data.total} />
         </div>

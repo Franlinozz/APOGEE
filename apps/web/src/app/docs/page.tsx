@@ -86,7 +86,7 @@ export default function DocsPage() {
       <main className="min-h-screen pt-14">
         {/* Hero */}
         <section
-          className="pt-20 pb-14 text-center px-4"
+          className="animate-fade-up pt-20 pb-14 text-center px-4"
           style={{
             background:
               'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,95,241,0.12) 0%, transparent 70%)',
@@ -110,9 +110,9 @@ export default function DocsPage() {
         {/* Cards grid */}
         <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6 lg:px-8">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {CARDS.map((card) => {
+            {CARDS.map((card, idx) => {
               const inner = (
-                <div className="group relative rounded-2xl border border-[var(--color-line)] bg-surface p-6 h-full flex flex-col gap-3 hover:border-[var(--color-line-accent)] hover:bg-elevated transition-all">
+                <div className="group relative rounded-2xl border border-[var(--color-line)] bg-surface p-6 h-full flex flex-col gap-3 hover:border-[var(--color-line-accent)] hover:bg-elevated hover:-translate-y-0.5 transition-[border-color,box-shadow,transform] duration-[220ms]">
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-sm font-semibold text-fg leading-tight">{card.title}</h2>
                     <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${card.badgeColor}`}>
@@ -132,12 +132,13 @@ export default function DocsPage() {
                   href={card.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block"
+                  className="animate-fade-up block"
+                  style={{ animationDelay: `${idx * 55}ms` }}
                 >
                   {inner}
                 </a>
               ) : (
-                <Link key={card.title} href={card.href} className="block">
+                <Link key={card.title} href={card.href} className="animate-fade-up block" style={{ animationDelay: `${idx * 55}ms` }}>
                   {inner}
                 </Link>
               );
@@ -145,7 +146,7 @@ export default function DocsPage() {
           </div>
 
           {/* Quick contract reference */}
-          <div className="mt-14 rounded-2xl border border-[var(--color-line)] bg-surface p-6 space-y-4">
+          <div className="animate-fade-up mt-14 rounded-2xl border border-[var(--color-line)] bg-surface p-6 space-y-4" style={{ animationDelay: '440ms' }}>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent-light mb-1">
                 Aristotle Mainnet — chainId 16661

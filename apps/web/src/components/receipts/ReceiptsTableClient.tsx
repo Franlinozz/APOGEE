@@ -188,7 +188,7 @@ export function ReceiptsTableClient({ initialReceipts, totalCount }: Props) {
                 {virtualizer.getVirtualItems().map((vRow) => {
                   const row = rows[vRow.index]!;
                   return (
-                    <tr key={row.id} className="border-b border-[var(--color-line)] last:border-0">
+                    <tr key={row.id} className="hover-row border-b border-[var(--color-line)] last:border-0">
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id} className="px-5 py-3">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -205,7 +205,7 @@ export function ReceiptsTableClient({ initialReceipts, totalCount }: Props) {
               </>
             ) : (
               rows.map((row) => (
-                <tr key={row.id} className="border-b border-[var(--color-line)] last:border-0">
+                <tr key={row.id} className="hover-row border-b border-[var(--color-line)] last:border-0">
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-5 py-3">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

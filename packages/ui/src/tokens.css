@@ -45,17 +45,17 @@
   --color-fg:           10 10 15;
   --color-fg-muted:     100 100 110;
   --color-fg-faint:     150 150 156;
-  --color-accent:       31 184 154;
-  --color-accent-light: 23 142 120;
+  --color-accent:       109 76 225;    /* #6D4CE1 violet */
+  --color-accent-light: 88 58 196;     /* #583AC4 */
   --color-success:      31 157 85;
   --color-warning:      183 121 31;
   --color-danger:       197 48 48;
   --color-neutral:      107 114 128;
   --color-line:         rgba(15 15 25 / 0.06);
   --color-line-bright:  rgba(15 15 25 / 0.10);
-  --color-line-accent:  rgba(31 184 154 / 0.30);
-  --shadow-glow:        0 0 80px rgba(31 184 154 / 0.15);
-  --shadow-glow-sm:     0 0 24px rgba(31 184 154 / 0.10);
+  --color-line-accent:  rgba(109 76 225 / 0.28);
+  --shadow-glow:        0 0 80px rgba(109 76 225 / 0.14);
+  --shadow-glow-sm:     0 0 24px rgba(109 76 225 / 0.10);
   --shadow-card:        0 1px 2px rgba(15 15 25 / 0.05);
   --shadow-card-hover:  0 8px 24px -8px rgba(15 15 25 / 0.12);
   color-scheme: light;

@@ -15,6 +15,7 @@ export function StatTile({ label, value, delta, deltaLabel, className }: StatTil
     <div
       className={cn(
         'flex flex-col gap-1 rounded-[var(--radius-xl)] border border-DEFAULT bg-surface p-5',
+        'transition-[border-color,box-shadow] duration-[220ms] hover:border-[var(--color-line-accent)] hover:shadow-card',
         className,
       )}
     >

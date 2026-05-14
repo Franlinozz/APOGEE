@@ -225,7 +225,7 @@ function ContractsTab() {
             {CONTRACT_NAMES.map(name => {
               const addr = contracts?.[name] ?? '';
               return (
-                <tr key={name} className="hover:bg-elevated transition-colors">
+                <tr key={name} className="hover-row">
                   <td className="px-5 py-3 font-semibold text-fg">{name}</td>
                   <td className="px-5 py-3 font-mono text-accent text-xs">
                     {addr || <span className="text-fg-faint italic">pending</span>}
@@ -257,7 +257,7 @@ function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForH
   const isActive = Boolean(lastHeartbeat);
 
   return (
-    <div className="relative rounded-2xl border border-[var(--color-line)] bg-surface overflow-hidden flex flex-col">
+    <div className="relative rounded-2xl border border-[var(--color-line)] bg-surface overflow-hidden flex flex-col transition-[border-color,box-shadow,transform] duration-[220ms] hover:border-[var(--color-line-accent)] hover:shadow-card hover:-translate-y-0.5">
       <div className={`h-px w-full bg-gradient-to-r ${topBar}`} />
 
       <div className="p-5 flex flex-col gap-5 flex-1">
@@ -369,14 +369,14 @@ function ActivityHeatmap({ heatmap }: { heatmap: Record<string, Record<string, n
 function OverviewTab({ proofs }: { proofs: ProofsApiResponse }) {
   return (
     <div className="space-y-14">
-      <div className="space-y-4">
+      <div className="animate-fade-up space-y-4">
         <h2 className="text-lg font-semibold text-fg">Demo agents</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {proofs.demoAgents.map(agent => <DemoAgentCard key={agent.slug} {...agent} />)}
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="animate-fade-up delay-150 space-y-4">
         <h2 className="text-lg font-semibold text-fg">Activity — last 14 days × 24 h</h2>
         <div className="rounded-2xl border border-[var(--color-line)] bg-surface p-5">
           <ActivityHeatmap heatmap={proofs.heatmap} />
@@ -392,7 +392,7 @@ function OverviewTab({ proofs }: { proofs: ProofsApiResponse }) {
 
 function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
   return (
-    <div className="space-y-6">
+    <div className="animate-fade-up space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-fg">Storage proof sample</h2>
         <p className="text-xs text-fg-muted mt-1 max-w-2xl leading-relaxed">
@@ -445,7 +445,7 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
       <section className="mx-auto max-w-5xl space-y-10">
 
         {/* Hero */}
-        <section className="text-center pb-4">
+        <section className="animate-fade-up text-center pb-4">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-light mb-4">
             Verification
           </p>
@@ -473,12 +473,14 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
         </section>
 
         {/* Tab navigation */}
-        <TabNav current={tab} />
+        <div className="animate-fade-up delay-150">
+          <TabNav current={tab} />
+        </div>
 
         {/* Tab content */}
-        {tab === 'overview'  && <OverviewTab proofs={proofs} />}
-        {tab === 'storage'   && <StorageProofsTab proofSample={proofs.storageProofSample} />}
-        {tab === 'contracts' && <ContractsTab />}
+        {tab === 'overview'  && <div className="animate-fade-up"><OverviewTab proofs={proofs} /></div>}
+        {tab === 'storage'   && <div className="animate-fade-up"><StorageProofsTab proofSample={proofs.storageProofSample} /></div>}
+        {tab === 'contracts' && <div className="animate-fade-up"><ContractsTab /></div>}
 
       </section>
       </main>
