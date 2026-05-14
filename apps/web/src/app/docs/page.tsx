@@ -12,7 +12,7 @@ const CARDS = [
     description:
       'See real-time receipts from the three demo agents running on Aristotle mainnet. Verify every action on chainscan.0g.ai.',
     badge: 'Live',
-    badgeColor: 'bg-green-500/15 text-green-400',
+    badgeColor: 'bg-success/15 text-success',
   },
   {
     href: 'https://github.com/Franlinozz/APOGEE/blob/main/docs/JUDGE_GUIDE.md',
@@ -21,7 +21,7 @@ const CARDS = [
     description:
       'QA checklist, step-by-step verification walkthrough, and known limitations. Start here if you are evaluating Apogee.',
     badge: 'Judges',
-    badgeColor: 'bg-violet-500/15 text-violet-400',
+    badgeColor: 'bg-accent/15 text-accent-light',
   },
   {
     href: 'https://github.com/Franlinozz/APOGEE/blob/main/docs/ARCHITECTURE.md',
@@ -30,7 +30,7 @@ const CARDS = [
     description:
       'Four-layer system overview, Mermaid sequence diagrams (skill execution, heartbeat loop, SIWE auth), and package dependency graph.',
     badge: 'Technical',
-    badgeColor: 'bg-blue-500/15 text-blue-400',
+    badgeColor: 'bg-accent/10 text-accent-light',
   },
   {
     href: 'https://apogeeedge-production.up.railway.app/docs/api',
@@ -39,7 +39,7 @@ const CARDS = [
     description:
       'Interactive Swagger UI (OpenAPI 3.1) for the full Edge API — auth, agents, receipts, skills, billing, WebSocket, and SSE.',
     badge: 'API',
-    badgeColor: 'bg-amber-500/15 text-amber-400',
+    badgeColor: 'bg-warning/15 text-warning',
   },
   {
     href: 'https://github.com/Franlinozz/APOGEE/blob/main/docs/DEPLOYMENT.md',
@@ -48,7 +48,7 @@ const CARDS = [
     description:
       'Vercel + Railway setup, env var names, heartbeat pause/unpause, network config, and rollback procedure.',
     badge: 'Ops',
-    badgeColor: 'bg-cyan-500/15 text-cyan-400',
+    badgeColor: 'bg-success/10 text-success',
   },
   {
     href: 'https://github.com/Franlinozz/APOGEE/blob/main/docs/TUTORIAL.md',
@@ -57,7 +57,7 @@ const CARDS = [
     description:
       'Deploy a translator agent that charges callers 0.0001 0G per call. Step-by-step from clone to on-chain receipt in 15 minutes.',
     badge: 'Tutorial',
-    badgeColor: 'bg-emerald-500/15 text-emerald-400',
+    badgeColor: 'bg-success/15 text-success',
   },
   {
     href: 'https://github.com/Franlinozz/APOGEE',
@@ -66,7 +66,7 @@ const CARDS = [
     description:
       'Full monorepo source: 9 Solidity contracts, Fastify Edge API, Next.js frontend, BullMQ runtime workers, 22 skills.',
     badge: 'Source',
-    badgeColor: 'bg-white/10 text-white/50',
+    badgeColor: 'bg-fg/[0.06] text-fg-muted',
   },
   {
     href: 'https://github.com/Franlinozz/APOGEE/blob/main/docs/REVIEWER.md',
@@ -75,7 +75,7 @@ const CARDS = [
     description:
       'Detailed 30-minute walkthrough for judges — contract verification, storage proofs, SIWE auth, scoring criteria mapping.',
     badge: 'Judges',
-    badgeColor: 'bg-violet-500/15 text-violet-400',
+    badgeColor: 'bg-accent/15 text-accent-light',
   },
 ] as const;
 
@@ -89,19 +89,19 @@ export default function DocsPage() {
           className="pt-20 pb-14 text-center px-4"
           style={{
             background:
-              'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,95,241,0.14) 0%, transparent 70%)',
+              'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,95,241,0.12) 0%, transparent 70%)',
           }}
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-400 mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-light mb-4">
             Documentation
           </p>
           <h1
-            className="text-4xl font-semibold tracking-tight text-white mx-auto max-w-2xl"
+            className="text-4xl font-semibold tracking-tight text-fg mx-auto max-w-2xl"
             style={{ letterSpacing: '-0.02em' }}
           >
             Everything you need to understand and build on Apogee Protocol
           </h1>
-          <p className="mt-4 text-white/50 text-base max-w-xl mx-auto leading-relaxed">
+          <p className="mt-4 text-fg-muted text-base max-w-xl mx-auto leading-relaxed">
             Start with the Judge Guide for a guided walkthrough, or explore the
             architecture, API reference, and tutorial at your own pace.
           </p>
@@ -112,15 +112,15 @@ export default function DocsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {CARDS.map((card) => {
               const inner = (
-                <div className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.025] p-6 h-full flex flex-col gap-3 hover:border-violet-500/40 hover:bg-white/[0.04] transition-all">
+                <div className="group relative rounded-2xl border border-[var(--color-line)] bg-surface p-6 h-full flex flex-col gap-3 hover:border-[var(--color-line-accent)] hover:bg-elevated transition-all">
                   <div className="flex items-start justify-between gap-2">
-                    <h2 className="text-sm font-semibold text-white leading-tight">{card.title}</h2>
+                    <h2 className="text-sm font-semibold text-fg leading-tight">{card.title}</h2>
                     <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${card.badgeColor}`}>
                       {card.badge}
                     </span>
                   </div>
-                  <p className="text-xs text-white/45 leading-relaxed flex-1">{card.description}</p>
-                  <span className="text-xs text-violet-400 group-hover:text-violet-300 transition-colors">
+                  <p className="text-xs text-fg-muted leading-relaxed flex-1">{card.description}</p>
+                  <span className="text-xs text-accent-light group-hover:text-accent transition-colors">
                     {card.external ? 'Open ↗' : 'View →'}
                   </span>
                 </div>
@@ -145,12 +145,12 @@ export default function DocsPage() {
           </div>
 
           {/* Quick contract reference */}
-          <div className="mt-14 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 space-y-4">
+          <div className="mt-14 rounded-2xl border border-[var(--color-line)] bg-surface p-6 space-y-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-violet-400 mb-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent-light mb-1">
                 Aristotle Mainnet — chainId 16661
               </p>
-              <h2 className="text-sm font-semibold text-white">Contract quick-reference</h2>
+              <h2 className="text-sm font-semibold text-fg">Contract quick-reference</h2>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 text-xs font-mono">
               {[
@@ -165,16 +165,16 @@ export default function DocsPage() {
                   href={`https://chainscan.0g.ai/address/${addr}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-2.5 hover:border-violet-500/30 transition-colors"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-line)] bg-elevated px-4 py-2.5 hover:border-[var(--color-line-accent)] transition-colors"
                 >
-                  <span className="text-white/60">{name}</span>
-                  <span className="text-violet-400 text-[10px]">{(addr ?? '').slice(0, 10)}…</span>
+                  <span className="text-fg-muted">{name}</span>
+                  <span className="text-accent-light text-[10px]">{(addr ?? '').slice(0, 10)}…</span>
                 </a>
               ))}
             </div>
-            <p className="text-[11px] text-white/30">
+            <p className="text-[11px] text-fg-faint">
               All 9 contracts listed in{' '}
-              <Link href="/proofs?tab=contracts" className="text-violet-400 hover:text-violet-300 underline">
+              <Link href="/proofs?tab=contracts" className="text-accent-light hover:text-accent underline">
                 /proofs → Contracts tab
               </Link>
             </p>

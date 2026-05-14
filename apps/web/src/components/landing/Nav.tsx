@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
@@ -10,6 +9,11 @@ const NavConnectButton = dynamic(
       <div className="h-8 w-32 animate-pulse rounded-[var(--radius)] bg-accent/30" />
     ),
   },
+);
+
+const NavThemeToggle = dynamic(
+  () => import('@/components/shell/ThemeToggle').then((m) => m.ThemeToggle),
+  { ssr: false },
 );
 
 const NAV_LINKS = [
@@ -26,36 +30,37 @@ const NAV_LINKS = [
 
 export function Nav() {
   return (
-    <header
-      className="landing-nav fixed inset-x-0 top-0 z-50 h-14"
-      style={{
-        background: 'rgba(8,10,18,0.72)',
-        backdropFilter: 'blur(16px) saturate(1.8)',
-        WebkitBackdropFilter: 'blur(16px) saturate(1.8)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-      }}
-    >
+    <header className="landing-nav fixed inset-x-0 top-0 z-50 h-14">
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Logotype */}
-        <Link href="/" className="flex items-center" aria-label="Apogee home">
-          {/* Dark logo (default) */}
-          <Image
-            src="/brand/apogee-logo-dark.webp"
-            alt="Apogee"
-            width={1023}
-            height={489}
-            className="theme-logo-dark h-7 w-auto object-contain"
-            priority
-          />
-          {/* Light logo */}
-          <Image
-            src="/brand/apogee-logo-light.webp"
-            alt="Apogee"
-            width={1023}
-            height={489}
-            className="theme-logo-light h-7 w-auto object-contain"
-            priority
-          />
+        {/* Logotype — SVG mark + wordmark text, inherits currentColor */}
+        <Link href="/" className="flex items-center gap-2" aria-label="Apogee home">
+          <svg
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-7 w-7 text-fg"
+            aria-hidden
+          >
+            <ellipse
+              cx="16" cy="16" rx="14" ry="8"
+              stroke="currentColor" strokeWidth="1"
+              opacity="0.28"
+              transform="rotate(-15 16 16)"
+            />
+            <path
+              d="M 16 5 L 26.5 27 H 5.5 Z"
+              stroke="currentColor" strokeWidth="2"
+              strokeLinejoin="round" strokeLinecap="round"
+            />
+            <line
+              x1="10.5" y1="20" x2="21.5" y2="20"
+              stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <circle cx="16" cy="5" r="3.5" fill="#7C5FF1" />
+            <circle cx="16" cy="5" r="1.8" fill="#EDE0FF" opacity="0.9" />
+          </svg>
+          <span className="text-sm font-semibold text-fg">Apogee</span>
         </Link>
 
         {/* Nav links */}
@@ -72,7 +77,10 @@ export function Nav() {
           ))}
         </nav>
 
-        <NavConnectButton />
+        <div className="flex items-center gap-2">
+          <NavThemeToggle compact />
+          <NavConnectButton />
+        </div>
       </div>
     </header>
   );

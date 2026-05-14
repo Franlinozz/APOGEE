@@ -1,6 +1,12 @@
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const TopbarThemeToggle = dynamic(
+  () => import('./ThemeToggle').then((m) => m.ThemeToggle),
+  { ssr: false },
+);
 
 export function Topbar({ title }: { title?: string }) {
   const jwt = cookies().get('apogee-jwt')?.value ?? '';
@@ -19,7 +25,8 @@ export function Topbar({ title }: { title?: string }) {
       )}
       {!title && <div />}
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <TopbarThemeToggle compact />
         <Link
           href="/agents/new"
           className="inline-flex h-8 items-center gap-1.5 rounded-[var(--radius)] bg-accent px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90"

@@ -1,7 +1,20 @@
 import type { HeatmapCell } from '@/lib/types';
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+// Edge returns day 0 = oldest, day 6 = today. Map each index to an actual date.
+function buildDayLabels(): { short: string; full: string }[] {
+  const today = new Date();
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    return {
+      short: `${WEEKDAYS[d.getDay()]} ${d.getDate()}`,
+      full: d.toDateString(),
+    };
+  });
+}
 
 function intensityClass(count: number, max: number): string {
   if (count === 0 || max === 0) return 'bg-elevated';
@@ -13,6 +26,7 @@ function intensityClass(count: number, max: number): string {
 }
 
 export function DashboardHeatmap({ cells }: { cells: HeatmapCell[] }) {
+  const dayLabels = buildDayLabels();
   const lookup = new Map(cells.map((c) => [`${c.day}-${c.hour}`, c.count]));
   const max = Math.max(0, ...cells.map((c) => c.count));
 
@@ -22,7 +36,7 @@ export function DashboardHeatmap({ cells }: { cells: HeatmapCell[] }) {
         {/* Hour labels */}
         <div
           className="mb-1 grid"
-          style={{ gridTemplateColumns: '40px repeat(24, minmax(16px, 1fr))' }}
+          style={{ gridTemplateColumns: '52px repeat(24, minmax(16px, 1fr))' }}
         >
           <div />
           {HOURS.map((h) => (
@@ -33,19 +47,21 @@ export function DashboardHeatmap({ cells }: { cells: HeatmapCell[] }) {
         </div>
 
         {/* Grid rows */}
-        {DAYS.map((day, di) => (
+        {dayLabels.map((label, di) => (
           <div
-            key={day}
+            key={di}
             className="mb-1 grid"
-            style={{ gridTemplateColumns: '40px repeat(24, minmax(16px, 1fr))' }}
+            style={{ gridTemplateColumns: '52px repeat(24, minmax(16px, 1fr))' }}
           >
-            <div className="flex items-center text-[10px] text-fg-faint leading-none">{day}</div>
+            <div className="flex items-center text-[10px] text-fg-faint leading-none whitespace-nowrap pr-1">
+              {label.short}
+            </div>
             {HOURS.map((hour) => {
               const count = lookup.get(`${di}-${hour}`) ?? 0;
               return (
                 <div
                   key={hour}
-                  title={`${day} ${hour}:00 — ${count} receipts`}
+                  title={`${label.short} ${hour}:00 — ${count} receipts`}
                   className={[
                     'mx-px h-4 rounded-sm transition-colors',
                     intensityClass(count, max),

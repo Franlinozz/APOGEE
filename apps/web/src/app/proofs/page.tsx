@@ -87,10 +87,8 @@ function mergeSeededAddresses(proofs: ProofsApiResponse): ProofsApiResponse {
   };
 }
 
-// ── Agent emblems (inline SVG, no files, no IDs) ──────────────────────────────
+// ── Agent emblems (inline SVG) ────────────────────────────────────────────────
 
-// Aurora — sunrise with rays, representing news analysis and real-time data broadcast.
-// Semicircle arc sits on a horizon line; 5 rays radiate outward at cardinal/diagonal angles.
 function AuroraIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -106,9 +104,6 @@ function AuroraIcon({ className }: { className?: string }) {
   );
 }
 
-// Vesper — crescent moon, representing creative / generative work done in the evening cycle.
-// Path uses two arcs: outer circle center (19,20) r=13, inner circle center (26,20) r=11.
-// The crescent faces right. Two accent dots suggest a star field.
 function VesperIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -122,8 +117,6 @@ function VesperIcon({ className }: { className?: string }) {
   );
 }
 
-// Helix — two crossing bezier strands with rungs, representing chain analytics and data interplay.
-// Strand 1: (8,8)→(32,32). Strand 2: (8,32)→(32,8). Rungs connect the strands at t≈0.2, 0.5, 0.8.
 function HelixIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -144,30 +137,30 @@ const AGENT_META = {
     Icon: AuroraIcon,
     role: 'Analysis Agent',
     capability: 'News · web.search · self-billing',
-    accent: 'text-amber-400',
+    accent: 'text-amber-500',
     iconBg: 'bg-amber-400/[0.08] border-amber-400/20',
     topBar: 'from-amber-400/40 to-transparent',
-    badgeActive: 'bg-amber-400/10 text-amber-300',
+    badgeActive: 'bg-amber-400/10 text-amber-600',
     dot: 'bg-amber-400',
   },
   vesper: {
     Icon: VesperIcon,
     role: 'Creative Agent',
     capability: 'Media · image.generate · nft.mint',
-    accent: 'text-violet-400',
-    iconBg: 'bg-violet-400/[0.08] border-violet-400/20',
-    topBar: 'from-violet-400/40 to-transparent',
-    badgeActive: 'bg-violet-400/10 text-violet-300',
-    dot: 'bg-violet-400',
+    accent: 'text-accent-light',
+    iconBg: 'bg-accent/[0.08] border-accent/20',
+    topBar: 'from-accent/40 to-transparent',
+    badgeActive: 'bg-accent/10 text-accent-light',
+    dot: 'bg-accent',
   },
   helix: {
     Icon: HelixIcon,
     role: 'Analytics Agent',
     capability: 'Chain · chain.query · daily report',
-    accent: 'text-cyan-400',
+    accent: 'text-cyan-500',
     iconBg: 'bg-cyan-400/[0.08] border-cyan-400/20',
     topBar: 'from-cyan-400/40 to-transparent',
-    badgeActive: 'bg-cyan-400/10 text-cyan-300',
+    badgeActive: 'bg-cyan-400/10 text-cyan-600',
     dot: 'bg-cyan-400',
   },
 } as const;
@@ -184,15 +177,15 @@ type TabId = (typeof TABS)[number]['id'];
 
 function TabNav({ current }: { current: TabId }) {
   return (
-    <div className="flex gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.06] w-fit">
+    <div className="flex gap-1 p-1 rounded-xl bg-elevated border border-[var(--color-line)] w-fit">
       {TABS.map(t => (
         <Link
           key={t.id}
           href={`?tab=${t.id}`}
           className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
             current === t.id
-              ? 'bg-violet-600 text-white shadow'
-              : 'text-white/50 hover:text-white/80'
+              ? 'bg-accent text-white shadow'
+              : 'text-fg-muted hover:text-fg'
           }`}
         >
           {t.label}
@@ -216,34 +209,34 @@ function ContractsTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white">Deployed contracts</h2>
-        <p className="text-xs text-white/40 mt-1">{chainName} · chainId {chainId} · {deployedCount}/{CONTRACT_NAMES.length} deployed</p>
+        <h2 className="text-lg font-semibold text-fg">Deployed contracts</h2>
+        <p className="text-xs text-fg-muted mt-1">{chainName} · chainId {chainId} · {deployedCount}/{CONTRACT_NAMES.length} deployed</p>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+      <div className="overflow-x-auto rounded-2xl border border-[var(--color-line)]">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-white/[0.06] text-left text-xs text-white/40">
+            <tr className="border-b border-[var(--color-line)] text-left text-xs text-fg-faint">
               <th className="px-5 py-3 font-medium">Contract</th>
               <th className="px-5 py-3 font-medium">Address</th>
               <th className="px-5 py-3 font-medium">Explorer</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/[0.04]">
+          <tbody className="divide-y divide-[var(--color-line)]">
             {CONTRACT_NAMES.map(name => {
               const addr = contracts?.[name] ?? '';
               return (
-                <tr key={name} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-5 py-3 font-semibold text-white/80">{name}</td>
-                  <td className="px-5 py-3 font-mono text-violet-300 text-xs">
-                    {addr || <span className="text-white/20 italic">pending</span>}
+                <tr key={name} className="hover:bg-elevated transition-colors">
+                  <td className="px-5 py-3 font-semibold text-fg">{name}</td>
+                  <td className="px-5 py-3 font-mono text-accent text-xs">
+                    {addr || <span className="text-fg-faint italic">pending</span>}
                   </td>
                   <td className="px-5 py-3">
                     {buildChainscanUrl({ address: addr, kind: 'address', chainId }) ? (
                       <a href={buildChainscanUrl({ address: addr, kind: 'address', chainId })!} target="_blank" rel="noreferrer"
-                        className="text-xs text-violet-400 hover:text-violet-300 underline">
+                        className="text-xs text-accent-light hover:text-accent underline">
                         View ↗
                       </a>
-                    ) : <span className="text-white/20">—</span>}
+                    ) : <span className="text-fg-faint">—</span>}
                   </td>
                 </tr>
               );
@@ -264,69 +257,63 @@ function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForH
   const isActive = Boolean(lastHeartbeat);
 
   return (
-    <div className="relative rounded-2xl border border-white/[0.06] bg-white/[0.025] overflow-hidden flex flex-col">
-      {/* Top accent gradient bar */}
+    <div className="relative rounded-2xl border border-[var(--color-line)] bg-surface overflow-hidden flex flex-col">
       <div className={`h-px w-full bg-gradient-to-r ${topBar}`} />
 
       <div className="p-5 flex flex-col gap-5 flex-1">
-        {/* Header: emblem + name + role */}
         <div className="flex items-center gap-3.5">
           <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${iconBg} ${accent}`}>
             <Icon className="w-6 h-6" />
           </div>
           <div className="min-w-0">
             <p className={`font-semibold capitalize leading-tight ${accent}`}>{slug}</p>
-            <p className="text-[11px] text-white/35 mt-0.5">{role}</p>
+            <p className="text-[11px] text-fg-muted mt-0.5">{role}</p>
           </div>
-          {/* Live indicator top-right */}
           <div className="ml-auto">
             {isActive ? (
               <span className="flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${dot}`} />
-                <span className="text-[10px] font-semibold text-white/40">Live</span>
+                <span className="text-[10px] font-semibold text-fg-muted">Live</span>
               </span>
             ) : (
-              <span className="text-[10px] text-white/20">Idle</span>
+              <span className="text-[10px] text-fg-faint">Idle</span>
             )}
           </div>
         </div>
 
-        {/* Capability tags */}
-        <p className="text-[10px] text-white/30 leading-relaxed -mt-2">{capability}</p>
+        <p className="text-[10px] text-fg-faint leading-relaxed -mt-2">{capability}</p>
 
-        {/* Stats */}
-        <div className="space-y-2.5 text-xs border-t border-white/[0.05] pt-4">
+        <div className="space-y-2.5 text-xs border-t border-[var(--color-line)] pt-4">
           <div className="flex justify-between items-center gap-2">
-            <span className="text-white/35 shrink-0">Address</span>
+            <span className="text-fg-faint shrink-0">Address</span>
             {buildChainscanUrl({ address: agentId, kind: 'address', chainId: 16661 }) ? (
               <a href={buildChainscanUrl({ address: agentId, kind: 'address', chainId: 16661 })!} target="_blank" rel="noreferrer"
                 className={`font-mono hover:opacity-80 truncate ${accent}`} title={agentId ?? undefined}>
                 {agentId?.slice(0, 6)}…{agentId?.slice(-4)}
               </a>
-            ) : agentId ? <span className="font-mono text-white/35">{agentId}</span> : <span className="text-white/20">not seeded</span>}
+            ) : agentId ? <span className="font-mono text-fg-faint">{agentId}</span> : <span className="text-fg-faint">not seeded</span>}
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-white/35">Receipts minted</span>
-            <span className="text-white/70 font-semibold tabular-nums">{receiptCount}</span>
+            <span className="text-fg-faint">Receipts minted</span>
+            <span className="text-fg font-semibold tabular-nums">{receiptCount}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-white/35">Last heartbeat</span>
-            <span className="text-white/55 tabular-nums">
+            <span className="text-fg-faint">Last heartbeat</span>
+            <span className="text-fg-muted tabular-nums">
               {lastHeartbeat ? new Date(lastHeartbeat).toLocaleTimeString() : '—'}
             </span>
           </div>
           {runningForHours !== null && (
             <div className="flex justify-between items-center">
-              <span className="text-white/35">Uptime</span>
-              <span className="text-green-400 font-semibold tabular-nums">{runningForHours}h</span>
+              <span className="text-fg-faint">Uptime</span>
+              <span className="text-success font-semibold tabular-nums">{runningForHours}h</span>
             </div>
           )}
         </div>
 
-        {/* Status badge */}
         <div className="mt-auto pt-1">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase ${isActive ? badgeActive : 'bg-white/[0.04] text-white/25'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? dot : 'bg-white/20'}`} />
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase ${isActive ? badgeActive : 'bg-elevated text-fg-faint'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? dot : 'bg-fg-faint'}`} />
             {isActive ? 'Active' : 'Awaiting first heartbeat'}
           </span>
         </div>
@@ -339,21 +326,21 @@ function ActivityHeatmap({ heatmap }: { heatmap: Record<string, Record<string, n
   const days = Object.keys(heatmap).sort().reverse();
   const allVals = days.flatMap(d => Object.values(heatmap[d] ?? {}).map(Number));
   const maxVal = Math.max(1, ...allVals);
-  const intensityBg = ['bg-white/[0.04]', 'bg-violet-900/40', 'bg-violet-700/50', 'bg-violet-500/60', 'bg-violet-400'];
+  const intensityBg = ['bg-elevated', 'bg-accent/20', 'bg-accent/40', 'bg-accent/65', 'bg-accent/90'];
 
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[680px]">
         <div className="flex gap-0.5 mb-1.5 pl-16">
           {Array.from({ length: 24 }, (_, h) => (
-            <div key={h} className="w-[26px] text-center text-[9px] text-white/20 shrink-0">
+            <div key={h} className="w-[26px] text-center text-[9px] text-fg-faint shrink-0">
               {h % 6 === 0 ? String(h) : ''}
             </div>
           ))}
         </div>
         {days.map(day => (
           <div key={day} className="flex items-center gap-1 mb-0.5">
-            <span className="text-[9px] text-white/30 w-14 shrink-0 text-right pr-2">{day.slice(5)}</span>
+            <span className="text-[9px] text-fg-faint w-14 shrink-0 text-right pr-2">{day.slice(5)}</span>
             <div className="flex gap-0.5">
               {Array.from({ length: 24 }, (_, h) => {
                 const count = Number(heatmap[day]?.[String(h)] ?? 0);
@@ -370,9 +357,9 @@ function ActivityHeatmap({ heatmap }: { heatmap: Record<string, Record<string, n
           </div>
         ))}
         <div className="flex items-center gap-2 mt-3 pl-16">
-          <span className="text-[9px] text-white/30">Less</span>
+          <span className="text-[9px] text-fg-faint">Less</span>
           {intensityBg.map((bg, i) => <div key={i} className={`w-[26px] h-4 rounded-[2px] ${bg}`} />)}
-          <span className="text-[9px] text-white/30">More</span>
+          <span className="text-[9px] text-fg-faint">More</span>
         </div>
       </div>
     </div>
@@ -383,15 +370,15 @@ function OverviewTab({ proofs }: { proofs: ProofsApiResponse }) {
   return (
     <div className="space-y-14">
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-white">Demo agents</h2>
+        <h2 className="text-lg font-semibold text-fg">Demo agents</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {proofs.demoAgents.map(agent => <DemoAgentCard key={agent.slug} {...agent} />)}
         </div>
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-white">Activity — last 14 days × 24 h</h2>
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+        <h2 className="text-lg font-semibold text-fg">Activity — last 14 days × 24 h</h2>
+        <div className="rounded-2xl border border-[var(--color-line)] bg-surface p-5">
           <ActivityHeatmap heatmap={proofs.heatmap} />
         </div>
       </div>
@@ -407,16 +394,16 @@ function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white">Storage proof sample</h2>
-        <p className="text-xs text-white/40 mt-1 max-w-2xl leading-relaxed">
+        <h2 className="text-lg font-semibold text-fg">Storage proof sample</h2>
+        <p className="text-xs text-fg-muted mt-1 max-w-2xl leading-relaxed">
           A full storage proof proves the payload made a complete round-trip: serialised → uploaded to
           0G Storage → Merkle root returned → that root anchored on-chain via
-          <code className="mx-1 font-mono">ReceiptBook.emitReceipt()</code>.
+          <code className="mx-1 font-mono text-accent">ReceiptBook.emitReceipt()</code>.
         </p>
       </div>
 
       {/* Glossary */}
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
+      <div className="rounded-xl border border-[var(--color-line)] bg-surface divide-y divide-[var(--color-line)]">
         {([
           ['payloadHash', 'keccak256 of the stable-JSON serialised action payload. Always present. Content proof — not a transaction hash, not linkable to a block explorer.'],
           ['storageRoot', '0G Storage Merkle root returned after a successful upload to Aristotle mainnet (chainId 16661). Content proof — not a transaction hash.'],
@@ -425,13 +412,13 @@ function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
           ['pending',     'Chain submission in flight or retrying. Resolves to minted within seconds.'],
         ] as [string, string][]).map(([term, def]) => (
           <div key={term} className="flex gap-4 px-5 py-3.5 text-xs">
-            <code className="shrink-0 font-mono text-violet-300 w-28">{term}</code>
-            <span className="text-white/40 leading-relaxed">{def}</span>
+            <code className="shrink-0 font-mono text-accent w-28">{term}</code>
+            <span className="text-fg-muted leading-relaxed">{def}</span>
           </div>
         ))}
       </div>
 
-      <p className="text-xs text-white/30 italic">
+      <p className="text-xs text-fg-faint italic">
         storageRoot and payloadHash are content-addressed proofs, not transaction hashes — only the mint tx links to a block explorer.
       </p>
 
@@ -457,30 +444,30 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
       <main className="min-h-screen pt-28 pb-16 px-6 bg-bg">
       <section className="mx-auto max-w-5xl space-y-10">
 
-        {/* Hero — centered, matches /docs rhythm */}
+        {/* Hero */}
         <section className="text-center pb-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-400 mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-light mb-4">
             Verification
           </p>
           <h1
-            className="text-4xl font-semibold tracking-tight text-white mx-auto max-w-2xl"
+            className="text-4xl font-semibold tracking-tight text-fg mx-auto max-w-2xl"
             style={{ letterSpacing: '-0.02em' }}
           >
             On-chain proofs of autonomous activity
           </h1>
-          <p className="mt-4 text-white/50 text-base max-w-xl mx-auto leading-relaxed">
+          <p className="mt-4 text-fg-muted text-base max-w-xl mx-auto leading-relaxed">
             Each agent action produces a receipt: the payload is hashed (keccak256), optionally
             uploaded to 0G Storage for a Merkle root, then anchored on Aristotle mainnet via{' '}
-            <code className="text-sm font-mono text-white/60">ReceiptBook.emitReceipt()</code>.
+            <code className="text-sm font-mono text-accent">ReceiptBook.emitReceipt()</code>.
             On-chain transactions auto-refresh every 30 s.
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-sm">
-            <span className="text-white/40">
-              <span className="text-white font-semibold">{proofs.totalReceipts.toLocaleString()}</span> receipts anchored
+            <span className="text-fg-muted">
+              <span className="text-fg font-semibold">{proofs.totalReceipts.toLocaleString()}</span> receipts anchored
             </span>
-            <span className="w-px h-4 bg-white/10" />
-            <span className="text-white/40">
-              Updated <span className="text-white/60">{new Date(proofs.generatedAt).toLocaleTimeString()}</span>
+            <span className="w-px h-4 bg-[var(--color-line-bright)]" />
+            <span className="text-fg-muted">
+              Updated <span className="text-fg-muted">{new Date(proofs.generatedAt).toLocaleTimeString()}</span>
             </span>
           </div>
         </section>

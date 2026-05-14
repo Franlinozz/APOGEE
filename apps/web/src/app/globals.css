@@ -61,6 +61,14 @@
   --orbital-dot-fill:      rgba(167 139 250 / 0.8);
   --orbital-node-gradient: radial-gradient(circle, #F0E6FF 0%, #A78BFA 60%, #7C5FF1 100%);
   --orbital-glow-bg:       radial-gradient(circle, rgba(124 95 241 / 0.10) 0%, transparent 70%);
+
+  /* Hero */
+  --hero-bg: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124 95 241 / 0.12) 0%, transparent 65%);
+
+  /* Hero heading gradient */
+  --grad-start: #A78BFA;
+  --grad-mid:   #7C5FF1;
+  --grad-end:   #60A5FA;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -113,6 +121,14 @@
   --orbital-dot-fill:      rgba(107 91 214 / 0.65);
   --orbital-node-gradient: radial-gradient(circle, #EDE0FF 0%, #8B7BE8 60%, #6B5BD6 100%);
   --orbital-glow-bg:       radial-gradient(circle, rgba(107 91 214 / 0.07) 0%, transparent 70%);
+
+  /* Hero */
+  --hero-bg: radial-gradient(ellipse 80% 55% at 50% 0%, rgba(107 91 214 / 0.08) 0%, transparent 65%);
+
+  /* Hero heading gradient — navy/violet for legible on light */
+  --grad-start: #6B5BD6;
+  --grad-mid:   #4338CA;
+  --grad-end:   #2563EB;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -170,8 +186,15 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   LIGHT MODE — LANDING NAV
+   LANDING NAV — dark default + light override
 ═══════════════════════════════════════════════════════════ */
+.landing-nav {
+  background: rgba(8 10 18 / 0.72);
+  backdrop-filter: blur(16px) saturate(1.8);
+  -webkit-backdrop-filter: blur(16px) saturate(1.8);
+  border-bottom: 1px solid rgba(255 255 255 / 0.06);
+}
+
 [data-theme="light"] .landing-nav {
   background: rgba(251 248 249 / 0.85) !important;
   border-bottom: 1px solid rgba(15 15 25 / 0.06) !important;
@@ -231,9 +254,9 @@ body {
 }
 
 .orbit-node {
-  offset-path: ellipse(148px 88px at center);
+  offset-path: ellipse(190px 110px at center);
   offset-distance: 0%;
-  animation: orbit-traverse 40s linear infinite;
+  animation: orbit-traverse 48s linear infinite;
 }
 
 @keyframes orbit-glow-pulse {

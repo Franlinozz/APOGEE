@@ -13,19 +13,19 @@ export default function WalletDocsPage() {
           className="pt-20 pb-14 text-center px-4"
           style={{
             background:
-              'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,95,241,0.14) 0%, transparent 70%)',
+              'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,95,241,0.12) 0%, transparent 70%)',
           }}
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-400 mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-light mb-4">
             Smart Wallet
           </p>
           <h1
-            className="text-4xl font-semibold tracking-tight text-white mx-auto max-w-2xl"
+            className="text-4xl font-semibold tracking-tight text-fg mx-auto max-w-2xl"
             style={{ letterSpacing: '-0.02em' }}
           >
             ERC-4337 Smart Accounts for autonomous agents
           </h1>
-          <p className="mt-4 text-white/50 text-base max-w-xl mx-auto leading-relaxed">
+          <p className="mt-4 text-fg-muted text-base max-w-xl mx-auto leading-relaxed">
             Every Apogee agent gets its own on-chain smart account with programmable
             spending policies, daily caps, and cryptographic ownership proofs.
           </p>
@@ -34,24 +34,24 @@ export default function WalletDocsPage() {
         <section className="mx-auto max-w-3xl px-4 pb-24 sm:px-6 lg:px-8 space-y-10">
 
           {/* How it works */}
-          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-8 space-y-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-400">How it works</h2>
-            <p className="text-sm text-white/60 leading-relaxed">
-              When you deploy an agent, Apogee calls <code className="text-violet-300 bg-violet-500/10 px-1 rounded">AccountFactory.createAccount(owner, salt)</code> on
+          <div className="rounded-2xl border border-[var(--color-line)] bg-surface p-8 space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-accent-light">How it works</h2>
+            <p className="text-sm text-fg-muted leading-relaxed">
+              When you deploy an agent, Apogee calls <code className="text-accent bg-accent/10 px-1 rounded">AccountFactory.createAccount(owner, salt)</code> on
               Aristotle mainnet (chainId 16661). This deploys a minimal ERC-4337 proxy whose address is
               deterministic — you can fund it before the account even exists on-chain.
             </p>
-            <p className="text-sm text-white/60 leading-relaxed">
+            <p className="text-sm text-fg-muted leading-relaxed">
               The predicted address is returned immediately after you start the deployment wizard, so
               you can top up the account before confirming the transaction.
             </p>
           </div>
 
           {/* Spending policies */}
-          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-8 space-y-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-400">Spending policies</h2>
-            <p className="text-sm text-white/60 leading-relaxed">
-              Each agent is governed by a <strong className="text-white/80">PolicyEngine</strong> rule set stored on-chain.
+          <div className="rounded-2xl border border-[var(--color-line)] bg-surface p-8 space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-accent-light">Spending policies</h2>
+            <p className="text-sm text-fg-muted leading-relaxed">
+              Each agent is governed by a <strong className="text-fg">PolicyEngine</strong> rule set stored on-chain.
               Policies enforce hard limits at the smart account level — not enforced by the API, but by the contract itself.
             </p>
             <div className="grid gap-3 sm:grid-cols-2 text-xs font-mono mt-2">
@@ -61,28 +61,28 @@ export default function WalletDocsPage() {
                 ['active', 'Toggle agent on/off without removing funds'],
                 ['allowedSkills', 'Whitelist of skill addresses the agent may call'],
               ].map(([field, desc]) => (
-                <div key={field} className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-3">
-                  <p className="text-violet-300 mb-1">{field}</p>
-                  <p className="text-white/45 font-sans">{desc}</p>
+                <div key={field} className="rounded-lg border border-[var(--color-line)] bg-elevated px-4 py-3">
+                  <p className="text-accent mb-1">{field}</p>
+                  <p className="text-fg-muted font-sans">{desc}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* On-chain identity */}
-          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-8 space-y-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-400">On-chain identity</h2>
-            <p className="text-sm text-white/60 leading-relaxed">
-              Each agent also receives an <strong className="text-white/80">AgentIdentity NFT</strong> (ERC-721) at
-              mint time. The NFT stores a <code className="text-violet-300 bg-violet-500/10 px-1 rounded">metadataRoot</code> hash
+          <div className="rounded-2xl border border-[var(--color-line)] bg-surface p-8 space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-accent-light">On-chain identity</h2>
+            <p className="text-sm text-fg-muted leading-relaxed">
+              Each agent also receives an <strong className="text-fg">AgentIdentity NFT</strong> (ERC-721) at
+              mint time. The NFT stores a <code className="text-accent bg-accent/10 px-1 rounded">metadataRoot</code> hash
               pointing to the agent&rsquo;s configuration in 0G decentralised storage, and a
-              <code className="text-violet-300 bg-violet-500/10 px-1 rounded"> publicKey</code> used for verifying signed receipts.
+              <code className="text-accent bg-accent/10 px-1 rounded mx-1">publicKey</code> used for verifying signed receipts.
             </p>
           </div>
 
           {/* Contract addresses */}
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-violet-400">
+          <div className="rounded-2xl border border-[var(--color-line)] bg-surface p-6 space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent-light">
               Aristotle Mainnet — chainId 16661
             </p>
             <div className="grid gap-2 text-xs font-mono">
@@ -96,18 +96,18 @@ export default function WalletDocsPage() {
                   href={`https://chainscan.0g.ai/address/${addr}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.05] bg-white/[0.02] px-4 py-2.5 hover:border-violet-500/30 transition-colors"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-line)] bg-elevated px-4 py-2.5 hover:border-[var(--color-line-accent)] transition-colors"
                 >
-                  <span className="text-white/60">{name}</span>
-                  <span className="text-violet-400 text-[10px]">{(addr ?? '').slice(0, 10)}…</span>
+                  <span className="text-fg-muted">{name}</span>
+                  <span className="text-accent-light text-[10px]">{(addr ?? '').slice(0, 10)}…</span>
                 </a>
               ))}
             </div>
           </div>
 
           <div className="flex gap-4 text-sm">
-            <Link href="/docs" className="text-violet-400 hover:text-violet-300 transition-colors">← Back to docs</Link>
-            <Link href="/docs/payments" className="text-violet-400 hover:text-violet-300 transition-colors">Payment Rails →</Link>
+            <Link href="/docs" className="text-accent-light hover:text-accent transition-colors">← Back to docs</Link>
+            <Link href="/docs/payments" className="text-accent-light hover:text-accent transition-colors">Payment Rails →</Link>
           </div>
         </section>
       </main>
