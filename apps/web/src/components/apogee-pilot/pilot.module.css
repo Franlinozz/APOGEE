@@ -2,15 +2,14 @@
 @keyframes breathe {
   0%, 100% {
     box-shadow:
-      0 0 0 0   rgba(99, 102, 241, 0),
-      0 4px 20px rgba(99, 102, 241, 0.25),
-      0 0 0 1px  rgba(99, 102, 241, 0.20);
+      0 4px 20px rgba(124, 95, 241, 0.40),
+      0 0 0 1px  rgba(124, 95, 241, 0.22);
   }
   50% {
     box-shadow:
-      0 0 0 7px rgba(99, 102, 241, 0.11),
-      0 4px 32px rgba(99, 102, 241, 0.50),
-      0 0 0 1px  rgba(99, 102, 241, 0.35);
+      0 4px 32px rgba(124, 95, 241, 0.70),
+      0 0 0 6px  rgba(124, 95, 241, 0.10),
+      0 0 0 1px  rgba(124, 95, 241, 0.38);
   }
 }
 
@@ -47,8 +46,8 @@
   animation: breathe 4s ease-in-out infinite;
   /* base glow always present so button is visible before first breathe cycle */
   box-shadow:
-    0 4px 20px rgba(99, 102, 241, 0.25),
-    0 0 0 1px  rgba(99, 102, 241, 0.20);
+    0 4px 20px rgba(124, 95, 241, 0.40),
+    0 0 0 1px  rgba(124, 95, 241, 0.22);
 }
 
 .launcher:hover,
@@ -98,7 +97,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .launcher       { animation: none; box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25); }
+  .launcher       { animation: none; box-shadow: 0 4px 16px rgba(124, 95, 241, 0.40); }
   .launcherOrbit  { animation: none; }
   .orbitNode      { animation: none; }
   .panel          { animation: none; }
@@ -120,13 +119,13 @@
     inset 0 1px 0 rgba(255, 255, 255, 1) !important;
 }
 
-/* Launcher: stays dark (black) in light mode — spec requirement */
+/* Launcher: dark navy in light mode for contrast; white icon stays crisp */
 :global([data-theme="light"]) .launcher {
-  background: linear-gradient(145deg, #0A0A0F 0%, #1A1A2E 100%) !important;
+  background: linear-gradient(145deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%) !important;
   box-shadow:
-    0 4px 20px rgba(10, 10, 15, 0.20),
-    0 0 0 1px rgba(10, 10, 15, 0.15);
-  animation: none;
+    0 4px 20px rgba(79, 70, 229, 0.35),
+    0 0 0 1px rgba(79, 70, 229, 0.20);
+  animation: breathe 4s ease-in-out infinite;
 }
 
 /* Thinking dots use the lighter accent in light mode */

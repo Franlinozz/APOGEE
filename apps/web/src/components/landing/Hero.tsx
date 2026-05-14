@@ -19,16 +19,16 @@ export function Hero() {
         style={{ background: 'var(--hero-bg)' }}
       />
 
-      {/* Orbital field — anchored to bottom half so it never crosses the headline */}
+      {/* Orbital field — anchored to bottom third so it sits below the headline */}
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-center overflow-hidden"
-        style={{ height: '52%' }}
+        style={{ height: '38%' }}
         aria-hidden
       >
-        <div className="relative flex items-center justify-center w-[min(90vw,640px)] h-[min(90vw,640px)]">
+        <div className="relative flex items-center justify-center w-[min(80vw,520px)] h-[min(80vw,520px)]">
           <svg
             viewBox="-200 -120 400 240"
-            className="absolute inset-0 w-full h-full opacity-[0.08]"
+            className="absolute inset-0 w-full h-full opacity-[0.06]"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >

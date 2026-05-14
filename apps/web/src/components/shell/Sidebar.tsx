@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -36,20 +37,23 @@ export function Sidebar() {
     <aside className="app-sidebar flex h-full w-56 flex-col border-r border-[var(--color-line)] bg-surface">
       {/* Logo */}
       <div className="flex h-14 items-center px-4 border-b border-[var(--color-line)]">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="Apogee home">
-          <svg
-            viewBox="0 0 32 32"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6 shrink-0 text-fg"
-            aria-hidden
-          >
-            <path d="M16 4 L28 29 H4 Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="miter" />
-            <path d="M9 20 L23 20" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            <path d="M4.5 27 Q10 2 28 8" stroke="#7C5FF1" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-            <path d="M28 5.5 L28.78 7.22 L30.5 8 L28.78 8.78 L28 10.5 L27.22 8.78 L25.5 8 L27.22 7.22 Z" fill="#7C5FF1" />
-          </svg>
-          <span className="text-xs font-bold tracking-[0.14em] uppercase text-fg">Apogee</span>
+        <Link href="/" className="flex items-center" aria-label="Apogee home">
+          <Image
+            src="/brand/apogee-logo-dark.png"
+            alt="Apogee"
+            width={120}
+            height={28}
+            className="theme-logo-dark h-6 w-auto"
+            priority
+          />
+          <Image
+            src="/brand/apogee-logo-light.png"
+            alt="Apogee"
+            width={120}
+            height={28}
+            className="theme-logo-light h-6 w-auto"
+            priority
+          />
         </Link>
       </div>
 
