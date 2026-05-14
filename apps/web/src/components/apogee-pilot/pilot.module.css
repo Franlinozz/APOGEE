@@ -106,3 +106,30 @@
   .thinkingDot    { animation: none; opacity: 0.6; }
   .streamCaret::after { animation: none; }
 }
+
+/* ── Light theme overrides ────────────────────────────── */
+
+/* Panel: white glass, soft shadow */
+:global([data-theme="light"]) .panel,
+:global([data-theme="light"]) .panelExit {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(15, 15, 25, 0.06) !important;
+  box-shadow:
+    0 24px 64px -8px rgba(15, 15, 25, 0.12),
+    0 0 0 1px rgba(31, 184, 154, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 1) !important;
+}
+
+/* Launcher: stays dark (black) in light mode — spec requirement */
+:global([data-theme="light"]) .launcher {
+  background: linear-gradient(145deg, #0A0A0F 0%, #1A1A2E 100%) !important;
+  box-shadow:
+    0 4px 20px rgba(10, 10, 15, 0.20),
+    0 0 0 1px rgba(10, 10, 15, 0.15);
+  animation: none;
+}
+
+/* Thinking dots use the lighter accent in light mode */
+:global([data-theme="light"]) .thinkingDot {
+  background: rgba(31, 184, 154, 0.8);
+}

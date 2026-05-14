@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 const CONTRACTS = [
@@ -21,9 +22,9 @@ const NAV_COLS = [
   {
     title: 'Community',
     links: [
-      { label: 'GitHub',    href: 'https://github.com/Franlinozz/APOGEE', external: true },
-      { label: '0G Docs',   href: 'https://docs.0g.ai', external: true },
-      { label: 'Explorer',  href: 'https://chainscan.0g.ai', external: true },
+      { label: 'GitHub',   href: 'https://github.com/Franlinozz/APOGEE', external: true },
+      { label: '0G Docs',  href: 'https://docs.0g.ai', external: true },
+      { label: 'Explorer', href: 'https://chainscan.0g.ai', external: true },
     ],
   },
 ] as const;
@@ -40,15 +41,25 @@ export function Footer() {
         <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="lg:col-span-2">
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-fg">
-              <span
-                className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                style={{ background: 'linear-gradient(135deg,#7C5FF1,#A78BFA)' }}
-                aria-hidden
-              >
-                A
-              </span>
-              Apogee Protocol
+            <div className="mb-4">
+              <Link href="/" aria-label="Apogee home" className="inline-flex items-center">
+                {/* Dark logo */}
+                <Image
+                  src="/brand/apogee-logo-dark.webp"
+                  alt="Apogee Protocol"
+                  width={1023}
+                  height={489}
+                  className="theme-logo-dark h-7 w-auto object-contain"
+                />
+                {/* Light logo */}
+                <Image
+                  src="/brand/apogee-logo-light.webp"
+                  alt="Apogee Protocol"
+                  width={1023}
+                  height={489}
+                  className="theme-logo-light h-7 w-auto object-contain"
+                />
+              </Link>
             </div>
             <p className="prose-width text-sm leading-relaxed text-fg-muted">
               The runtime layer for autonomous AI agents on 0G — self-custodial wallets,

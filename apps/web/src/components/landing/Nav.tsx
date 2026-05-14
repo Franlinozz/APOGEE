@@ -1,7 +1,7 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
-// NavConnectButton uses wagmi/RainbowKit hooks — load client-only
 const NavConnectButton = dynamic(
   () => import('./NavConnectButton').then((m) => m.NavConnectButton),
   {
@@ -12,7 +12,6 @@ const NavConnectButton = dynamic(
   },
 );
 
-// Absolute paths so these work correctly from any sub-route (/docs, /proofs, etc.)
 const NAV_LINKS = [
   { href: '/#product', label: 'Product' },
   { href: '/#skills',  label: 'Skills' },
@@ -28,7 +27,7 @@ const NAV_LINKS = [
 export function Nav() {
   return (
     <header
-      className="fixed inset-x-0 top-0 z-50 h-14"
+      className="landing-nav fixed inset-x-0 top-0 z-50 h-14"
       style={{
         background: 'rgba(8,10,18,0.72)',
         backdropFilter: 'blur(16px) saturate(1.8)',
@@ -38,18 +37,25 @@ export function Nav() {
     >
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logotype */}
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight text-fg"
-        >
-          <span
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white"
-            style={{ background: 'linear-gradient(135deg,#7C5FF1,#A78BFA)' }}
-            aria-hidden
-          >
-            A
-          </span>
-          Apogee
+        <Link href="/" className="flex items-center" aria-label="Apogee home">
+          {/* Dark logo (default) */}
+          <Image
+            src="/brand/apogee-logo-dark.webp"
+            alt="Apogee"
+            width={1023}
+            height={489}
+            className="theme-logo-dark h-7 w-auto object-contain"
+            priority
+          />
+          {/* Light logo */}
+          <Image
+            src="/brand/apogee-logo-light.webp"
+            alt="Apogee"
+            width={1023}
+            height={489}
+            className="theme-logo-light h-7 w-auto object-contain"
+            priority
+          />
         </Link>
 
         {/* Nav links */}
@@ -66,7 +72,6 @@ export function Nav() {
           ))}
         </nav>
 
-        {/* Opens RainbowKit modal in-place; shows short address when connected */}
         <NavConnectButton />
       </div>
     </header>

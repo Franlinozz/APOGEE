@@ -3,6 +3,8 @@ import Link from 'next/link';
 /* ─────────────────────────────────────────────────────────
    Pure server component. Zero client JS.
    Orbital animation: CSS only, ~400 B, gated on prefers-reduced-motion.
+   Orbital colors: driven by CSS vars so light/dark themes apply
+   without any JS or conditional class logic.
 ───────────────────────────────────────────────────────── */
 export function Hero() {
   return (
@@ -10,15 +12,11 @@ export function Hero() {
       id="hero"
       className="relative flex min-h-screen items-center overflow-hidden pt-14"
     >
-      {/* Radial gradient backdrop */}
+      {/* Radial gradient backdrop — dims to transparent; vars change per theme */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 60% at 60% 0%, rgba(124,95,241,0.18) 0%, transparent 70%),' +
-            'radial-gradient(ellipse 50% 40% at 5% 80%, rgba(124,95,241,0.08) 0%, transparent 60%)',
-        }}
+        style={{ background: 'var(--orbital-glow-bg)' }}
       />
 
       <div className="relative mx-auto grid w-full max-w-7xl grid-cols-1 gap-12 px-4 py-24 sm:px-6 lg:grid-cols-2 lg:gap-8 lg:px-8">
@@ -37,7 +35,7 @@ export function Hero() {
             The runtime where{' '}
             <span
               style={{
-                background: 'linear-gradient(135deg, #A78BFA 0%, #7C5FF1 50%, #60A5FA 100%)',
+                background: 'linear-gradient(135deg, var(--grad-start, #A78BFA) 0%, var(--grad-mid, #7C5FF1) 50%, var(--grad-end, #60A5FA) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -71,16 +69,16 @@ export function Hero() {
           </div>
         </div>
 
-        {/* ── Right: orbital SVG — zero JS ── */}
+        {/* ── Right: orbital SVG — zero JS, CSS-var driven ── */}
         <div className="flex items-center justify-center lg:justify-end" aria-hidden>
           <div className="relative flex h-80 w-80 items-center justify-center sm:h-96 sm:w-96">
-            {/* Outer glow */}
+            {/* Outer glow — CSS var controlled */}
             <div
               className="absolute inset-8 rounded-full"
-              style={{ background: 'radial-gradient(circle, rgba(124,95,241,0.10) 0%, transparent 70%)' }}
+              style={{ background: 'var(--orbital-glow-bg)' }}
             />
 
-            {/* Ring SVG */}
+            {/* Ring SVG — all colors via CSS vars */}
             <svg
               viewBox="-160 -100 320 200"
               className="absolute inset-0 h-full w-full"
@@ -91,27 +89,37 @@ export function Hero() {
               <ellipse
                 cx="0" cy="0"
                 rx="148" ry="88"
-                stroke="rgba(124,95,241,0.22)"
+                style={{ stroke: 'var(--orbital-ring-stroke)' }}
                 strokeWidth="1"
               />
-              {/* Inner ring — atmosphere effect */}
+              {/* Inner ring */}
               <ellipse
                 cx="0" cy="0"
                 rx="100" ry="60"
-                stroke="rgba(167,139,250,0.10)"
+                style={{ stroke: 'var(--orbital-ring-stroke-2)' }}
                 strokeWidth="1"
               />
-              {/* Central body — the planet/agent */}
-              <circle cx="0" cy="0" r="18" fill="rgba(20,21,38,1)" stroke="rgba(124,95,241,0.35)" strokeWidth="1" />
-              <circle cx="0" cy="0" r="10" fill="rgba(124,95,241,0.25)" />
-              <circle cx="0" cy="0" r="4"  fill="rgba(167,139,250,0.8)" />
+              {/* Central body */}
+              <circle
+                cx="0" cy="0" r="18"
+                style={{ fill: 'var(--orbital-planet-fill)', stroke: 'var(--orbital-planet-stroke)' }}
+                strokeWidth="1"
+              />
+              <circle
+                cx="0" cy="0" r="10"
+                style={{ fill: 'var(--orbital-core-fill)' }}
+              />
+              <circle
+                cx="0" cy="0" r="4"
+                style={{ fill: 'var(--orbital-dot-fill)' }}
+              />
             </svg>
 
             {/* Traveling node — pure CSS animation */}
             <div className="orbit-node absolute">
               <div
                 className="orbit-node-inner h-3 w-3 rounded-full"
-                style={{ background: 'radial-gradient(circle, #F0E6FF 0%, #A78BFA 60%, #7C5FF1 100%)' }}
+                style={{ background: 'var(--orbital-node-gradient)' }}
               />
             </div>
 

@@ -2,40 +2,122 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design tokens ─────────────────────────────────────────
-   Matches packages/ui/src/tokens.css — defined here so Next.js
-   includes them in the critical-path CSS bundle automatically.  */
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS — DARK (default)
+   Space-separated R G B channels for Tailwind opacity compat.
+   Usage: rgb(var(--color-accent) / 0.5)
+═══════════════════════════════════════════════════════════ */
 :root {
+  /* Surfaces */
   --color-bg:           8 10 18;
   --color-surface:      13 14 26;
   --color-elevated:     20 21 38;
+
+  /* Typography */
   --color-fg:           240 240 255;
   --color-fg-muted:     155 155 200;
   --color-fg-faint:     74 74 106;
+
+  /* Accent */
   --color-accent:       124 95 241;
   --color-accent-light: 167 139 250;
-  --color-success:      34 197 94;
-  --color-warning:      245 158 11;
-  --color-danger:       239 68 68;
-  --color-neutral:      107 114 128;
+
+  /* Status */
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-danger:  239 68 68;
+  --color-neutral: 107 114 128;
+
+  /* Borders */
   --color-line:         rgba(255 255 255 / 0.08);
   --color-line-bright:  rgba(255 255 255 / 0.12);
   --color-line-accent:  rgba(124 95 241 / 0.30);
+
+  /* Shadows */
   --shadow-glow:        0 0 80px rgba(124 95 241 / 0.28);
   --shadow-glow-sm:     0 0 24px rgba(124 95 241 / 0.20);
   --shadow-card:        0 1px 3px rgba(0 0 0 / 0.4);
   --shadow-card-hover:  0 0 0 1px rgba(124 95 241 / 0.30), 0 4px 24px rgba(124 95 241 / 0.12);
-  --radius-sm:  6px;
-  --radius:     10px;
-  --radius-lg:  16px;
-  --radius-xl:  20px;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius:    10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Motion */
   --duration-fast: 120ms;
   --duration-base: 200ms;
   --duration-slow: 350ms;
+
   color-scheme: dark;
+
+  /* Orbital SVG CSS vars */
+  --orbital-ring-stroke:   rgba(124 95 241 / 0.22);
+  --orbital-ring-stroke-2: rgba(167 139 250 / 0.10);
+  --orbital-planet-fill:   rgba(20 21 38 / 1);
+  --orbital-planet-stroke: rgba(124 95 241 / 0.35);
+  --orbital-core-fill:     rgba(124 95 241 / 0.25);
+  --orbital-dot-fill:      rgba(167 139 250 / 0.8);
+  --orbital-node-gradient: radial-gradient(circle, #F0E6FF 0%, #A78BFA 60%, #7C5FF1 100%);
+  --orbital-glow-bg:       radial-gradient(circle, rgba(124 95 241 / 0.10) 0%, transparent 70%);
 }
 
-/* ── Base ──────────────────────────────────────────────────  */
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS — LIGHT
+   Overrides dark tokens with AA-contrast equivalents.
+═══════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  /* Surfaces */
+  --color-bg:           251 248 249;   /* #FBF8F9 */
+  --color-surface:      255 255 255;   /* white cards */
+  --color-elevated:     250 249 252;   /* barely-off-white for inputs etc. */
+
+  /* Typography */
+  --color-fg:           10 10 15;      /* #0A0A0F — near-black */
+  --color-fg-muted:     100 100 110;   /* ≈ rgba(10,10,15,0.62) on #FBF8F9 */
+  --color-fg-faint:     150 150 156;   /* ≈ rgba(10,10,15,0.42) on #FBF8F9 */
+
+  /* Accent — darker cyan; passes WCAG AA on light surfaces */
+  --color-accent:       31 184 154;    /* #1FB89A */
+  --color-accent-light: 23 142 120;    /* #178E78 */
+
+  /* Status — darker for AA on light */
+  --color-success: 31 157 85;    /* #1F9D55 */
+  --color-warning: 183 121 31;   /* #B7791F */
+  --color-danger:  197 48 48;    /* #C53030 */
+  --color-neutral: 107 114 128;
+
+  /* Borders */
+  --color-line:         rgba(15 15 25 / 0.06);
+  --color-line-bright:  rgba(15 15 25 / 0.10);
+  --color-line-accent:  rgba(31 184 154 / 0.30);
+
+  /* Shadows */
+  --shadow-glow:        0 0 80px rgba(31 184 154 / 0.15);
+  --shadow-glow-sm:     0 0 24px rgba(31 184 154 / 0.10);
+  --shadow-card:        0 1px 2px rgba(15 15 25 / 0.05);
+  --shadow-card-hover:  0 8px 24px -8px rgba(15 15 25 / 0.12);
+
+  color-scheme: light;
+
+  /* Background gradient */
+  --bg-gradient: linear-gradient(135deg, #F4E6EE 0%, #ECE3F0 35%, #F6EDF1 70%, #FBF8F9 100%);
+
+  /* Orbital SVG CSS vars — desaturated violet for light */
+  --orbital-ring-stroke:   rgba(107 91 214 / 0.18);
+  --orbital-ring-stroke-2: rgba(107 91 214 / 0.08);
+  --orbital-planet-fill:   rgba(242 238 255 / 1);
+  --orbital-planet-stroke: rgba(107 91 214 / 0.28);
+  --orbital-core-fill:     rgba(107 91 214 / 0.15);
+  --orbital-dot-fill:      rgba(107 91 214 / 0.65);
+  --orbital-node-gradient: radial-gradient(circle, #EDE0FF 0%, #8B7BE8 60%, #6B5BD6 100%);
+  --orbital-glow-bg:       radial-gradient(circle, rgba(107 91 214 / 0.07) 0%, transparent 70%);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BASE RESET
+═══════════════════════════════════════════════════════════ */
 *,
 *::before,
 *::after {
@@ -56,7 +138,94 @@ body {
   min-height: 100dvh;
 }
 
-/* ── Orbital animation (landing hero — CSS only) ──────────── */
+/* Light mode: gradient background, fixed so it doesn't scroll */
+[data-theme="light"] body {
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  background-color: unset;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE — SURFACE OVERRIDES
+   Make bg-bg containers transparent so the body gradient shows.
+═══════════════════════════════════════════════════════════ */
+[data-theme="light"] .bg-bg,
+[data-theme="light"] .app-shell {
+  background-color: transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE — SHELL CHROME (sidebar + topbar glass)
+═══════════════════════════════════════════════════════════ */
+[data-theme="light"] .app-sidebar {
+  background: rgba(255 255 255 / 0.82);
+  backdrop-filter: saturate(140%) blur(20px);
+  -webkit-backdrop-filter: saturate(140%) blur(20px);
+}
+
+[data-theme="light"] .app-topbar {
+  background: rgba(255 255 255 / 0.72);
+  backdrop-filter: saturate(140%) blur(20px);
+  -webkit-backdrop-filter: saturate(140%) blur(20px);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE — LANDING NAV
+═══════════════════════════════════════════════════════════ */
+[data-theme="light"] .landing-nav {
+  background: rgba(251 248 249 / 0.85) !important;
+  border-bottom: 1px solid rgba(15 15 25 / 0.06) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE — SIDEBAR NAV ITEM ACTIVE STATE
+   White pill, soft shadow, dark text — 0G Hub pattern.
+═══════════════════════════════════════════════════════════ */
+[data-theme="light"] .nav-item[data-active="true"] {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(15 15 25 / 0.06) !important;
+  color: rgb(10 10 15) !important;
+}
+
+[data-theme="light"] .nav-item[data-active="true"] svg {
+  color: rgb(10 10 15) !important;
+}
+
+[data-theme="light"] .nav-item:not([data-active="true"]):hover {
+  background-color: rgba(255 255 255 / 0.60) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE — APOGEE PILOT PANEL OVERRIDES
+   Targets CSS-module classes from pilot.module.css via :global.
+   These rules live here (not in the module) so they can reference
+   the data-theme attribute on <html>.
+═══════════════════════════════════════════════════════════ */
+[data-theme="light"] .pilot-panel-override {
+  background: rgba(255 255 255 / 0.96) !important;
+  border-color: rgba(15 15 25 / 0.06) !important;
+  box-shadow:
+    0 24px 64px -8px rgba(15 15 25 / 0.12),
+    0 0 0 1px rgba(31 184 154 / 0.08),
+    inset 0 1px 0 rgba(255 255 255 / 1) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOGO VISIBILITY — theme-aware show/hide (SSR-safe)
+   Both logo images always rendered; CSS controls which shows.
+   Default (no data-theme) = dark mode.
+═══════════════════════════════════════════════════════════ */
+.theme-logo-light { display: none; }
+.theme-logo-dark  { display: block; }
+
+[data-theme="light"] .theme-logo-light { display: block; }
+[data-theme="light"] .theme-logo-dark  { display: none; }
+
+/* ═══════════════════════════════════════════════════════════
+   ANIMATIONS
+═══════════════════════════════════════════════════════════ */
 @keyframes orbit-traverse {
   to { offset-distance: 100%; }
 }
@@ -76,6 +245,10 @@ body {
   animation: orbit-glow-pulse 3s ease-in-out infinite;
 }
 
+[data-theme="light"] .orbit-node-inner {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .orbit-node,
   .orbit-node-inner {
@@ -83,13 +256,29 @@ body {
   }
 }
 
-/* ── Utility: reading width cap ─────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════════════════ */
 .prose-width {
   max-width: 65ch;
 }
 
-/* ── Scrollbar ──────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   SCROLLBAR
+═══════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-line-bright); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255 255 255 / 0.2); }
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-bright);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255 255 255 / 0.2);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(15 15 25 / 0.12);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15 15 25 / 0.20);
+}

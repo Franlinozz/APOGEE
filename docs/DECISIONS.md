@@ -132,3 +132,16 @@
 - Bug fixed: Pilot was invisible on the live site for authenticated users on non-app pages (e.g. the landing page). Root cause: root layout rendered `GuestPilot` only when `!isAuthenticated`, but `AuthPilot` in `(app)/layout.tsx` only mounts on dashboard/agents/etc. routes. An authenticated user visiting `/` had no Pilot instance at all.
 - Fix: Root layout now unconditionally mounts a single `ApogeePilot` with `isGuest={!isAuthenticated}`. `(app)/layout.tsx` no longer imports or mounts a second Pilot instance. One mount point, zero double-mounting risk, Pilot visible on every page regardless of auth state.
 - No bundle regression: landing 98.2 kB, dashboard 180 kB (unchanged).
+
+## 2026-05-14 — Light theme, brand system, logo integration (UI/Brand pass)
+
+- **Shipped**: Full dual-theme system: dark (existing, unchanged) + light (opt-in via sidebar toggle). Token override via `[data-theme="light"]` on `<html>`. Theme persisted in `apogee-theme` httpOnly cookie via server action in `apps/web/src/app/actions/theme.ts`. Anti-FOUC blocking script in root layout detects `prefers-color-scheme` on first visit (no cookie).
+- **Token system**: `packages/ui/src/tokens.css` and `apps/web/src/app/globals.css` both define `[data-theme="light"]` block with 15 overridden RGB-channel tokens + rgba border/shadow tokens. Light accent `#1FB89A` chosen for WCAG AA contrast on light surfaces (dark-theme cyan `#4DE3C1` would fail).
+- **Logo integration**: `apogee-logo-dark.webp` / `apogee-logo-light.webp` (1023×489) used in Sidebar, Nav, Footer. Both rendered server-side; `.theme-logo-dark` / `.theme-logo-light` CSS classes toggle visibility per `[data-theme]`. Zero hydration mismatch, zero flash.
+- **Shell**: `Sidebar.tsx` gets `app-sidebar` class (glass backdrop-filter in light); `Topbar.tsx` gets `app-topbar`; `Nav.tsx` gets `landing-nav`. `ThemeToggle` component placed in sidebar footer with mounted-state pattern.
+- **Pilot light mode**: `pilot.module.css` `:global([data-theme="light"])` overrides — white panel with soft shadow, black launcher.
+- **Orbital SVG**: All hardcoded hex/rgba stroke/fill replaced with CSS vars (`--orbital-ring-stroke`, `--orbital-node-gradient`, etc.); vars swap per theme.
+- **Favicon/icons**: `layout.tsx` metadata now references `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`. `viewport.themeColor` uses dual media-query array.
+- **TX hash guard**: already in place via `buildChainscanUrl` + `TX_RE = /^0x[a-fA-F0-9]{64}$/`; verified across `RecentActivity` and `ReceiptsTableClient`.
+- **Build**: 26 pages clean, no TS errors. Pre-existing pino-pretty warning (dev-only dep, not related to this change).
+- **Deviations**: Local index hide/delete feature scoped as future work — no backend hide endpoint in this pass. Follow-up: wire `/api/agents/[id]/hide` to a "Hide from dashboard" button in agent settings.
