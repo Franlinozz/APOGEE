@@ -19,29 +19,33 @@ export function Hero() {
         style={{ background: 'var(--hero-bg)' }}
       />
 
-      {/* Orbital background motif — subtle, not dominant */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
-        <svg
-          viewBox="-200 -120 400 240"
-          className="h-[min(90vw,640px)] w-[min(90vw,640px)] opacity-[0.07]"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <ellipse cx="0" cy="0" rx="190" ry="110" stroke="currentColor" strokeWidth="1" className="text-accent" />
-          <ellipse cx="0" cy="0" rx="130" ry="76" stroke="currentColor" strokeWidth="0.8" className="text-accent" />
-          <ellipse cx="0" cy="0" rx="72" ry="42" stroke="currentColor" strokeWidth="0.6" className="text-accent" />
-          <circle cx="0" cy="0" r="16" stroke="currentColor" strokeWidth="0.8" className="text-accent" />
-        </svg>
-      </div>
-
-      {/* Traveling node — pure CSS animation */}
-      <div className="orbit-node pointer-events-none absolute" aria-hidden
-        style={{ offsetPath: 'ellipse(190px 110px at center)' } as React.CSSProperties}
+      {/* Orbital field — anchored to bottom half so it never crosses the headline */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-center overflow-hidden"
+        style={{ height: '52%' }}
+        aria-hidden
       >
-        <div
-          className="orbit-node-inner h-2.5 w-2.5 rounded-full opacity-60"
-          style={{ background: 'var(--orbital-node-gradient)' }}
-        />
+        <div className="relative flex items-center justify-center w-[min(90vw,640px)] h-[min(90vw,640px)]">
+          <svg
+            viewBox="-200 -120 400 240"
+            className="absolute inset-0 w-full h-full opacity-[0.08]"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <ellipse cx="0" cy="0" rx="190" ry="110" stroke="currentColor" strokeWidth="1" className="text-accent" />
+            <ellipse cx="0" cy="0" rx="130" ry="76" stroke="currentColor" strokeWidth="0.8" className="text-accent" />
+            <ellipse cx="0" cy="0" rx="72" ry="42" stroke="currentColor" strokeWidth="0.6" className="text-accent" />
+            <circle cx="0" cy="0" r="16" stroke="currentColor" strokeWidth="0.8" className="text-accent" />
+          </svg>
+
+          {/* Traveling node — contained inside orbital-field so it orbits below the text */}
+          <div className="orbit-node pointer-events-none absolute" aria-hidden>
+            <div
+              className="orbit-node-inner h-2.5 w-2.5 rounded-full opacity-60"
+              style={{ background: 'var(--orbital-node-gradient)' }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Content — single column, centered */}
