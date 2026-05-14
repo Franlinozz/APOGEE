@@ -18,7 +18,7 @@ export function Launcher({ isOpen, onToggle, unreadCount }: LauncherProps) {
         border border-accent/40 backdrop-blur-sm
         transition-transform duration-200 hover:scale-105 active:scale-95
         ${isOpen ? 'scale-105' : styles.launcher}`}
-      style={{ background: 'linear-gradient(145deg, #0c0e22 0%, #12153a 100%)' }}
+      style={{ background: 'linear-gradient(145deg, #8b68f5 0%, #6c42e8 100%)' }}
     >
       {/*
         --color-accent is stored as raw RGB channels ("124 95 241"), not a full color.

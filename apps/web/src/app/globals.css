@@ -77,18 +77,18 @@
 ═══════════════════════════════════════════════════════════ */
 [data-theme="light"] {
   /* Surfaces */
-  --color-bg:           251 248 249;   /* #FBF8F9 */
+  --color-bg:           250 247 252;   /* #FAF7FC — very pale violet-white */
   --color-surface:      255 255 255;   /* white cards */
-  --color-elevated:     250 249 252;   /* barely-off-white for inputs etc. */
+  --color-elevated:     245 243 250;   /* off-white with faint violet tint */
 
   /* Typography */
   --color-fg:           10 10 15;      /* #0A0A0F — near-black */
-  --color-fg-muted:     100 100 110;   /* ≈ rgba(10,10,15,0.62) on #FBF8F9 */
-  --color-fg-faint:     150 150 156;   /* ≈ rgba(10,10,15,0.42) on #FBF8F9 */
+  --color-fg-muted:     88 88 100;     /* slightly darker than before for contrast */
+  --color-fg-faint:     145 143 158;   /* medium-light gray */
 
-  /* Accent — darker cyan; passes WCAG AA on light surfaces */
-  --color-accent:       31 184 154;    /* #1FB89A */
-  --color-accent-light: 23 142 120;    /* #178E78 */
+  /* Accent — violet kept for brand consistency in light mode */
+  --color-accent:       109 76 225;    /* #6D4CE1 — rich violet, AA on white */
+  --color-accent-light: 88 58 196;     /* #583AC4 — darker for text */
 
   /* Status — darker for AA on light */
   --color-success: 31 157 85;    /* #1F9D55 */
@@ -96,37 +96,37 @@
   --color-danger:  197 48 48;    /* #C53030 */
   --color-neutral: 107 114 128;
 
-  /* Borders */
-  --color-line:         rgba(15 15 25 / 0.06);
-  --color-line-bright:  rgba(15 15 25 / 0.10);
-  --color-line-accent:  rgba(31 184 154 / 0.30);
+  /* Borders — slightly stronger so cards/inputs don't vanish */
+  --color-line:         rgba(15 15 25 / 0.09);
+  --color-line-bright:  rgba(15 15 25 / 0.14);
+  --color-line-accent:  rgba(109 76 225 / 0.28);
 
-  /* Shadows */
-  --shadow-glow:        0 0 80px rgba(31 184 154 / 0.15);
-  --shadow-glow-sm:     0 0 24px rgba(31 184 154 / 0.10);
-  --shadow-card:        0 1px 2px rgba(15 15 25 / 0.05);
-  --shadow-card-hover:  0 8px 24px -8px rgba(15 15 25 / 0.12);
+  /* Shadows — card now has a subtle definition ring */
+  --shadow-glow:        0 0 80px rgba(109 76 225 / 0.14);
+  --shadow-glow-sm:     0 0 24px rgba(109 76 225 / 0.10);
+  --shadow-card:        0 1px 3px rgba(15 15 25 / 0.07), 0 0 0 1px rgba(15 15 25 / 0.04);
+  --shadow-card-hover:  0 8px 24px -8px rgba(15 15 25 / 0.14), 0 0 0 1px rgba(109 76 225 / 0.18);
 
   color-scheme: light;
 
-  /* Background gradient */
-  --bg-gradient: linear-gradient(135deg, #F4E6EE 0%, #ECE3F0 35%, #F6EDF1 70%, #FBF8F9 100%);
+  /* Background gradient — cooler violet-lavender, more on-brand */
+  --bg-gradient: linear-gradient(135deg, #EDE6F5 0%, #E6E0F0 30%, #EDE8F5 62%, #F8F5FB 100%);
 
-  /* Orbital SVG CSS vars — desaturated violet for light */
-  --orbital-ring-stroke:   rgba(107 91 214 / 0.18);
-  --orbital-ring-stroke-2: rgba(107 91 214 / 0.08);
-  --orbital-planet-fill:   rgba(242 238 255 / 1);
-  --orbital-planet-stroke: rgba(107 91 214 / 0.28);
-  --orbital-core-fill:     rgba(107 91 214 / 0.15);
-  --orbital-dot-fill:      rgba(107 91 214 / 0.65);
-  --orbital-node-gradient: radial-gradient(circle, #EDE0FF 0%, #8B7BE8 60%, #6B5BD6 100%);
-  --orbital-glow-bg:       radial-gradient(circle, rgba(107 91 214 / 0.07) 0%, transparent 70%);
+  /* Orbital SVG CSS vars — brand violet for light */
+  --orbital-ring-stroke:   rgba(109 76 225 / 0.18);
+  --orbital-ring-stroke-2: rgba(109 76 225 / 0.08);
+  --orbital-planet-fill:   rgba(240 236 255 / 1);
+  --orbital-planet-stroke: rgba(109 76 225 / 0.28);
+  --orbital-core-fill:     rgba(109 76 225 / 0.14);
+  --orbital-dot-fill:      rgba(109 76 225 / 0.65);
+  --orbital-node-gradient: radial-gradient(circle, #EDE0FF 0%, #8B70E8 60%, #6D4CE1 100%);
+  --orbital-glow-bg:       radial-gradient(circle, rgba(109 76 225 / 0.07) 0%, transparent 70%);
 
   /* Hero */
-  --hero-bg: radial-gradient(ellipse 80% 55% at 50% 0%, rgba(107 91 214 / 0.08) 0%, transparent 65%);
+  --hero-bg: radial-gradient(ellipse 80% 55% at 50% 0%, rgba(109 76 225 / 0.07) 0%, transparent 65%);
 
-  /* Hero heading gradient — navy/violet for legible on light */
-  --grad-start: #6B5BD6;
+  /* Hero heading gradient — rich violet → indigo for light mode */
+  --grad-start: #6D4CE1;
   --grad-mid:   #4338CA;
   --grad-end:   #2563EB;
 }
@@ -196,10 +196,10 @@ body {
 }
 
 [data-theme="light"] .landing-nav {
-  background: rgba(251 248 249 / 0.85) !important;
-  border-bottom: 1px solid rgba(15 15 25 / 0.06) !important;
-  backdrop-filter: blur(16px) saturate(140%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+  background: rgba(250 247 252 / 0.88) !important;
+  border-bottom: 1px solid rgba(15 15 25 / 0.08) !important;
+  backdrop-filter: blur(16px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(150%) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -208,16 +208,16 @@ body {
 ═══════════════════════════════════════════════════════════ */
 [data-theme="light"] .nav-item[data-active="true"] {
   background-color: #ffffff !important;
-  box-shadow: 0 1px 2px rgba(15 15 25 / 0.06) !important;
+  box-shadow: 0 1px 3px rgba(15 15 25 / 0.08), 0 0 0 1px rgba(15 15 25 / 0.05) !important;
   color: rgb(10 10 15) !important;
 }
 
 [data-theme="light"] .nav-item[data-active="true"] svg {
-  color: rgb(10 10 15) !important;
+  color: rgb(109 76 225) !important;
 }
 
 [data-theme="light"] .nav-item:not([data-active="true"]):hover {
-  background-color: rgba(255 255 255 / 0.60) !important;
+  background-color: rgba(255 255 255 / 0.70) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -228,11 +228,28 @@ body {
 ═══════════════════════════════════════════════════════════ */
 [data-theme="light"] .pilot-panel-override {
   background: rgba(255 255 255 / 0.96) !important;
-  border-color: rgba(15 15 25 / 0.06) !important;
+  border-color: rgba(15 15 25 / 0.08) !important;
   box-shadow:
-    0 24px 64px -8px rgba(15 15 25 / 0.12),
-    0 0 0 1px rgba(31 184 154 / 0.08),
+    0 24px 64px -8px rgba(15 15 25 / 0.14),
+    0 0 0 1px rgba(109 76 225 / 0.10),
     inset 0 1px 0 rgba(255 255 255 / 1) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE — INPUT / FOCUS IMPROVEMENTS
+═══════════════════════════════════════════════════════════ */
+[data-theme="light"] input:focus-visible,
+[data-theme="light"] textarea:focus-visible,
+[data-theme="light"] select:focus-visible {
+  outline: 2px solid rgba(109 76 225 / 0.5);
+  outline-offset: 0;
+}
+
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  border-color: rgba(15 15 25 / 0.14);
+  color: rgb(10 10 15);
 }
 
 /* ═══════════════════════════════════════════════════════════

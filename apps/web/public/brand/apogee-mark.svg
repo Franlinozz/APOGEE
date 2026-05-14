@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Angular A: sharp geometric, miter corners -->
+  <path d="M16 4 L28 29 H4 Z"
+    stroke="currentColor" stroke-width="2.2"
+    stroke-linejoin="miter" fill="none"/>
+  <!-- A crossbar -->
+  <path d="M9 20 L23 20"
+    stroke="currentColor" stroke-width="2.2"
+    stroke-linecap="round"/>
+  <!-- Orbital swoosh: sweeps from lower-left through A to upper-right star -->
+  <path d="M4.5 27 Q10 2 28 8"
+    stroke="#7C5FF1" stroke-width="1.8"
+    fill="none" stroke-linecap="round"/>
+  <!-- 4-point star at swoosh terminus -->
+  <path d="M28 5.5 L28.78 7.22 L30.5 8 L28.78 8.78 L28 10.5 L27.22 8.78 L25.5 8 L27.22 7.22 Z"
+    fill="#7C5FF1"/>
+</svg>

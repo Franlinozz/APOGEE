@@ -10,7 +10,7 @@ function renderInline(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-    .replace(/`([^`\n]+)`/g, '<code style="background:var(--color-elevated);border-radius:3px;padding:1px 4px;font-size:0.78em;font-family:var(--font-mono)">$1</code>');
+    .replace(/`([^`\n]+)`/g, '<code style="background:rgb(var(--color-elevated));border-radius:3px;padding:1px 4px;font-size:0.78em;font-family:var(--font-mono)">$1</code>');
 }
 
 function parseContent(text: string): React.ReactNode[] {
@@ -24,7 +24,7 @@ function parseContent(text: string): React.ReactNode[] {
         <pre
           key={i}
           style={{
-            background: 'var(--color-elevated)',
+            background: 'rgb(var(--color-elevated))',
             borderRadius: 6,
             padding: '8px 12px',
             fontSize: '0.75rem',
@@ -115,7 +115,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
       <div className="flex justify-end">
         <div
           style={{
-            background: 'var(--color-accent)',
+            background: 'rgb(var(--color-accent))',
             color: '#fff',
             borderRadius: '12px 12px 2px 12px',
             padding: '8px 12px',
@@ -135,10 +135,10 @@ export function ChatMessage({ message }: ChatMessageProps) {
   return (
     <div className="flex gap-2">
       <div style={{ paddingTop: 2, flexShrink: 0 }}>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-accent)', marginTop: 6 }} />
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgb(var(--color-accent))', marginTop: 6 }} />
       </div>
       <div
-        style={{ flex: 1, color: 'var(--color-fg)', wordBreak: 'break-word' }}
+        style={{ flex: 1, color: 'rgb(var(--color-fg))', wordBreak: 'break-word' }}
         className={message.isStreaming ? styles.streamCaret : ''}
       >
         {parseContent(message.content)}

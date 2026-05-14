@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#0D0E1A"/>
+  <!-- Angular A -->
+  <path d="M16 5 L27 28 H5 Z"
+    fill="none" stroke="#F0F0FF" stroke-width="2.1"
+    stroke-linejoin="miter"/>
+  <path d="M9.5 20.5 L22.5 20.5"
+    stroke="#F0F0FF" stroke-width="2.1" stroke-linecap="round"/>
+  <!-- Orbital swoosh -->
+  <path d="M5.5 26.5 Q10.5 3 27.5 8.5"
+    stroke="#7C5FF1" stroke-width="1.7"
+    fill="none" stroke-linecap="round"/>
+  <!-- 4-point star -->
+  <path d="M27.5 6 L28.28 7.72 L30 8.5 L28.28 9.28 L27.5 11 L26.72 9.28 L25 8.5 L26.72 7.72 Z"
+    fill="#7C5FF1"/>
+</svg>
