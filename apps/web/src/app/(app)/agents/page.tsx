@@ -21,7 +21,8 @@ export default function AgentsPage() {
     <>
       <Topbar title="Agents" />
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-6xl space-y-3">
+          <p className="text-xs text-fg-faint">Showing agents owned by the connected wallet. Dashboard totals are global network counts.</p>
           <Suspense fallback={<Skeleton className="h-64 rounded-[var(--radius-xl)]" />}>
             <AgentsList />
           </Suspense>

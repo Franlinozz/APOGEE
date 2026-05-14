@@ -36,6 +36,14 @@ interface Props {
 }
 
 // Map a raw error to a user-friendly message + optional detail
+function ethToWeiString(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '0';
+  const [whole = '0', frac = ''] = trimmed.split('.');
+  const padded = `${frac}000000000000000000`.slice(0, 18);
+  return (BigInt(whole || '0') * 1_000_000_000_000_000_000n + BigInt(padded || '0')).toString();
+}
+
 function classifyError(title: string, detail?: string, status?: number): { message: string; detail?: string } {
   if (status === 401 || title.toLowerCase().includes('auth') || title.toLowerCase().includes('sign')) {
     return { message: 'Not signed in', detail: 'Your session may have expired. Return to the home page and sign in again.' };
@@ -106,6 +114,12 @@ export function WizardStepDeploy({ state, onBack, onDone }: Props) {
         body: JSON.stringify({
           name: state.identity.name.trim(),
           metadataRoot: state.identity.name.trim(),
+          skills: state.skills,
+          policy: {
+            maxPerTxWei: ethToWeiString(state.policy.maxPerTxEth),
+            dailyCapWei: ethToWeiString(state.policy.dailyCapEth),
+            allowedSkills: state.skills,
+          },
         }),
       });
 

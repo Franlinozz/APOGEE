@@ -9,14 +9,15 @@ export const revalidate = 30;
 export default async function ReceiptsPage() {
   let data: { items: Receipt[]; total: number } = { items: [], total: 0 };
   try {
-    data = await serverGetReceipts({ limit: 100 });
+    data = await serverGetReceipts({ limit: 100, scope: 'global' });
   } catch {}
 
   return (
     <>
       <Topbar title="Receipts" />
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-6xl space-y-3">
+          <p className="text-xs text-fg-faint">Showing global receipt activity from the same Edge receipt index used by dashboard stats. Wallet-specific filtering can be added from this feed.</p>
           <ReceiptsTableClient initialReceipts={data.items} totalCount={data.total} />
         </div>
       </main>

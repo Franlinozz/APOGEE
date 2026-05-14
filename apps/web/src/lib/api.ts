@@ -33,6 +33,21 @@ function normalizeMemoryEntry(row: Record<string, unknown>, agentId: string): Me
   };
 }
 
+
+function normalizeService(row: Record<string, unknown>): ServiceListing {
+  return {
+    id: String(row['id'] ?? row['serviceId'] ?? ''),
+    providerAddress: String(row['providerAddress'] ?? row['agentId'] ?? '0x0000000000000000000000000000000000000000'),
+    name: String(row['name'] ?? row['serviceId'] ?? 'Service'),
+    description: String(row['description'] ?? ''),
+    modelId: typeof row['modelId'] === 'string' ? row['modelId'] : undefined,
+    pricePerTokenWei: String(row['pricePerTokenWei'] ?? row['priceWei'] ?? '0'),
+    latencyMs: typeof row['latencyMs'] === 'number' ? row['latencyMs'] : undefined,
+    uptime: typeof row['uptime'] === 'number' ? row['uptime'] : undefined,
+    tags: Array.isArray(row['tags']) ? row['tags'].map(String) : [],
+  };
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -143,13 +158,14 @@ export function getRuns(agentId: string, token?: string): Promise<Run[]> {
 // ── Receipts ──────────────────────────────────────────────
 
 export function getReceipts(
-  params?: { agentId?: string; page?: number; limit?: number },
+  params?: { agentId?: string; page?: number; limit?: number; scope?: 'owned' | 'global' },
   token?: string,
 ): Promise<{ items: Receipt[]; total: number }> {
   const qs = new URLSearchParams();
   if (params?.agentId) qs.set('agentId', params.agentId);
   if (params?.page != null) qs.set('page', String(params.page));
   if (params?.limit != null) qs.set('limit', String(params.limit));
+  if (params?.scope) qs.set('scope', params.scope);
   const q = qs.toString() ? `?${qs}` : '';
   return apiFetch<{ items: Record<string, unknown>[]; total?: number }>(`/v1/receipts${q}`, undefined, token)
     .then((data) => ({ items: data.items.map(normalizeReceipt), total: data.total ?? data.items.length }));
@@ -188,7 +204,7 @@ export function getServices(params?: { tags?: string }): Promise<ServiceListing[
   const qs = new URLSearchParams();
   if (params?.tags) qs.set('tags', params.tags);
   const q = qs.toString() ? `?${qs}` : '';
-  return apiFetch<ServiceListing[]>(`/v1/services${q}`);
+  return apiFetch<Record<string, unknown>[]>(`/v1/services${q}`).then((rows) => rows.map(normalizeService));
 }
 
 export function installSkill(agentId: string, skillId: string, token?: string): Promise<{ installed: boolean }> {
@@ -197,6 +213,11 @@ export function installSkill(agentId: string, skillId: string, token?: string): 
     { method: 'POST' },
     token,
   );
+}
+
+
+export function getAgentSkills(agentId: string, token?: string): Promise<Array<{ agentId: string; skillId: string; version?: string; installedAt: string }>> {
+  return apiFetch<Array<{ agentId: string; skillId: string; version?: string; installedAt: string }>>(`/v1/agents/${agentId}/skills`, undefined, token);
 }
 
 // ── Dashboard ─────────────────────────────────────────────

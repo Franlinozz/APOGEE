@@ -4,7 +4,7 @@ export interface Agent {
   ownerAddress: string;
   identityTokenId?: string;
   accountAddress?: string;
-  status: 'active' | 'paused' | 'deploying' | 'error';
+  status: 'pending_deploy' | 'deployed' | 'activating' | 'active' | 'paused' | 'failed' | 'deploying' | 'error';
   createdAt: string;
   updatedAt: string;
   policyId?: string;
@@ -79,7 +79,7 @@ export interface RunStep {
   id: string;
   runId: string;
   type: string;
-  status: 'running' | 'success' | 'error';
+  status: 'queued' | 'running' | 'success' | 'succeeded' | 'error' | 'failed';
   input?: unknown;
   output?: unknown;
   durationMs?: number;
@@ -89,7 +89,7 @@ export interface RunStep {
 export interface Run {
   id: string;
   agentId: string;
-  status: 'queued' | 'running' | 'success' | 'error';
+  status: 'queued' | 'running' | 'success' | 'succeeded' | 'error' | 'failed';
   steps: RunStep[];
   createdAt: string;
   completedAt?: string;

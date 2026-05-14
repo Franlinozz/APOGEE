@@ -93,7 +93,7 @@ export function MemoryExplorer({ agentId, initialEntries }: Props) {
             />
           ))}
           {entries.length === 0 && (
-            <p className="p-3 text-xs text-fg-faint">No entries found.</p>
+            <p className="p-3 text-xs text-fg-faint">No entries found. Memory appears after this agent runs a memory.write/search task, or after new deployments create their initialization entry.</p>
           )}
         </div>
       </div>
@@ -138,8 +138,8 @@ export function MemoryExplorer({ agentId, initialEntries }: Props) {
             </div>
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-fg-muted">Select an entry to view it.</p>
+          <div className="flex h-full items-center justify-center px-6 text-center">
+            <p className="text-sm text-fg-muted">Select an entry to view it. If the list is empty, this agent has not written memory yet.</p>
           </div>
         )}
       </div>

@@ -9,6 +9,7 @@ import {
   getMemory,
   getDashboardStats,
   getReceiptHeatmap,
+  getAgentSkills,
 } from './api';
 
 function tok(): string | undefined {
@@ -24,3 +25,5 @@ export const serverGetReceipts = (params?: Parameters<typeof getReceipts>[0]) =>
 export const serverGetMemory = (agentId: string) => getMemory(agentId, tok());
 export const serverGetDashboardStats = () => getDashboardStats(tok());
 export const serverGetReceiptHeatmap = () => getReceiptHeatmap(tok());
+
+export const serverGetAgentSkills = (agentId: string) => getAgentSkills(agentId, tok());

@@ -23,7 +23,18 @@ const nonceResponseSchema = z.object({ nonce: z.string(), message: z.string() })
 const siweNonceBodySchema = z.object({ address: addressSchema, domain: z.string().min(1).optional(), uri: z.string().url().optional(), chainId: z.number().int().positive().default(16661) });
 const siweVerifyBodySchema = z.object({ message: z.string().min(1), signature: z.string().min(1) });
 const jwtResponseSchema = z.object({ token: z.string(), address: addressSchema });
-const agentCreateSchema = z.object({ owner: addressSchema.optional(), name: z.string().min(1).max(120).optional(), metadataRoot: z.string().optional(), policyId: z.string().optional() });
+const agentCreateSchema = z.object({
+  owner: addressSchema.optional(),
+  name: z.string().min(1).max(120).optional(),
+  metadataRoot: z.string().optional(),
+  policyId: z.string().optional(),
+  skills: z.array(z.string().min(1)).optional(),
+  policy: z.object({
+    maxPerTxWei: z.string().optional(),
+    dailyCapWei: z.string().optional(),
+    allowedSkills: z.array(z.string()).optional(),
+  }).optional(),
+});
 const agentSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -35,7 +46,7 @@ const agentSchema = z.object({
   policyId: z.string().optional(),
   balanceWei: z.string(),
   kpis: z.record(z.string(), z.number()),
-  status: z.enum(['active', 'paused', 'deploying', 'error']),
+  status: z.enum(['pending_deploy', 'deployed', 'activating', 'active', 'paused', 'failed', 'deploying', 'error']),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -45,14 +56,24 @@ const skillBodySchema = z.object({ skillId: z.string().min(1), version: z.string
 const runBodySchema = z.object({ skillId: z.string().min(1), input: jsonValueSchema.optional(), idempotencyKey: z.string().optional() });
 const runSchema = z.object({ id: z.string(), agentId: z.string(), status: z.enum(['queued', 'running', 'succeeded', 'failed']), createdAt: z.string(), updatedAt: z.string() });
 const serviceBodySchema = z.object({ agentId: z.string().min(1), serviceId: z.string().min(1), tags: z.array(z.string()).default([]), priceWei: z.string(), description: z.string().optional() });
-const serviceSchema = z.object({ id: z.string(), agentId: z.string(), serviceId: z.string(), tags: z.array(z.string()), priceWei: z.string(), description: z.string().optional() });
+const serviceSchema = z.object({
+  id: z.string(),
+  providerAddress: addressSchema,
+  name: z.string(),
+  description: z.string(),
+  modelId: z.string().optional(),
+  pricePerTokenWei: z.string(),
+  latencyMs: z.number().optional(),
+  uptime: z.number().optional(),
+  tags: z.array(z.string()),
+});
 const quoteBodySchema = z.object({ payeeAgentId: z.string().min(1), payerAgentId: z.string().optional(), serviceId: z.string().min(1), requestedAmount: z.union([z.string(), z.number(), z.bigint()]).optional(), ttlSec: z.number().int().positive().optional() });
 const quoteResponseSchema = z.object({ quoteHash: hex32Schema, amount: z.string(), deadline: z.number(), payeeReceiver: addressSchema, signature: z.string(), nonce: z.string() });
 const settleBodySchema = z.object({ quoteHash: hex32Schema, payerSignature: z.string().optional(), txHash: hex32Schema.optional(), permitSignature: z.string().optional(), clientReceiptId: z.string().optional(), payerAgentId: z.string().optional() });
 const refundBodySchema = z.object({ reason: z.string(), agentId: z.string().optional(), clientReceiptId: z.string().optional() });
 const memoryPutSchema = z.object({ value: jsonValueSchema, tags: z.array(z.string()).default([]) });
 const memorySearchSchema = z.object({ query: z.string().min(1), limit: z.number().int().positive().max(50).default(10) });
-const paginationSchema = z.object({ cursor: z.string().optional(), limit: z.coerce.number().int().positive().max(100).default(25), tag: z.string().optional(), agentId: z.string().optional() });
+const paginationSchema = z.object({ cursor: z.string().optional(), limit: z.coerce.number().int().positive().max(100).default(25), tag: z.string().optional(), agentId: z.string().optional(), scope: z.enum(['owned', 'global']).default('owned') });
 const chainStatusSchema = z.object({ ok: z.boolean(), chainId: z.number(), blockNumber: z.number().optional(), latencyMs: z.number().optional(), rpc: z.string() });
 const healthSchema = z.object({
   ok: z.boolean(),
@@ -68,7 +89,7 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 type AuthUser = { address: string };
 type AgentRecord = z.infer<typeof agentSchema>;
 type RunRecord = z.infer<typeof runSchema> & { receipts: ReceiptIndexRow[]; steps: Array<{ id: string; name: string; status: string; createdAt: string }> };
-type ServiceRecord = z.infer<typeof serviceSchema>;
+type ServiceRecord = z.infer<typeof serviceSchema> & { agentId?: string; serviceId?: string; priceWei?: string };
 type SkillInstall = { agentId: string; skillId: string; version?: string | undefined; config?: JsonValue | undefined; installedAt: string };
 type MemoryRecord = { agentId: string; key: string; value: JsonValue; tags: string[]; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
@@ -117,6 +138,15 @@ const DEFAULT_SKILLS = [
   { id: 'web.search', name: 'Web Search', version: '1.0.0', description: 'Search the web from an agent run', category: 'Web', tier: 'free' as const, pricePerCallWei: '0', tags: ['web'] },
   { id: 'web.fetch', name: 'Web Fetch', version: '1.0.0', description: 'Fetch and parse a URL', category: 'Web', tier: 'free' as const, pricePerCallWei: '0', tags: ['web'] },
   { id: 'storage.upload', name: 'Storage Upload', version: '1.0.0', description: 'Upload artifacts to 0G Storage', category: 'Storage', tier: 'free' as const, pricePerCallWei: '0', tags: ['storage'] },
+];
+
+const DEFAULT_SERVICES: ServiceRecord[] = [
+  { id: '0g-storage', providerAddress: '0x0000000000000000000000000000000000000000', name: '0G Storage', description: 'Decentralized storage roots used for receipt payloads and memory artifacts.', pricePerTokenWei: '0', latencyMs: 900, uptime: 0.995, tags: ['storage', 'aristotle'] },
+  { id: '0g-compute', providerAddress: '0x0000000000000000000000000000000000000000', name: '0G Compute', description: 'Compute endpoint for model-backed agent skills when configured.', pricePerTokenWei: '0', latencyMs: 1200, uptime: 0.99, tags: ['compute', 'ai'] },
+  { id: 'aristotle-rpc', providerAddress: '0x0000000000000000000000000000000000000000', name: 'Aristotle RPC', description: '0G Aristotle mainnet RPC used for agent identity, payments, and receipts.', pricePerTokenWei: '0', latencyMs: 350, uptime: 0.998, tags: ['chain', 'rpc'] },
+  { id: 'receipt-book', providerAddress: '0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53', name: 'ReceiptBook', description: 'On-chain receipt minting contract for auditable agent activity.', pricePerTokenWei: '0', latencyMs: 500, uptime: 0.995, tags: ['receipts', 'proofs'] },
+  { id: 'payment-router', providerAddress: '0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c', name: 'Payment Router', description: 'Settlement router mapping agent identities to smart accounts.', pricePerTokenWei: '0', latencyMs: 500, uptime: 0.995, tags: ['payments', 'settlement'] },
+  { id: 'memory-index', providerAddress: '0x0000000000000000000000000000000000000000', name: 'Memory Index', description: 'Edge-indexed memory records written by memory skills and initialization events.', pricePerTokenWei: '0', latencyMs: 150, uptime: 0.99, tags: ['memory', 'index'] },
 ];
 
 class Mutex {
@@ -299,7 +329,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
             policyId: existing?.policyId,
             balanceWei: existing?.balanceWei ?? '0',
             kpis: existing?.kpis ?? { runs: 0, receipts: [...store.receipts.values()].filter((receipt) => receipt.agentId === id).length },
-            status: existing?.status ?? 'active',
+            status: measurableStatus(id, existing?.status ?? 'deployed'),
             createdAt: existing?.createdAt ?? indexedAt,
             updatedAt: indexedAt,
           });
@@ -338,8 +368,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     if (!service) throw new Error(`Service ${serviceId} for payee agent ${payeeAgentId} was not found`);
     const agent = store.agents.get(payeeAgentId);
     const receiver = agent?.accountAddress ?? service.agentId;
-    if (!addressSchema.safeParse(receiver).success) throw new Error(`Payee agent ${payeeAgentId} has no settlement receiver address`);
-    return { receiver, amount: BigInt(service.priceWei) };
+    if (!receiver || !addressSchema.safeParse(receiver).success) throw new Error(`Payee agent ${payeeAgentId} has no settlement receiver address`);
+    return { receiver, amount: BigInt(service.priceWei ?? service.pricePerTokenWei) };
   }, eventBus: {
     publish: (_event, payload) => {
       store.receipts.set(payload.receiptId, payload);
@@ -355,6 +385,28 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       for (const client of clients) client.send(JSON.stringify(event));
     }
   };
+
+  const isRecent = (iso: string | null | undefined, windowMs = 15 * 60_000): boolean => {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return Number.isFinite(t) && Date.now() - t < windowMs;
+  };
+
+  const hasRuntimeActivity = (agentId: string): boolean => {
+    if (agentId === '1') return isRecent(store.lastHeartbeat.aurora);
+    if (agentId === '2') return isRecent(store.lastHeartbeat.vesper);
+    if (agentId === '3') return isRecent(store.lastHeartbeat.helix);
+    return [...store.runs.values()].some((run) => run.agentId === agentId) || [...store.receipts.values()].some((receipt) => receipt.agentId === agentId);
+  };
+
+  const measurableStatus = (agentId: string, fallback: AgentRecord['status']): AgentRecord['status'] => {
+    if (fallback === 'paused' || fallback === 'failed' || fallback === 'error' || fallback === 'deploying' || fallback === 'pending_deploy') return fallback;
+    return hasRuntimeActivity(agentId) ? 'active' : 'activating';
+  };
+
+  const receiptRows = (agentId?: string): ReceiptIndexRow[] => [...store.receipts.values()]
+    .filter((receipt) => !agentId || receipt.agentId === agentId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const provisionAgentOnChain = async (owner: string, metadataRoot?: string): Promise<{ id: string; accountAddress: string; metadataRoot: string } | null> => {
     if (!options.accountFactoryAddress || !options.agentIdentityAddress) return null;
@@ -670,10 +722,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         return sum;
       }
     }, 0n);
-    const activeAgents = Object.values(store.lastHeartbeat).filter((heartbeat) => {
-      if (!heartbeat) return false;
-      return Date.now() - new Date(heartbeat).getTime() < 15 * 60_000;
-    }).length;
+    const activeAgents = [...store.agents.values()].filter((agent) => measurableStatus(agent.id, agent.status) === 'active').length;
     const agents = Math.max(store.agents.size, demoAgentIds.size);
 
     return {
@@ -685,6 +734,33 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       totalVolumeWei: totalFlowed.toString(),
       activeAgents,
     };
+  });
+
+
+  app.get('/v1/receipts/heatmap', { schema: { tags: ['receipts'], querystring: z.object({ days: z.coerce.number().int().positive().max(30).default(7), scope: z.enum(['owned', 'global']).default('global') }) } }, async (request) => {
+    const query = z.object({ days: z.coerce.number().int().positive().max(30).default(7), scope: z.enum(['owned', 'global']).default('global') }).parse(request.query);
+    let rows = receiptRows();
+    if (query.scope === 'owned') {
+      const user = await requireAuth(request);
+      await syncOnChainAgents();
+      const ownedAgentIds = new Set([...store.agents.values()].filter((agent) => sameAddress(agent.owner, user.address)).map((agent) => agent.id));
+      rows = rows.filter((receipt) => ownedAgentIds.has(receipt.agentId));
+    }
+    const cells = new Map<string, { day: number; hour: number; count: number }>();
+    const now = Date.now();
+    for (const receipt of rows) {
+      const created = new Date(receipt.createdAt).getTime();
+      if (!Number.isFinite(created)) continue;
+      const ageDays = Math.floor((now - created) / 86_400_000);
+      if (ageDays < 0 || ageDays >= query.days) continue;
+      const day = query.days - 1 - ageDays;
+      const hour = new Date(receipt.createdAt).getHours();
+      const key = `${day}:${hour}`;
+      const cell = cells.get(key) ?? { day, hour, count: 0 };
+      cell.count += 1;
+      cells.set(key, cell);
+    }
+    return [...cells.values()].sort((a, b) => a.day - b.day || a.hour - b.hour);
   });
 
   // ── Public proofs data (no auth, ISR-friendly) ────────────────────────────
@@ -823,27 +899,57 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       identityTokenId: provisioned?.id,
       accountAddress: provisioned?.accountAddress ?? user.address,
       balanceWei: '0',
-      kpis: { runs: 0, receipts: 0 },
-      status: 'active',
+      kpis: { runs: 1, receipts: 0 },
+      status: 'activating',
       createdAt: now,
       updatedAt: now,
     };
     if (provisioned?.metadataRoot ?? body.metadataRoot) agent.metadataRoot = provisioned?.metadataRoot ?? body.metadataRoot;
     if (body.policyId) agent.policyId = body.policyId;
+    if (body.policy) agent.policyId = agent.policyId ?? newId('policy');
     store.agents.set(agent.id, agent);
+
+    const selectedSkills = [...new Set(body.skills ?? body.policy?.allowedSkills ?? ['memory.write'])];
+    for (const skillId of selectedSkills) {
+      const install: SkillInstall = { agentId: agent.id, skillId, installedAt: now };
+      store.skills.set(`${agent.id}:${skillId}`, install);
+    }
+
+    const initRun: RunRecord = {
+      id: newId('run'),
+      agentId: agent.id,
+      status: 'succeeded',
+      createdAt: now,
+      updatedAt: now,
+      receipts: [],
+      steps: [{ id: newId('step'), name: 'agent.created', status: 'succeeded', createdAt: now }],
+    };
+    store.runs.set(initRun.id, initRun);
+    store.memory.set(`${agent.id}:system/initialized`, {
+      agentId: agent.id,
+      key: 'system/initialized',
+      value: { event: 'agent.created', name: agent.name, skills: selectedSkills, status: 'waiting_for_first_runtime_run' },
+      tags: ['system', 'created'],
+      updatedAt: now,
+    });
+    broadcast(agent.id, { event: 'run.step', payload: json(initRun.steps[0]) });
     return agent;
   });
 
   app.get('/v1/agents', { schema: { tags: ['agents'], response: { 200: z.array(agentSchema) } } }, async (request) => {
     const user = await requireAuth(request);
     await syncOnChainAgents();
-    return [...store.agents.values()].filter((agent) => agent.owner.toLowerCase() === user.address.toLowerCase());
+    return [...store.agents.values()]
+      .filter((agent) => agent.owner.toLowerCase() === user.address.toLowerCase())
+      .map((agent) => ({ ...agent, status: measurableStatus(agent.id, agent.status) }));
   });
 
   app.get('/v1/agents/:id', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), response: { 200: agentSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { id } = z.object({ id: idSchema }).parse(request.params);
-    return await ownedAgent(reply, user, id);
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
+    return { ...agent, status: measurableStatus(agent.id, agent.status) };
   });
 
   app.patch('/v1/agents/:id/policy', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), body: policyPatchSchema } }, async (request, reply) => {
@@ -890,6 +996,25 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return { runId: run.id };
   });
 
+
+  app.get('/v1/agents/:id/runs', { schema: { tags: ['runs'], params: z.object({ id: idSchema }) } }, async (request, reply) => {
+    const user = await requireAuth(request);
+    const { id } = z.object({ id: idSchema }).parse(request.params);
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
+    return [...store.runs.values()]
+      .filter((run) => run.agentId === id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  });
+
+  app.get('/v1/agents/:id/skills', { schema: { tags: ['skills'], params: z.object({ id: idSchema }) } }, async (request, reply) => {
+    const user = await requireAuth(request);
+    const { id } = z.object({ id: idSchema }).parse(request.params);
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
+    return [...store.skills.values()].filter((skill) => skill.agentId === id);
+  });
+
   app.get('/v1/runs/:runId', { schema: { tags: ['runs'], params: z.object({ runId: idSchema }), response: { 200: runSchema } } }, async (request, reply) => {
     const user = await requireAuth(request);
     const { runId } = z.object({ runId: idSchema }).parse(request.params);
@@ -917,15 +1042,26 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const body = serviceBodySchema.parse(request.body);
     const agent = await ownedAgent(reply, user, body.agentId);
     if (reply.sent || 'statusCode' in agent) return agent;
-    const service: ServiceRecord = { id: newId('svc'), agentId: body.agentId, serviceId: body.serviceId, tags: body.tags, priceWei: body.priceWei };
-    if (body.description) service.description = body.description;
+    const service: ServiceRecord = {
+      id: newId('svc'),
+      agentId: body.agentId,
+      serviceId: body.serviceId,
+      providerAddress: agent.accountAddress ?? agent.owner,
+      name: body.serviceId,
+      description: body.description ?? `Service exposed by agent ${body.agentId}`,
+      tags: body.tags,
+      priceWei: body.priceWei,
+      pricePerTokenWei: body.priceWei,
+    };
     store.services.set(service.id, service);
     return service;
   });
 
-  app.get('/v1/services', { schema: { tags: ['services'], querystring: z.object({ tag: z.string().optional() }), response: { 200: z.array(serviceSchema) } } }, async (request) => {
-    const { tag } = z.object({ tag: z.string().optional() }).parse(request.query);
-    return [...store.services.values()].filter((service) => !tag || service.tags.includes(tag));
+  app.get('/v1/services', { schema: { tags: ['services'], querystring: z.object({ tag: z.string().optional(), tags: z.string().optional() }), response: { 200: z.array(serviceSchema) } } }, async (request) => {
+    const { tag, tags } = z.object({ tag: z.string().optional(), tags: z.string().optional() }).parse(request.query);
+    const filter = tag ?? tags;
+    const custom = [...store.services.values()];
+    return [...DEFAULT_SERVICES, ...custom].filter((service) => !filter || service.tags.includes(filter));
   });
 
   app.post('/v1/quote', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } }, schema: { tags: ['billing'], body: quoteBodySchema, response: { 402: quoteResponseSchema } }, preHandler: async (request, reply) => {
@@ -1016,18 +1152,22 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   });
 
   app.get('/v1/receipts', { schema: { tags: ['receipts'], querystring: paginationSchema } }, async (request, reply) => {
-    const user = await requireAuth(request);
     const query = paginationSchema.parse(request.query);
-    if (query.agentId) {
-      const agent = await ownedAgent(reply, user, query.agentId);
-      if (reply.sent || 'statusCode' in agent) return agent;
+    let ownedAgentIds: Set<string> | null = null;
+    if (query.scope !== 'global') {
+      const user = await requireAuth(request);
+      if (query.agentId) {
+        const agent = await ownedAgent(reply, user, query.agentId);
+        if (reply.sent || 'statusCode' in agent) return agent;
+      }
+      await syncOnChainAgents();
+      ownedAgentIds = new Set([...store.agents.values()].filter((agent) => sameAddress(agent.owner, user.address)).map((agent) => agent.id));
+    } else {
+      await syncOnChainAgents();
     }
-    await syncOnChainAgents();
-    const ownedAgentIds = new Set([...store.agents.values()].filter((agent) => sameAddress(agent.owner, user.address)).map((agent) => agent.id));
-    const rows = [...store.receipts.values()]
-      .filter((receipt) => ownedAgentIds.has(receipt.agentId) && (!query.agentId || receipt.agentId === query.agentId))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return { items: rows.slice(0, query.limit), total: rows.length, nextCursor: null };
+    const rows = receiptRows(query.agentId)
+      .filter((receipt) => !ownedAgentIds || ownedAgentIds.has(receipt.agentId));
+    return { items: rows.slice(0, query.limit), total: rows.length, scope: query.scope, nextCursor: null };
   });
 
   app.get('/v1/receipts/:id', { schema: { tags: ['receipts'], params: z.object({ id: idSchema }) } }, async (request, reply) => {

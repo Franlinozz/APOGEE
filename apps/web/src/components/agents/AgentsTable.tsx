@@ -18,8 +18,12 @@ import { AgentAvatar, Badge } from '@apogee/ui';
 import { ArrowUpDown } from 'lucide-react';
 
 const BADGE_VARIANT: Record<Agent['status'], 'success' | 'warning' | 'danger' | 'neutral'> = {
+  pending_deploy: 'warning',
+  deployed: 'neutral',
+  activating: 'warning',
   active: 'success',
   paused: 'neutral',
+  failed: 'danger',
   deploying: 'warning',
   error: 'danger',
 };

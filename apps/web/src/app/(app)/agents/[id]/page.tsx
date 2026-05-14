@@ -1,7 +1,8 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { Topbar } from '@/components/shell/Topbar';
-import { serverGetAgent } from '@/lib/server-api';
+import { serverGetAgent, serverGetAgentSkills, serverGetMemory, serverGetReceipts, serverGetRuns } from '@/lib/server-api';
+import { getSkills } from '@/lib/api';
 import { AgentDetailTabs } from '@/components/agents/AgentDetailTabs';
 import { AgentAvatar, Badge, Skeleton } from '@apogee/ui';
 
@@ -16,8 +17,12 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
   active: 'success',
+  activating: 'warning',
+  deployed: 'neutral',
+  pending_deploy: 'warning',
   paused: 'neutral',
   deploying: 'warning',
+  failed: 'danger',
   error: 'danger',
 };
 
@@ -31,7 +36,7 @@ async function AgentHeader({ id }: { id: string }) {
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold text-fg">{agent.name}</h1>
           <Badge variant={STATUS_VARIANT[agent.status] ?? 'neutral'} className="capitalize">
-            {agent.status}
+            {agent.status.replace('_', ' ')}
           </Badge>
         </div>
         <p className="font-mono text-xs text-fg-muted mt-0.5">{agent.id}</p>
@@ -40,6 +45,28 @@ async function AgentHeader({ id }: { id: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+async function AgentBody({ id }: { id: string }) {
+  const agent = await serverGetAgent(id).catch(() => notFound());
+  const [receiptsResult, runs, memoryEntries, installedSkills, skillCatalog] = await Promise.all([
+    serverGetReceipts({ agentId: id, limit: 25, scope: 'global' }).catch(() => ({ items: [], total: 0 })),
+    serverGetRuns(id).catch(() => []),
+    serverGetMemory(id).catch(() => []),
+    serverGetAgentSkills(id).catch(() => []),
+    getSkills().catch(() => []),
+  ]);
+
+  return (
+    <AgentDetailTabs
+      agent={agent}
+      receipts={receiptsResult.items}
+      runs={runs}
+      memoryEntries={memoryEntries}
+      installedSkills={installedSkills}
+      skillCatalog={skillCatalog}
+    />
   );
 }
 
@@ -58,7 +85,9 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
             <AgentHeader id={params.id} />
           </Suspense>
 
-          <AgentDetailTabs agentId={params.id} />
+          <Suspense fallback={<div className="p-6"><Skeleton className="h-64 rounded-[var(--radius-xl)]" /></div>}>
+            <AgentBody id={params.id} />
+          </Suspense>
         </div>
       </main>
     </>

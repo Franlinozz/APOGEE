@@ -22,10 +22,10 @@ async function StatsRow() {
   try { stats = await serverGetDashboardStats(); } catch {}
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <StatTile label="Total Agents" value={String(stats.totalAgents)} />
-      <StatTile label="Active Agents" value={String(stats.activeAgents)} />
-      <StatTile label="Total Receipts" value={String(stats.totalReceipts)} />
-      <StatTile label="Total Volume" value={fmtWei(stats.totalVolumeWei)} />
+      <StatTile label="Network Agents" value={String(stats.totalAgents)} />
+      <StatTile label="Runtime Active" value={String(stats.activeAgents)} />
+      <StatTile label="Network Receipts" value={String(stats.totalReceipts)} />
+      <StatTile label="Network Volume" value={fmtWei(stats.totalVolumeWei)} />
     </div>
   );
 }
@@ -39,7 +39,7 @@ async function HeatmapSection() {
 async function ActivitySection() {
   let receipts: Awaited<ReturnType<typeof serverGetReceipts>>['items'] = [];
   try {
-    const result = await serverGetReceipts({ limit: 10 });
+    const result = await serverGetReceipts({ limit: 10, scope: 'global' });
     receipts = result.items;
   } catch {}
   return <RecentActivity receipts={receipts} />;
@@ -51,6 +51,8 @@ export default function DashboardPage() {
       <Topbar title="Dashboard" />
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-6xl space-y-8">
+          <p className="text-xs text-fg-faint">Showing global Aristotle network activity. The Agents page shows agents owned by the connected wallet.</p>
+
           {/* Stat tiles */}
           <Suspense
             fallback={
