@@ -153,6 +153,38 @@ body {
   color: rgb(var(--color-fg));
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   min-height: 100dvh;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at center, rgba(167 139 250 / 0.46) 0 1px, transparent 1.35px),
+    radial-gradient(ellipse at 30% 18%, rgba(96 165 250 / 0.16), transparent 42%),
+    radial-gradient(ellipse at 72% 78%, rgba(124 95 241 / 0.14), transparent 46%);
+  background-size: 18px 18px, 900px 520px, 820px 560px;
+  background-position: 0 0, center top, center bottom;
+  opacity: 0.038;
+  -webkit-mask-image:
+    radial-gradient(ellipse at 50% 14%, black 0%, transparent 62%),
+    linear-gradient(to bottom, transparent 0%, black 16%, black 82%, transparent 100%);
+  mask-image:
+    radial-gradient(ellipse at 50% 14%, black 0%, transparent 62%),
+    linear-gradient(to bottom, transparent 0%, black 16%, black 82%, transparent 100%);
+  transform: skewY(-3deg) scale(1.04);
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-shell {
+  background-color: transparent !important;
 }
 
 /* Light mode: gradient background, fixed so it doesn't scroll */
@@ -160,6 +192,14 @@ body {
   background: var(--bg-gradient);
   background-attachment: fixed;
   background-color: unset;
+}
+
+[data-theme="light"] body::before {
+  background-image:
+    radial-gradient(circle at center, rgba(109 76 225 / 0.38) 0 1px, transparent 1.35px),
+    radial-gradient(ellipse at 28% 16%, rgba(109 76 225 / 0.11), transparent 44%),
+    radial-gradient(ellipse at 78% 72%, rgba(96 165 250 / 0.10), transparent 48%);
+  opacity: 0.062;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -190,9 +230,9 @@ body {
    LANDING NAV — premium translucent glass in dark + light
 ═══════════════════════════════════════════════════════════ */
 .landing-nav {
-  background: rgba(5 7 18 / 0.72);
-  backdrop-filter: blur(20px) saturate(135%);
-  -webkit-backdrop-filter: blur(20px) saturate(135%);
+  background: rgba(5 7 18 / 0.70);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
   border-bottom: 1px solid rgba(255 255 255 / 0.075);
   box-shadow: 0 16px 42px -36px rgba(0 0 0 / 0.72);
 }
