@@ -166,7 +166,7 @@ body::before {
   background-size: cover;
   background-position: center top;
   background-repeat: no-repeat;
-  opacity: 0.072;
+  opacity: 0.085;
   mix-blend-mode: screen;
   filter: invert(1) contrast(1.16) saturate(0.72);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 86%, transparent 100%);
@@ -190,7 +190,7 @@ body > * {
 }
 
 [data-theme="light"] body::before {
-  opacity: 0.058;
+  opacity: 0.110;
   mix-blend-mode: multiply;
   filter: contrast(0.94) saturate(0.72);
 }
@@ -257,8 +257,8 @@ body > * {
 
 .hero-sphere-bg::before {
   background:
-    linear-gradient(90deg, rgb(var(--color-bg)) 0%, rgba(8 10 18 / 0.46) 22%, transparent 56%, rgba(8 10 18 / 0.18) 100%),
-    linear-gradient(180deg, rgba(8 10 18 / 0.52) 0%, transparent 34%, rgba(8 10 18 / 0.62) 100%);
+    linear-gradient(90deg, rgb(var(--color-bg)) 0%, rgba(8 10 18 / 0.38) 22%, transparent 56%, rgba(8 10 18 / 0.12) 100%),
+    linear-gradient(180deg, rgba(8 10 18 / 0.36) 0%, transparent 34%, rgba(8 10 18 / 0.42) 100%);
   z-index: 2;
 }
 
@@ -268,12 +268,12 @@ body > * {
 }
 
 .hero-sphere-image {
-  opacity: 0.28;
+  opacity: 0.38;
   object-fit: cover;
   object-position: 52% 45%;
-  filter: brightness(0.82) contrast(0.94) saturate(0.9);
-  -webkit-mask-image: radial-gradient(circle at 54% 45%, black 0%, black 56%, transparent 88%);
-  mask-image: radial-gradient(circle at 54% 45%, black 0%, black 56%, transparent 88%);
+  filter: brightness(0.88) contrast(0.96) saturate(0.92);
+  -webkit-mask-image: radial-gradient(circle at 54% 45%, black 0%, black 62%, transparent 90%);
+  mask-image: radial-gradient(circle at 54% 45%, black 0%, black 62%, transparent 90%);
 }
 
 .hero-sphere-scrim {
@@ -281,8 +281,8 @@ body > * {
   inset: 0;
   z-index: 4;
   background:
-    radial-gradient(circle at 50% 44%, transparent 0%, transparent 30%, rgba(5 7 18 / 0.22) 70%, rgba(5 7 18 / 0.50) 100%),
-    linear-gradient(to bottom, rgba(5 7 18 / 0.48), rgba(5 7 18 / 0.24), rgba(5 7 18 / 0.68));
+    radial-gradient(circle at 50% 44%, transparent 0%, transparent 36%, rgba(5 7 18 / 0.14) 72%, rgba(5 7 18 / 0.34) 100%),
+    linear-gradient(to bottom, rgba(5 7 18 / 0.28), rgba(5 7 18 / 0.10), rgba(5 7 18 / 0.42));
 }
 
 [data-theme="light"] .hero-sphere-bg::before {
@@ -296,26 +296,26 @@ body > * {
 }
 
 [data-theme="light"] .hero-sphere-image {
-  opacity: 0.32;
+  opacity: 0.42;
   filter: brightness(1.03) contrast(0.94) saturate(0.9);
 }
 
 [data-theme="light"] .hero-sphere-scrim {
   background:
-    radial-gradient(circle at 50% 44%, transparent 0%, transparent 34%, rgba(250 247 255 / 0.18) 72%, rgba(250 247 255 / 0.46) 100%),
-    linear-gradient(to bottom, rgba(250 247 255 / 0.38), rgba(246 241 255 / 0.16), rgba(250 247 255 / 0.58));
+    radial-gradient(circle at 50% 44%, transparent 0%, transparent 40%, rgba(250 247 255 / 0.12) 72%, rgba(250 247 255 / 0.32) 100%),
+    linear-gradient(to bottom, rgba(250 247 255 / 0.22), rgba(246 241 255 / 0.08), rgba(250 247 255 / 0.38));
 }
 
 @media (max-width: 767px) {
   .hero-sphere-image {
-    opacity: 0.13;
+    opacity: 0.20;
     object-position: 50% 64%;
-    -webkit-mask-image: radial-gradient(circle at 50% 62%, black 0%, black 34%, transparent 72%);
-    mask-image: radial-gradient(circle at 50% 62%, black 0%, black 34%, transparent 72%);
+    -webkit-mask-image: radial-gradient(circle at 50% 62%, black 0%, black 40%, transparent 76%);
+    mask-image: radial-gradient(circle at 50% 62%, black 0%, black 40%, transparent 76%);
   }
 
   [data-theme="light"] .hero-sphere-image {
-    opacity: 0.19;
+    opacity: 0.28;
   }
 }
 
