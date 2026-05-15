@@ -11,12 +11,12 @@ const signerKey = `0x${'1'.repeat(64)}`;
 class FakeChain implements BillingChainClient {
   contract<T>(): T {
     return {
-      emitReceipt: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
+      emitReceipt: async () => ({ hash: txHash, wait: async () => ({ hash: txHash, status: 1 }) }),
       nextTokenId: async () => 7n,
       predict: async () => '0x0000000000000000000000000000000000000007',
-      createAccount: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
-      mint: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
-      setAgentAccount: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
+      createAccount: async () => ({ hash: txHash, wait: async () => ({ hash: txHash, status: 1 }) }),
+      mint: async () => ({ hash: txHash, wait: async () => ({ hash: txHash, status: 1 }) }),
+      setAgentAccount: async () => ({ hash: txHash, wait: async () => ({ hash: txHash, status: 1 }) }),
     } as T;
   }
   async send(): Promise<{ hash: string }> { return { hash: txHash }; }

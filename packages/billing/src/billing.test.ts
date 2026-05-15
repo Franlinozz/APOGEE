@@ -13,7 +13,7 @@ class FakeChain implements BillingChainClient {
   public sent = 0;
   contract<T>(): T {
     return {
-      emitReceipt: async () => ({ hash: txHash, wait: async () => ({ hash: txHash }) }),
+      emitReceipt: async () => ({ hash: txHash, wait: async () => ({ hash: txHash, status: 1 }) }),
     } as T;
   }
   async send(): Promise<{ hash: string } & Record<string, unknown>> {
@@ -22,6 +22,14 @@ class FakeChain implements BillingChainClient {
   }
   async waitForReceipt(): Promise<{ hash: string; logs: Log[] }> {
     return { hash: txHash, logs: [{ topics: paymentLog.topics, data: paymentLog.data } as unknown as Log] };
+  }
+}
+
+class RevertingReceiptChain extends FakeChain {
+  override contract<T>(): T {
+    return {
+      emitReceipt: async () => ({ hash: txHash, wait: async () => ({ hash: txHash, status: 0 }) }),
+    } as T;
   }
 }
 
@@ -58,10 +66,10 @@ describe('billing prompt 4', () => {
     await expect(settlement.settle({ quoteHash: quote.quoteHash, txHash })).resolves.toMatchObject({ status: 'settled' });
   });
 
-  it('falls back to local pending receipts after storage failures', async () => {
+  it('falls back to local storage and only marks minted after chain confirmation', async () => {
     const storage = { uploadJson: async () => { throw new Error('offline'); } } satisfies StorageBoundary;
     const minter = new ReceiptMinter({ storageClient: storage, chainClient: new FakeChain(), receiptBookAddress: address, fallbackDir: '.tmp-test-receipts' });
-    await expect(minter.mint({ agentId: '1', actionTag: 'TEST', payload: { ok: true } })).resolves.toMatchObject({ status: 'pending' });
+    await expect(minter.mint({ agentId: '1', actionTag: 'TEST', payload: { ok: true } })).resolves.toMatchObject({ status: 'minted' });
   });
 
   it('publishes receipt events', async () => {
@@ -71,6 +79,15 @@ describe('billing prompt 4', () => {
     const minter = new ReceiptMinter({ storageClient: new FakeStorage(), chainClient: new FakeChain(), receiptBookAddress: address, eventBus: bus });
     await minter.mint({ agentId: '1', actionTag: 'TEST', payload: { ok: true } });
     expect(seen).toBe(true);
+  });
+
+  it('does not mark reverted receipt transactions as minted', async () => {
+    const bus = new LocalReceiptEventBus();
+    let failedStatus: string | undefined;
+    bus.subscribe('receipt', (row) => { failedStatus = row.status; });
+    const minter = new ReceiptMinter({ storageClient: new FakeStorage(), chainClient: new RevertingReceiptChain(), receiptBookAddress: address, eventBus: bus });
+    await expect(minter.mint({ agentId: '1', actionTag: 'TEST', payload: { ok: true } })).rejects.toThrow(/reverted/);
+    expect(failedStatus).toBe('failed');
   });
 
   it('refund manager calls router and mints refund receipt', async () => {

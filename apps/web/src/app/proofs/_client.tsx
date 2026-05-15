@@ -1,7 +1,7 @@
 // CLIENT: pagination state for receipt feed and storage proof table
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { buildChainscanUrl } from '@/lib/chainscan';
 
 const PAGE_SIZE = 9;
@@ -14,7 +14,8 @@ type ReceiptIndexRow = {
   valueWei: string;
   storageRoot: string;
   txHash?: string;
-  status: 'pending' | 'minted';
+  status: 'pending' | 'minted' | 'failed';
+  error?: string;
   createdAt: string;
 };
 
@@ -100,26 +101,39 @@ export function NetworkToggle({
 export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
   const [data, setData] = useState<ProofsData | null>(null);
   const [lastVerified, setLastVerified] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [manualVerifying, setManualVerifying] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
   const [page, setPage] = useState(1);
 
-  const fetch_ = useCallback(async () => {
-    setLoading(true);
+  const fetch_ = useCallback(async (mode: 'manual' | 'background' = 'background') => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12_000);
+    if (mode === 'manual') setManualVerifying(true);
+    else setRefreshing(true);
     try {
-      const res = await fetch(`${edgeUrl}/v1/proofs?chain=aristotle`);
-      if (res.ok) {
-        const json = await res.json() as ProofsData;
-        setData(json);
-        setLastVerified(new Date().toISOString());
-      }
-    } catch { /* no-op */ } finally {
-      setLoading(false);
+      const res = await fetch(`${edgeUrl}/v1/proofs?chain=aristotle`, { signal: controller.signal });
+      if (!res.ok) throw new Error(`Proof verification failed (${res.status})`);
+      const json = await res.json() as ProofsData;
+      setData(json);
+      setLastVerified(new Date().toISOString());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error && err.name === 'AbortError' ? 'Verification timed out — retrying shortly.' : err instanceof Error ? err.message : 'Verification failed — retrying shortly.');
+    } finally {
+      clearTimeout(timer);
+      inFlight.current = false;
+      setManualVerifying(false);
+      setRefreshing(false);
     }
   }, [edgeUrl]);
 
   useEffect(() => {
-    void fetch_();
-    const id = setInterval(() => { void fetch_(); }, 10_000);
+    void fetch_('background');
+    const id = setInterval(() => { void fetch_('background'); }, 10_000);
     return () => clearInterval(id);
   }, [fetch_]);
 
@@ -153,14 +167,20 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
             </span>
           )}
           <button
-            onClick={() => void fetch_()}
-            disabled={loading}
+            onClick={() => void fetch_('manual')}
+            disabled={manualVerifying}
             className="px-3 py-1 rounded-lg border border-[var(--color-line-bright)] text-xs text-fg-muted hover:text-fg hover:border-[var(--color-line-accent)] transition-colors disabled:opacity-40"
           >
-            {loading ? 'Verifying…' : 'Verify now'}
+            {manualVerifying ? 'Verifying…' : refreshing ? 'Refreshing…' : 'Verify now'}
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-warning/25 bg-warning/10 p-3 text-xs text-warning">
+          {error}
+        </div>
+      )}
 
       {!data && (
         <div className="rounded-xl border border-[var(--color-line)] bg-surface p-6 text-sm text-fg-muted text-center">
@@ -195,7 +215,7 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
                     <td className="px-4 py-2.5 text-fg-muted capitalize">{r.agentId}</td>
                     <td className="px-4 py-2.5 text-fg-muted">{formatValue(r.valueWei)}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'}`}>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-success/15 text-success' : r.status === 'failed' ? 'bg-danger/15 text-danger' : 'bg-warning/15 text-warning'}`}>
                         {r.status}
                       </span>
                     </td>
@@ -318,7 +338,7 @@ export function StorageProofsClient({ proofSample }: { proofSample: StorageProof
                   ) : <span className="text-fg-faint">—</span>}
                 </td>
                 <td className="px-4 py-2.5">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'}`}>
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-success/15 text-success' : r.status === 'failed' ? 'bg-danger/15 text-danger' : 'bg-warning/15 text-warning'}`}>
                     {r.status}
                   </span>
                 </td>

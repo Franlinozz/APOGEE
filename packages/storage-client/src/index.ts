@@ -166,6 +166,7 @@ export class StorageClient {
       // upload is either single { txHash, rootHash, txSeq } or multi-fragment { txHashes[], rootHashes[], txSeqs[] }
       const singleRoot: string = ('rootHash' in upload && upload.rootHash) ? upload.rootHash : rootHash;
       const singleTx: string   = ('txHash'   in upload) ? upload.txHash : '';
+      if (singleTx) await this.assertSuccessfulStorageTx(singleTx, rootHash, payload.byteLength);
       return {
         rootHash: singleRoot,
         txHash: singleTx,
@@ -174,6 +175,18 @@ export class StorageClient {
     } finally {
       await file.close();
       await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  private async assertSuccessfulStorageTx(txHash: string, rootHash: string, sizeBytes: number): Promise<void> {
+    if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) return;
+    const receipt = await this.signer.provider?.waitForTransaction(txHash, 1, 90_000);
+    if (!receipt) {
+      throw new StorageError('TX_RECEIPT_MISSING', `0G storage transaction ${txHash} was not confirmed`, { txHash, rootHash, sizeBytes });
+    }
+    if (receipt.status === 0) {
+      this.logger.error({ txHash, rootHash, sizeBytes, blockNumber: receipt.blockNumber, gasUsed: receipt.gasUsed?.toString() }, '0G storage transaction reverted');
+      throw new StorageError('TX_REVERTED', `0G storage transaction ${txHash} reverted`, receipt);
     }
   }
 

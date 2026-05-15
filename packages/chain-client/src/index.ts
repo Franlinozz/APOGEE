@@ -198,6 +198,9 @@ export class ChainClient {
       timeout,
     ]);
     if (!receipt) throw new ChainError('RECEIPT_MISSING', `Transaction ${parsedHash} was not mined`);
+    if (receipt.status === 0) {
+      throw new ChainError('TX_REVERTED', `Transaction ${parsedHash} reverted`, receipt);
+    }
     return receipt;
   }
 
@@ -226,7 +229,8 @@ export class ChainClient {
   }
 
   private async withGasPricing(tx: TransactionRequest): Promise<TransactionRequest> {
-    const gasLimit = tx.gasLimit ?? (await this.signer.estimateGas(tx));
+    const estimatedGas = tx.gasLimit ?? (await this.signer.estimateGas(tx));
+    const gasLimit = typeof estimatedGas === 'bigint' ? (estimatedGas * 130n) / 100n : estimatedGas;
     const pricing = await this.suggestGasPricing();
     return { ...tx, gasLimit, ...pricing, chainId: tx.chainId ?? this.chainId };
   }

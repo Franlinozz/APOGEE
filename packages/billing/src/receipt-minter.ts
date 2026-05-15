@@ -24,7 +24,8 @@ export interface ReceiptIndexRow {
   storageTxHash?: string | undefined;
   valueWei: string;
   txHash?: string | undefined;
-  status: 'pending' | 'minted';
+  status: 'pending' | 'minted' | 'failed';
+  error?: string | undefined;
   createdAt: string;
 }
 
@@ -64,7 +65,7 @@ export interface MintReceiptResult {
   storageRoot: string;
   storageTxHash?: string | undefined;
   payloadHash: string;
-  status: 'pending' | 'minted';
+  status: 'pending' | 'minted' | 'failed';
 }
 
 interface StorageUploadResult {
@@ -74,7 +75,10 @@ interface StorageUploadResult {
 }
 
 interface ReceiptBookContract {
-  emitReceipt(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint): Promise<{ hash: string; wait(): Promise<TransactionReceipt> }>;
+  emitReceipt(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint, overrides?: { gasLimit?: bigint }): Promise<{ hash: string; wait(): Promise<TransactionReceipt> }>;
+  estimateGas?: {
+    emitReceipt(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint): Promise<bigint>;
+  };
 }
 
 const mintSchema = z.object({
@@ -257,7 +261,7 @@ export class ReceiptMinter {
       storageRoot,
       storageTxHash,
       valueWei: valueWei.toString(),
-      status: storageRoot.startsWith('local://') ? 'pending' : 'minted',
+      status: 'pending',
       createdAt: new Date().toISOString(),
     };
 
@@ -268,7 +272,15 @@ export class ReceiptMinter {
     // the receipt is verifiable; the reconciler will re-upload and update storageRoot later.
     const effectiveStorageRoot = storageRoot.startsWith('local://') ? payloadHash : storageRoot;
 
-    const receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei, lockWaitMs);
+    let receipt: TransactionReceipt;
+    try {
+      receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei, lockWaitMs);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.index.update(receiptId, { status: 'failed', storageRoot: effectiveStorageRoot, storageTxHash, error: message });
+      this.eventBus.publish('receipt', { ...row, storageRoot: effectiveStorageRoot, storageTxHash, status: 'failed', error: message });
+      throw error;
+    }
     const txHash = receipt.hash;
     await this.index.update(receiptId, { txHash, storageRoot: effectiveStorageRoot, storageTxHash, status: 'minted' });
 
@@ -346,11 +358,15 @@ export class ReceiptMinter {
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const tx = await receiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei) as { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<TransactionReceipt> };
+        const estimatedGas = await receiptBook.estimateGas?.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei);
+        const gasLimit = estimatedGas === undefined ? undefined : (estimatedGas * 130n) / 100n;
+        const tx = await receiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei, gasLimit === undefined ? undefined : { gasLimit }) as { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<TransactionReceipt> };
         const signerAddress = (this.options.chainClient as unknown as { getSigner?(): { address: string } }).getSigner?.()?.address ?? 'unknown';
-        this.logger.info({ method: 'ReceiptBook.emitReceipt', signerAddress, nonce: tx.nonce, txHash: tx.hash, gasPrice: tx.gasPrice?.toString() ?? null, maxFeePerGas: tx.maxFeePerGas?.toString() ?? null, maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString() ?? null, attempt, lockWaitMs }, 'receipt tx submitted');
+        this.logger.info({ method: 'ReceiptBook.emitReceipt', signerAddress, nonce: tx.nonce, txHash: tx.hash, estimatedGas: estimatedGas?.toString(), gasLimit: gasLimit?.toString(), gasPrice: tx.gasPrice?.toString() ?? null, maxFeePerGas: tx.maxFeePerGas?.toString() ?? null, maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString() ?? null, attempt, lockWaitMs }, 'receipt tx submitted');
         const receipt = await tx.wait();
-        this.logger.info({ method: 'ReceiptBook.emitReceipt', signerAddress, txHash: tx.hash, nonce: tx.nonce, attempt, lockWaitMs }, 'receipt tx confirmed');
+        if (receipt.status === 0) throw new Error(`ReceiptBook.emitReceipt reverted for ${tx.hash}`);
+        if (receipt.status !== 1) throw new Error(`ReceiptBook.emitReceipt did not confirm successfully for ${tx.hash} (status ${receipt.status ?? 'unknown'})`);
+        this.logger.info({ method: 'ReceiptBook.emitReceipt', signerAddress, txHash: tx.hash, nonce: tx.nonce, status: receipt.status, gasUsed: receipt.gasUsed?.toString(), attempt, lockWaitMs }, 'receipt tx confirmed');
         return receipt;
       } catch (error) {
         lastError = error;

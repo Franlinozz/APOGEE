@@ -126,7 +126,7 @@ type DeployNonceRecord = { ownerLower: string; nonce: string; deadline: number; 
 type OnboardingRecord = { key: string; chainId: number; tokenId: string; stages: Record<string, boolean>; status: 'pending' | 'running' | 'complete' | 'failed'; attempts: number; error?: string | undefined; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
-type TxResponse = { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<unknown> };
+type TxResponse = { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<{ status?: number | null; gasUsed?: bigint } | unknown> };
 type PilotMsg = { role: 'user' | 'assistant'; content: string; createdAt: string };
 type PilotConvo = { id: string; userAddress: string; messages: PilotMsg[]; createdAt: string };
 type AccountFactoryContract = { predict(owner: string, salt: string): Promise<string>; createAccount(owner: string, salt: string): Promise<TxResponse> };
@@ -1011,8 +1011,9 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
           try {
             const tx = await submit();
             app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce, gasPrice: tx.gasPrice?.toString() ?? null, maxFeePerGas: tx.maxFeePerGas?.toString() ?? null, maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString() ?? null, attempt, lockWaitMs }, 'provision-agent: tx submitted');
-            await tx.wait();
-            app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce, attempt, lockWaitMs }, 'provision-agent: tx confirmed');
+            const receipt = await tx.wait() as { status?: number | null; gasUsed?: bigint };
+            if (receipt.status !== 1) throw new Error(`${method} did not confirm successfully for ${tx.hash} (status ${receipt.status ?? 'unknown'})`);
+            app.log.info({ method, signerAddress, hash: tx.hash, nonce: tx.nonce, status: receipt.status, gasUsed: receipt.gasUsed?.toString(), attempt, lockWaitMs }, 'provision-agent: tx confirmed');
             return tx.hash;
           } catch (error) {
             lastError = error;
@@ -1223,7 +1224,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.get('/v1/stats', { schema: { tags: ['system'] } }, async () => {
     await syncOnChainAgents();
     await syncOnChainReceipts();
-    const receipts = receiptRows();
+    const receipts = receiptRows().filter((receipt) => receipt.status === 'minted');
     const demoAgentIds = new Set(receipts.map((receipt) => receipt.agentId));
     const totalFlowed = receipts.reduce((sum, receipt) => {
       try {
@@ -1250,7 +1251,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   app.get('/v1/receipts/heatmap', { schema: { tags: ['receipts'], querystring: z.object({ days: z.coerce.number().int().positive().max(30).default(7), scope: z.enum(['owned', 'global']).default('global') }) } }, async (request) => {
     await syncOnChainReceipts();
     const query = z.object({ days: z.coerce.number().int().positive().max(30).default(7), scope: z.enum(['owned', 'global']).default('global') }).parse(request.query);
-    let rows = receiptRows();
+    let rows = receiptRows().filter((receipt) => receipt.status === 'minted');
     if (query.scope === 'owned') {
       const user = await requireAuth(request);
       await syncOnChainAgents();
@@ -1280,6 +1281,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const chainParam = (request.query as Record<string, string>)['chain'] ?? 'aristotle';
     const chainId = chainParam === 'galileo' ? 16602 : 16661;
     const allReceipts = [...store.receipts.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const mintedReceipts = allReceipts.filter((receipt) => receipt.status === 'minted');
     const last50 = allReceipts.slice(0, 50);
 
     // 14d × 24h heatmap
@@ -1290,7 +1292,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       heatmap[day] = {};
       for (let h = 0; h < 24; h++) heatmap[day][h] = 0;
     }
-    for (const r of allReceipts) {
+    for (const r of mintedReceipts) {
       const dt = new Date(r.createdAt);
       const day = dt.toISOString().slice(0, 10);
       const hour = dt.getUTCHours();
@@ -1298,7 +1300,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     }
 
     const demoAgents = ['aurora', 'vesper', 'helix'].map(slug => {
-      const agentReceipts = allReceipts.filter(r => r.agentId.toLowerCase().includes(slug));
+      const agentReceipts = mintedReceipts.filter(r => r.agentId.toLowerCase().includes(slug));
       return {
         slug,
         agentId: agentReceipts[0]?.agentId ?? null,
@@ -1312,6 +1314,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
     // 5 random receipts that have a real 0G storage root (not a local fallback or bare payloadHash)
     const withRealStorage = allReceipts.filter(r =>
+      r.status === 'minted' &&
       r.storageRoot &&
       !r.storageRoot.startsWith('local://') &&
       r.storageRoot !== r.payloadHash,
@@ -1334,7 +1337,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return {
       chainId,
       generatedAt: new Date().toISOString(),
-      totalReceipts: receiptRows().length,
+      totalReceipts: receiptRows().filter((receipt) => receipt.status === 'minted').length,
       demoAgents,
       receipts: last50,
       heatmap,
@@ -1405,8 +1408,12 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     if (secret !== process.env.INTERNAL_SECRET) return problem(reply, 401, 'Unauthorized', 'Invalid internal secret.');
     const row = request.body as ReceiptIndexRow;
     if (!row?.receiptId) return problem(reply, 400, 'Bad request', 'Missing receiptId');
-    store.receipts.set(row.receiptId, row);
-    broadcast(row.agentId, { event: 'receipt', payload: json(row) });
+    const hasValidTxHash = /^0x[a-fA-F0-9]{64}$/.test(row.txHash ?? '');
+    const normalizedRow: ReceiptIndexRow = row.status === 'minted' && !hasValidTxHash
+      ? { ...row, status: 'pending' }
+      : row;
+    store.receipts.set(normalizedRow.receiptId, normalizedRow);
+    broadcast(normalizedRow.agentId, { event: 'receipt', payload: json(normalizedRow) });
     return { ok: true };
   });
 
