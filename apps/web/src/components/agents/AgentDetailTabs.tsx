@@ -35,7 +35,7 @@ function runtimeLabel(agent: Agent, receipts: Receipt[], runs: Run[]): string {
   if (latestRun && agent.status === 'active') return `Active — last runtime run ${fmtDate(latestRun.createdAt)}`;
   if (agent.status === 'failed' || agent.status === 'error') return `Failed — ${agent.deployment?.error ?? 'bootstrap or runtime failed'}`;
   if (agent.status === 'activating') return 'Activating — bootstrap pending';
-  if (agent.status === 'initialized' || agent.status === 'ready' || receipts.some((r) => r.skillId === 'agent.created')) return 'Initialized — awaiting first scheduled task';
+  if (agent.status === 'initialized' || agent.status === 'ready' || receipts.some((r) => r.skillId === 'agent.created')) return 'Bootstrapped — no recurring runtime delegated yet';
   return 'Indexed — awaiting bootstrap';
 }
 
@@ -107,8 +107,8 @@ function OverviewTab({ agent, receipts, runs, memoryEntries, installedSkills }: 
       <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
         <p className="text-sm font-medium text-fg">Lifecycle honesty</p>
         <p className="mt-2 text-xs text-fg-muted">
-          Deployment/bootstrap receipts are real lifecycle records. They do not mean this agent has an autonomous runtime loop yet.
-          User-created agents become <span className="text-fg">active</span> only after a real scheduled task or heartbeat exists.
+          Deployment/bootstrap receipts are real lifecycle records. They do not mean this agent has an autonomous recurring runtime loop yet.
+          User-created agents become <span className="text-fg">runtime active</span> only after a real scheduled task, session key, or heartbeat exists.
         </p>
       </div>
     </div>
@@ -151,7 +151,7 @@ function ActivityTab({ receipts, runs }: { receipts: Receipt[]; runs: Run[] }) {
     ...runs.map((run) => ({ id: run.id, type: 'run', label: run.steps[0]?.type ?? 'agent.run', status: run.status, time: run.createdAt, txHash: undefined, storageRoot: undefined })),
   ].sort((a, b) => b.time.localeCompare(a.time));
 
-  if (events.length === 0) return <Empty title="No lifecycle events yet" body="No deployment, bootstrap, memory, heartbeat, or runtime receipts are indexed for this agent yet." />;
+  if (events.length === 0) return <Empty title="No lifecycle events indexed yet" body="No deployment, bootstrap, memory, heartbeat, or runtime receipts are indexed for this agent yet." />;
 
   return (
     <div className="space-y-2">
@@ -198,7 +198,7 @@ function MemoryTab({ agentId, entries }: { agentId: string; entries: MemoryEntry
 }
 
 function SkillsTab({ installedSkills, skillCatalog }: { installedSkills: InstalledSkill[]; skillCatalog: SkillManifest[] }) {
-  if (installedSkills.length === 0) return <Empty title="No installed skills indexed" body="Skill selections are now stored during deployment. Existing older agents may show empty until reconfigured or indexed from a new deployment." />;
+  if (installedSkills.length === 0) return <Empty title="No selected skills indexed" body="Skill selections are stored during deployment. Existing older agents may show empty until reconfigured or indexed from a new deployment." />;
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {installedSkills.map((install) => {
@@ -207,11 +207,11 @@ function SkillsTab({ installedSkills, skillCatalog }: { installedSkills: Install
           <div key={install.skillId} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="font-medium text-sm text-fg">{manifest?.name ?? install.skillId}</p>
-              <Badge variant="success">installed</Badge>
+              <Badge variant="success">selected</Badge>
             </div>
             <p className="mt-1 font-mono text-xs text-fg-faint">{install.skillId}</p>
-            <p className="mt-2 text-xs text-fg-muted">{manifest?.description ?? 'Installed skill metadata is not in the current catalog.'}</p>
-            <p className="mt-3 text-xs text-fg-faint">Installed {fmtDate(install.installedAt)}</p>
+            <p className="mt-2 text-xs text-fg-muted">{manifest?.description ?? 'Selected skill metadata is not in the current catalog.'}</p>
+            <p className="mt-3 text-xs text-fg-faint">Selected {fmtDate(install.installedAt)}</p>
           </div>
         );
       })}
@@ -274,9 +274,9 @@ function SettingsTab({ agent }: { agent: Agent }) {
       <div className="rounded-[var(--radius-lg)] border border-warning/30 bg-warning/5 p-4">
         <p className="font-medium text-fg">Workspace visibility</p>
         <p className="mt-1 text-xs text-fg-muted">Hide rushed or test agents from your local workspace without touching chain state.</p>
-        <p className="mt-1 text-xs text-fg-faint">This does not delete the on-chain agent or receipts. It only hides this agent from your Apogee workspace.</p>
+        <p className="mt-1 text-xs text-fg-faint">This does not delete the on-chain agent or receipts. It only hides the local workspace index entry.</p>
         {!confirming ? (
-          <button onClick={() => setConfirming(true)} className="mt-3 rounded-[var(--radius)] border border-warning/40 px-3 py-1.5 text-xs text-warning hover:bg-warning/10">Hide from my workspace</button>
+          <button onClick={() => setConfirming(true)} className="mt-3 rounded-[var(--radius)] border border-warning/40 px-3 py-1.5 text-xs text-warning hover:bg-warning/10">Hide local index</button>
         ) : (
           <div className="mt-3 space-y-3 rounded-[var(--radius)] border border-[var(--color-line)] bg-elevated p-3">
             <p className="text-xs text-fg-muted">Type <span className="font-mono text-fg">{required}</span> or <span className="font-mono text-fg">{agent.name}</span> to confirm.</p>

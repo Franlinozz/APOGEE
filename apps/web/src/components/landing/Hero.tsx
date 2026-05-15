@@ -10,7 +10,7 @@ export function Hero() {
   return (
     <section
       id="hero"
-      className="relative flex min-h-screen items-center justify-center overflow-hidden pt-14"
+      className="relative flex min-h-screen items-center justify-center overflow-hidden pt-[104px] sm:pt-32 lg:pt-36"
     >
       {/* Radial gradient backdrop */}
       <div
@@ -49,7 +49,7 @@ export function Hero() {
       </div>
 
       {/* Content — single column, centered */}
-      <div className="relative mx-auto w-full max-w-3xl px-4 py-32 text-center sm:px-6 lg:px-8">
+      <div className="relative mx-auto w-full max-w-3xl px-4 pb-32 pt-10 text-center sm:px-6 sm:pt-12 lg:px-8">
 
         {/* Live status pill */}
         <div

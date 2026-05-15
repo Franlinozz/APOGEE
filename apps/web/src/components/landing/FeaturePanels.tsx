@@ -34,7 +34,7 @@ const PANELS = [
 
 export function FeaturePanels() {
   return (
-    <section id="product" className="py-24">
+    <section id="product" className="landing-anchor py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <InViewReveal className="mb-16 max-w-xl">

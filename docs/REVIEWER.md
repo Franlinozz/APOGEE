@@ -76,63 +76,87 @@ All three agents mint receipts via `ReceiptBook.mint()` on Aristotle. Filter
 
 ---
 
-## 5. 30-Minute Verification Walkthrough
+## 5-minute walkthrough
+
+1. **Open the landing page** — https://apogee-red.vercel.app
+   - Apogee is the runtime layer for autonomous agents on 0G / Aristotle.
+   - The core promise is self-custodial wallets, encrypted memory infrastructure, and verifiable receipts for agent actions.
+
+2. **Connect wallet**
+   - Wallet connection proves ownership of the workspace being viewed.
+   - Signing may be required for dashboard/session flows and for deploy authorization; sign-in does not require spending funds.
+
+3. **Open Dashboard**
+   - **Network Agents** = indexed `AgentIdentity` records / deployed agents visible to Apogee.
+   - **Runtime Active** = agents with recent runtime or demo heartbeat activity.
+   - **Network Receipts** = indexed `ReceiptBook` receipt activity.
+   - **Network Volume** = cumulative 0G value recorded by indexed receipts.
+   - Dashboard totals are global Aristotle network activity. The Agents page focuses on the connected wallet where applicable.
+
+4. **Open Receipts**
+   - Click a real transaction hash and confirm it opens on `chainscan.0g.ai`.
+   - Some rows may represent local deployment/lifecycle records without a transaction hash. Transaction links should only exist when a real `0x` transaction hash exists.
+
+5. **Deploy a fresh agent**
+   - Choose 1–2 skills and complete the wallet authorization/signature flow.
+   - Expected result within about 60 seconds: the agent appears in `/agents`; status becomes initialized, ready, or bootstrapped depending on the current UI label; Activity shows deployment/bootstrap events where implemented; Memory shows `system/init` bootstrap memory; Skills shows the selected skills.
+   - Receipt rows link to Chainscan only when a real transaction hash exists.
+
+6. **Open Marketplace**
+   - The Skills tab shows the skill catalog and the Services tab shows available service listings.
+   - Current install/selection is part of deployment/configuration. A full paid third-party marketplace purchase flow is roadmap.
+
+7. **Open `/proofs`**
+   - The page explains `ReceiptBook`, payload hashes, optional 0G Storage roots, and the autonomous proof loop.
+   - Demo agents generate recurring heartbeat/proof activity that can be verified through indexed receipts and Chainscan links.
+
+## Current production truth
+
+- Demo agents 1–3 run scheduled heartbeat/demo tasks.
+- User-deployed agents currently get deployment/bootstrap receipts immediately.
+- User-deployed agents can show bootstrap memory and selected skills.
+- Full autonomous recurring runtime for arbitrary newly-created user agents requires session-key/delegation support and is roadmap.
+- Paid third-party marketplace install flow is roadmap.
+- On-chain policy editing and revenue-split actions are roadmap unless explicitly shown as implemented in the UI.
+
+## 30-Minute Verification Walkthrough
 
 ### Step 1 — /proofs page (5 min)
 
 1. Open https://apogee-red.vercel.app/proofs
-2. The **On-chain Receipts** tab shows live `ReceiptMinted` events fetched from
-   the Edge API which reads from Aristotle mainnet.
-3. Click any receipt row's `txHash` link — opens chainscan.0g.ai showing the
-   on-chain transaction.
-4. The **Storage Proofs** tab shows receipts that include a `storageRoot` from
-   0G Storage. Click the `storageTxHash` link to verify the data was anchored.
-5. The **Activity Heatmap** shows 14 days × 24 hours of receipt volume.
+2. The **On-chain Receipts** tab shows indexed receipt events fetched from the Edge API which reads from Aristotle mainnet and local lifecycle records.
+3. Click any real `txHash` link — it opens chainscan.0g.ai showing the on-chain transaction.
+4. The **Storage Proofs** tab shows receipts that include a `storageRoot` from 0G Storage where available.
+5. The **Activity Heatmap** shows recent receipt volume.
 
 ### Step 2 — Edge API health (2 min)
 
 ```bash
-curl https://apogeeedge-production.up.railway.app/health | jq .
+curl https://apogeeedge-production.up.railway.app/v1/health | jq .
 ```
 
-Expected response shape:
-```json
-{
-  "ok": true,
-  "uptimeSec": ...,
-  "chain": { "aristotle": { "ok": true, "blockNumber": ..., "latencyMs": ... } },
-  "lastHeartbeat": { "aurora": "...", "vesper": "...", "helix": "..." }
-}
-```
+Expected response includes `ok: true` plus chain/indexer/runtime health fields when available.
 
 ### Step 3 — Live receipts via API (3 min)
 
 ```bash
-curl "https://apogeeedge-production.up.railway.app/v1/proofs" | jq .receipts[0:3]
+curl "https://apogeeedge-production.up.railway.app/v1/receipts?scope=global&limit=3" | jq .items
 ```
 
-Returns the last 50 on-chain receipts. Verify `txHash` fields on chainscan.
+Returns indexed receipts. Verify any populated `txHash` on chainscan.
 
 ### Step 4 — SIWE sign-in (5 min)
 
 1. Visit https://apogee-red.vercel.app
 2. Click **Launch App** → **Connect Wallet**
-3. Sign the SIWE message with any Ethereum wallet (no 0G tokens needed for sign-in)
-4. You land on the **Dashboard** showing protocol-wide statistics
+3. Sign the SIWE message with any Ethereum wallet. No 0G token spend is required for sign-in.
+4. You land on the **Dashboard** showing global Aristotle network statistics.
 
 ### Step 5 — Verify 0G Storage integration (5 min)
 
-Vesper's heartbeat uploads data to 0G Storage every 15 minutes. To check:
-
-1. On the /proofs page → **Storage Proofs** tab
-2. Each row with a `storageRoot` (hex, not `local://`) represents a successful
-   0G Storage upload
-3. The `storageTxHash` links to the 0G Storage transaction on chainscan
-
-Alternatively, check the Railway logs:
-```
-VESPER heartbeat: storage.upload → storageRoot=0x... storageTxHash=0x...
-```
+1. On `/proofs`, open **Storage Proofs**.
+2. Rows with a real hex `storageRoot` represent 0G Storage-backed payload roots.
+3. Rows with local/bootstrap-only records are lifecycle records and should not show fake transaction links.
 
 ### Step 6 — Smart contract read (5 min)
 
@@ -144,15 +168,12 @@ cast call 0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53 \
   --rpc-url https://evmrpc-testnet.0g.ai
 ```
 
-Increasing total confirms live heartbeat activity. The counter grows by ~1 every
-10 minutes.
+Increasing totals confirm live receipt activity from the demo/runtime loop.
 
 ### Step 7 — Skill sandbox (optional, 5 min)
 
-The Apogee Pilot chatbot (bottom-right on every page) runs without authentication.
-Try: `"What agents are running?"` or `"Explain how receipts work"`
-
----
+The Apogee Pilot chatbot (bottom-right on public pages) runs without authentication.
+Try: `What agents are running?` or `Explain how receipts work`.
 
 ## 6. Repository Structure
 

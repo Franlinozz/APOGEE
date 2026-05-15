@@ -72,6 +72,30 @@ The result: teams spend weeks on plumbing instead of building products. Apogee e
 
 ---
 
+## What works today
+
+- Wallet connect and wallet ownership/signature flow for sign-in and deployment authorization where enabled.
+- Agent deployment through the web app.
+- On-chain `AgentIdentity` indexing for agents visible to Apogee.
+- `ReceiptBook` receipts and a receipts explorer with safe Chainscan links only for real transaction hashes.
+- Global dashboard metrics for Aristotle network agents, active runtime/demo agents, receipts, and indexed volume.
+- Marketplace skill catalog and services catalog.
+- System/bootstrap memory for newly deployed agents.
+- Selected skills attached to new deployments.
+- Demo runtime receipts from scheduled heartbeat agents.
+- `/proofs` page for live receipt/proof visibility, payload hashes, and optional 0G Storage roots.
+
+## Roadmap / not yet fully automated
+
+- Full autonomous recurring runtime scheduling for arbitrary user-created agents.
+- Session-key/delegation flow for user agents.
+- True paid marketplace install/purchase flow.
+- On-chain policy editing UI.
+- Revenue split UI actions.
+- Richer memory writes beyond bootstrap for arbitrary newly-created agents.
+
+---
+
 ## Architecture
 
 ![Apogee Protocol Architecture](docs/diagrams/architecture.svg)
