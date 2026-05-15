@@ -209,6 +209,69 @@ body {
   scroll-margin-top: 112px;
 }
 
+/* Reference-inspired hero atmosphere: a quiet holographic runtime object. */
+.hero-hologram {
+  opacity: 0.18;
+  mix-blend-mode: screen;
+}
+
+.hero-hologram-object {
+  position: absolute;
+  right: max(-160px, -10vw);
+  bottom: max(38px, 8vh);
+  width: min(76vw, 820px);
+  height: auto;
+  transform: rotate(-5deg);
+  transform-origin: center;
+  filter: blur(0.15px) drop-shadow(0 0 54px rgba(124 95 241 / 0.18));
+}
+
+.hero-hologram-glow {
+  position: absolute;
+  right: -12vw;
+  bottom: 4vh;
+  width: min(72vw, 760px);
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 44% 46%, rgba(255 255 255 / 0.22), transparent 19%),
+    radial-gradient(circle at 48% 48%, rgba(124 95 241 / 0.22), transparent 34%),
+    radial-gradient(circle at 62% 58%, rgba(96 165 250 / 0.16), transparent 44%),
+    radial-gradient(circle at 45% 38%, rgba(34 211 238 / 0.12), transparent 52%);
+  filter: blur(20px);
+}
+
+.hero-hologram-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(var(--color-bg)) 0%, rgba(8 10 18 / 0.62) 38%, transparent 78%),
+    linear-gradient(180deg, rgba(8 10 18 / 0.20) 0%, transparent 42%, rgb(var(--color-bg)) 100%);
+}
+
+[data-theme="light"] .hero-hologram {
+  opacity: 0.24;
+  mix-blend-mode: multiply;
+}
+
+[data-theme="light"] .hero-hologram-object {
+  filter: blur(0.2px) drop-shadow(0 24px 90px rgba(109 76 225 / 0.10));
+}
+
+[data-theme="light"] .hero-hologram-glow {
+  background:
+    radial-gradient(circle at 44% 46%, rgba(255 255 255 / 0.60), transparent 20%),
+    radial-gradient(circle at 48% 48%, rgba(109 76 225 / 0.18), transparent 36%),
+    radial-gradient(circle at 62% 58%, rgba(96 165 250 / 0.14), transparent 46%),
+    radial-gradient(circle at 45% 38%, rgba(34 211 238 / 0.10), transparent 54%);
+}
+
+[data-theme="light"] .hero-hologram-wash {
+  background:
+    linear-gradient(90deg, rgba(250 247 252 / 0.94) 0%, rgba(250 247 252 / 0.74) 42%, transparent 82%),
+    linear-gradient(180deg, rgba(250 247 252 / 0.40) 0%, transparent 42%, rgba(248 245 251 / 0.94) 100%);
+}
+
 /* ═══════════════════════════════════════════════════════════
    LIGHT MODE — SIDEBAR NAV ITEM ACTIVE STATE
    White pill, soft shadow, dark text — 0G Hub pattern.
