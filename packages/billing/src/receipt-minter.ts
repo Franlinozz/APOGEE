@@ -75,9 +75,10 @@ interface StorageUploadResult {
 }
 
 interface ReceiptBookContract {
-  emitReceipt(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint, overrides?: { gasLimit?: bigint }): Promise<{ hash: string; wait(): Promise<TransactionReceipt> }>;
-  estimateGas?: {
-    emitReceipt(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint): Promise<bigint>;
+  // ethers v6: estimateGas moved from contract.estimateGas.fn() to contract.fn.estimateGas()
+  emitReceipt: {
+    (agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint, overrides?: { gasLimit?: bigint }): Promise<{ hash: string; wait(): Promise<TransactionReceipt> }>;
+    estimateGas?(agentId: bigint, actionTag: string, payloadHash: string, storageRoot: string, valueWei: bigint): Promise<bigint>;
   };
 }
 
@@ -362,9 +363,12 @@ export class ReceiptMinter {
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const estimatedGas = await receiptBook.estimateGas?.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei);
-        const gasLimit = estimatedGas === undefined ? undefined : (estimatedGas * 130n) / 100n;
-        const tx = await receiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei, gasLimit === undefined ? undefined : { gasLimit }) as { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<TransactionReceipt> };
+        const estimatedGas = await receiptBook.emitReceipt.estimateGas?.(agentId, actionTag, payloadHash, storageRoot, valueWei);
+        const gasLimit = estimatedGas !== undefined ? (estimatedGas * 130n) / 100n : undefined;
+        const tx = await (gasLimit !== undefined
+          ? receiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei, { gasLimit })
+          : receiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei)
+        ) as { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<TransactionReceipt> };
         const signerAddress = (this.options.chainClient as unknown as { getSigner?(): { address: string } }).getSigner?.()?.address ?? 'unknown';
         this.logger.info({ method: 'ReceiptBook.emitReceipt', signerAddress, nonce: tx.nonce, txHash: tx.hash, estimatedGas: estimatedGas?.toString(), gasLimit: gasLimit?.toString(), gasPrice: tx.gasPrice?.toString() ?? null, maxFeePerGas: tx.maxFeePerGas?.toString() ?? null, maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString() ?? null, attempt, lockWaitMs }, 'receipt tx submitted');
         const receipt = await tx.wait();
