@@ -200,6 +200,7 @@ class Mutex {
 }
 
 const deployMutex = new Mutex();
+const DEPLOY_AUTH_ENABLED = process.env.APOGEE_DEPLOY_AUTH_ENABLED !== 'false';
 const DEPLOY_LOCK_TIMEOUT_MS = 120_000;
 const DEPLOY_RETRY_BACKOFF_MS = [1_500, 4_000] as const;
 
@@ -611,7 +612,14 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       const router = new Contract(paymentRouterAddress, [
         'function agentAccounts(uint256 agentId) view returns (address)',
       ], provider) as unknown as PaymentRouterReadContract;
-      const nextTokenId = await identity.nextTokenId();
+      let nextTokenId: bigint;
+      try {
+        nextTokenId = await identity.nextTokenId();
+      } catch (err) {
+        app.log.warn({ agentIdentityAddress, err }, 'agent index sync skipped — AgentIdentity unavailable or has no bytecode');
+        lastChainAgentSyncAt = Date.now();
+        return;
+      }
       const maxTokenId = nextTokenId > 200n ? 200n : nextTokenId;
       const indexedAt = nowIso();
       let synced = 0;
@@ -1056,7 +1064,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   });
 
 
-  app.get('/v1/auth/deploy-nonce', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } }, schema: { tags: ['auth'], response: { 200: deployNonceResponseSchema } } }, async (request) => {
+  app.get('/v1/auth/deploy-nonce', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } }, schema: { tags: ['auth'], response: { 200: deployNonceResponseSchema } } }, async (request, reply) => {
+    if (!DEPLOY_AUTH_ENABLED) return problem(reply, 404, 'Deploy authorization disabled', 'EIP-712 deployment authorization is disabled; use the legacy deploy endpoint.');
     const user = await requireAuth(request);
     const now = nowIso();
     const deadline = Math.floor(Date.now() / 1000) + 10 * 60;
@@ -1500,6 +1509,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
 
   app.post('/v1/agents/deploy-authorized', { schema: { tags: ['agents'], body: deployAuthorizedSchema, response: { 200: agentSchema } } }, async (request, reply) => {
+    if (!DEPLOY_AUTH_ENABLED) return problem(reply, 404, 'Deploy authorization disabled', 'EIP-712 deployment authorization is disabled; use the legacy deploy endpoint.');
     const user = await requireAuth(request);
     const body = deployAuthorizedSchema.parse(request.body);
     const owner = body.authorization.owner;

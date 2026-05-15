@@ -1,7 +1,8 @@
 import { cookies } from 'next/headers';
 import { type NextRequest, NextResponse } from 'next/server';
 
-const EDGE = process.env['EDGE_API_URL'] ?? process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:8080';
+const PROD_EDGE_URL = 'https://apogeeedge-production.up.railway.app';
+const EDGE = process.env['EDGE_API_URL']?.trim().replace(/\/$/, '') || process.env['NEXT_PUBLIC_API_URL']?.trim().replace(/\/$/, '') || PROD_EDGE_URL;
 
 export async function POST(req: NextRequest) {
   const token = cookies().get('apogee-jwt')?.value;

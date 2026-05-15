@@ -87,6 +87,11 @@ export function ConnectWallet() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
+    setState('idle');
+    setErrorMsg('');
+  }, [address]);
+
+  useEffect(() => {
     if (!isConnected && openConnectModal) {
       openConnectModal();
     }
@@ -104,17 +109,20 @@ export function ConnectWallet() {
       const signature = await signMessageAsync({ message });
       const { token } = await siweVerify(message, signature);
 
-      await fetch('/api/auth/set-cookie', {
+      const cookieRes = await fetch('/api/auth/set-cookie', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
+      if (!cookieRes.ok) throw new Error('Session cookie could not be saved. Please try again.');
 
       router.push(redirect);
       router.refresh();
     } catch (err: unknown) {
-      if ((err as { code?: number })?.code === 4001) {
-        setState('idle');
+      const text = err instanceof Error ? err.message.toLowerCase() : '';
+      if ((err as { code?: number })?.code === 4001 || text.includes('user rejected') || text.includes('user denied') || text.includes('rejected request')) {
+        setState('error');
+        setErrorMsg('Signature cancelled. Nothing changed — you can try again when ready.');
         return;
       }
       setState('error');

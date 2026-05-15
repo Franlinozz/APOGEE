@@ -1,14 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-const EDGE_URL = process.env.EDGE_API_URL?.replace(/\/$/, '');
+const PROD_EDGE_URL = 'https://apogeeedge-production.up.railway.app';
+const EDGE_URL = process.env.EDGE_API_URL?.trim().replace(/\/$/, '') || process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, '') || PROD_EDGE_URL;
 
 export async function POST(request: NextRequest) {
-  if (!EDGE_URL) {
-    return NextResponse.json(
-      { title: 'Auth service unavailable', detail: 'EDGE_API_URL is not configured on this deployment.' },
-      { status: 503 },
-    );
-  }
   const body = await request.text();
   const upstream = await fetch(`${EDGE_URL}/v1/auth/siwe/verify`, {
     method: 'POST',

@@ -7,6 +7,8 @@ import type { AgentWizardState } from '@/lib/types';
 import { aristotle } from '@/lib/wagmi';
 import { CheckCircle, AlertCircle, Loader2, RefreshCw, Wallet } from 'lucide-react';
 
+const DEPLOY_AUTH_ENABLED = process.env.NEXT_PUBLIC_DEPLOY_AUTH_ENABLED !== 'false';
+
 type DeployStatus =
   | { phase: 'idle' }
   | { phase: 'preparing_authorization' }
@@ -129,6 +131,35 @@ export function WizardStepDeploy({ state, onBack, onDone }: Props) {
         await switchChainAsync({ chainId: aristotle.id });
       }
 
+      if (!DEPLOY_AUTH_ENABLED) {
+        setStatus({ phase: 'creating' });
+        const legacyRes = await fetch('/api/agents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: state.identity.name.trim(),
+            description: state.identity.description.trim() || undefined,
+            metadataRoot: state.identity.name.trim(),
+            skills: state.skills,
+            policy,
+          }),
+        });
+        const legacyData = await legacyRes.json() as Record<string, unknown>;
+        if (!legacyRes.ok) {
+          const classified = classifyError((legacyData['title'] as string | undefined) ?? legacyRes.statusText, legacyData['detail'] as string | undefined, legacyRes.status);
+          setStatus({ phase: 'error', message: classified.message, detail: classified.detail, requireNewSignature: classified.requireNewSignature });
+          return;
+        }
+        const agentId = (legacyData['id'] as string | undefined) ?? 'deployed';
+        setStatus({ phase: 'done', txHash: agentId });
+        setConfetti(true);
+        setTimeout(() => {
+          setConfetti(false);
+          onDone(agentId);
+        }, 1600);
+        return;
+      }
+
       setStatus({ phase: 'preparing_authorization' });
       const nonceRes = await fetch('/api/auth/deploy-nonce');
       const nonce = await nonceRes.json() as { owner?: string; nonce?: string; deadline?: number; chainId?: number; title?: string; detail?: string };
@@ -221,14 +252,16 @@ export function WizardStepDeploy({ state, onBack, onDone }: Props) {
             ? 'Try again'
             : status.phase === 'signature_cancelled'
               ? 'Sign again'
-              : 'Sign deployment authorization';
+              : DEPLOY_AUTH_ENABLED ? 'Sign deployment authorization' : 'Deploy agent';
 
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-base font-semibold text-fg">Deploy agent</h2>
         <p className="mt-1 text-sm text-fg-muted">
-          Review your configuration, sign a wallet authorization, then Apogee’s deployment relayer provisions the agent on Aristotle.
+          {DEPLOY_AUTH_ENABLED
+            ? 'Review your configuration, sign a wallet authorization, then Apogee’s deployment relayer provisions the agent on Aristotle.'
+            : 'Review your configuration, then Apogee’s deployment relayer provisions the agent on Aristotle.'}
         </p>
       </div>
 

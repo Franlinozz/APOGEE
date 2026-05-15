@@ -18,31 +18,41 @@ function fmtWei(wei: string): string {
 }
 
 async function StatsRow() {
-  let stats = { totalAgents: 0, totalReceipts: 0, totalVolumeWei: '0', activeAgents: 0 };
-  try { stats = await serverGetDashboardStats(); } catch {}
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <StatTile label="Network Agents" value={String(stats.totalAgents)} />
-      <StatTile label="Runtime Active" value={String(stats.activeAgents)} />
-      <StatTile label="Network Receipts" value={String(stats.totalReceipts)} />
-      <StatTile label="Network Volume" value={fmtWei(stats.totalVolumeWei)} />
-    </div>
-  );
+  try {
+    const stats = await serverGetDashboardStats();
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile label="Network Agents" value={String(stats.totalAgents)} />
+        <StatTile label="Runtime Active" value={String(stats.activeAgents)} />
+        <StatTile label="Network Receipts" value={String(stats.totalReceipts)} />
+        <StatTile label="Network Volume" value={fmtWei(stats.totalVolumeWei)} />
+      </div>
+    );
+  } catch {
+    return (
+      <div className="rounded-[var(--radius-xl)] border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+        Network data unavailable. Edge stats could not be loaded, so Apogee is not showing fake zero activity.
+      </div>
+    );
+  }
 }
 
 async function HeatmapSection() {
-  let cells: Awaited<ReturnType<typeof serverGetReceiptHeatmap>> = [];
-  try { cells = await serverGetReceiptHeatmap(); } catch {}
-  return <DashboardHeatmap cells={cells} />;
+  try {
+    const cells = await serverGetReceiptHeatmap();
+    return <DashboardHeatmap cells={cells} />;
+  } catch {
+    return <p className="rounded-[var(--radius-lg)] border border-warning/30 bg-warning/10 p-4 text-sm text-warning">Receipt heatmap unavailable while Edge is unreachable.</p>;
+  }
 }
 
 async function ActivitySection() {
-  let receipts: Awaited<ReturnType<typeof serverGetReceipts>>['items'] = [];
   try {
     const result = await serverGetReceipts({ limit: 10, scope: 'global' });
-    receipts = result.items;
-  } catch {}
-  return <RecentActivity receipts={receipts} />;
+    return <RecentActivity receipts={result.items} />;
+  } catch {
+    return <p className="rounded-[var(--radius-lg)] border border-warning/30 bg-warning/10 p-4 text-sm text-warning">Recent receipts unavailable while Edge is unreachable.</p>;
+  }
 }
 
 export default function DashboardPage() {

@@ -1,6 +1,8 @@
 import type { Agent, Policy, Receipt, MemoryEntry, SkillManifest, ServiceListing, Run, DashboardStats, HeatmapCell } from './types';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+const PROD_EDGE_URL = 'https://apogeeedge-production.up.railway.app';
+const envApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+const BASE = envApiUrl || (process.env.NODE_ENV === 'production' ? PROD_EDGE_URL : 'http://localhost:8080');
 
 
 function normalizeReceipt(row: Record<string, unknown>): Receipt {
@@ -236,18 +238,10 @@ export function getAgentSkills(agentId: string, token?: string): Promise<Array<{
 
 // ── Dashboard ─────────────────────────────────────────────
 
-export async function getDashboardStats(token?: string): Promise<DashboardStats> {
-  try {
-    return await apiFetch<DashboardStats>('/v1/stats', undefined, token);
-  } catch {
-    return { totalAgents: 0, totalReceipts: 0, totalVolumeWei: '0', activeAgents: 0 };
-  }
+export function getDashboardStats(token?: string): Promise<DashboardStats> {
+  return apiFetch<DashboardStats>('/v1/stats', undefined, token);
 }
 
-export async function getReceiptHeatmap(token?: string): Promise<HeatmapCell[]> {
-  try {
-    return await apiFetch<HeatmapCell[]>('/v1/receipts/heatmap', undefined, token);
-  } catch {
-    return [];
-  }
+export function getReceiptHeatmap(token?: string): Promise<HeatmapCell[]> {
+  return apiFetch<HeatmapCell[]>('/v1/receipts/heatmap', undefined, token);
 }
