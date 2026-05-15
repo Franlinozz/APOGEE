@@ -16,38 +16,37 @@ export function Hero() {
       {/* Radial gradient backdrop */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 z-0"
         style={{ background: 'var(--hero-bg)' }}
       />
 
-      {/* Paid hero image asset — decorative background only, blended into the page. */}
+      {/* Paid sphere asset — full-bleed decorative hero atmosphere. */}
       <div
         aria-hidden
-        className="hero-sphere-bg pointer-events-none absolute inset-0 overflow-hidden"
+        className="hero-sphere-bg pointer-events-none absolute inset-0 z-0 overflow-hidden"
       >
-        <div className="hero-sphere-glow" />
         <Image
           src="/brand/apogee-hero-sphere.png"
           alt=""
-          width={1280}
-          height={720}
+          fill
+          sizes="100vw"
           className="hero-sphere-image"
           priority
           aria-hidden
         />
-        <div className="hero-sphere-wash" />
+        <div className="hero-sphere-scrim" />
       </div>
 
       {/* Orbital field — anchored to bottom third so it sits below the headline */}
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-center overflow-hidden"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] flex items-end justify-center overflow-hidden"
         style={{ height: '38%' }}
         aria-hidden
       >
         <div className="relative flex items-center justify-center w-[min(80vw,520px)] h-[min(80vw,520px)]">
           <svg
             viewBox="-200 -120 400 240"
-            className="absolute inset-0 w-full h-full opacity-[0.05]"
+            className="absolute inset-0 w-full h-full opacity-[0.035]"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >
@@ -60,7 +59,7 @@ export function Hero() {
           {/* Traveling node — contained inside orbital-field so it orbits below the text */}
           <div className="orbit-node pointer-events-none absolute" aria-hidden>
             <div
-              className="orbit-node-inner h-2.5 w-2.5 rounded-full opacity-50"
+              className="orbit-node-inner h-2.5 w-2.5 rounded-full opacity-35"
               style={{ background: 'var(--orbital-node-gradient)' }}
             />
           </div>
@@ -68,7 +67,7 @@ export function Hero() {
       </div>
 
       {/* Content — single column, centered */}
-      <div className="relative mx-auto w-full max-w-3xl px-4 pb-32 pt-10 text-center sm:px-6 sm:pt-12 lg:px-8">
+      <div className="relative z-10 mx-auto w-full max-w-3xl px-4 pb-32 pt-10 text-center sm:px-6 sm:pt-12 lg:px-8">
 
         {/* Live status pill */}
         <div
