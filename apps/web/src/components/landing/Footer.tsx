@@ -1,5 +1,5 @@
-import Image from 'next/image';
 import Link from 'next/link';
+import { ApogeeLogo } from '@/components/brand/apogee-logo';
 
 const CONTRACTS = [
   { label: 'PaymentRouter',   address: '0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c' },
@@ -43,22 +43,7 @@ export function Footer() {
           <div className="lg:col-span-2">
             <div className="mb-4">
               <Link href="/" aria-label="Apogee home" className="inline-flex items-center">
-                {/* Dark logo */}
-                <Image
-                  src="/brand/apogee-logo-dark.webp"
-                  alt="Apogee Protocol"
-                  width={1023}
-                  height={489}
-                  className="theme-logo-dark h-7 w-auto object-contain"
-                />
-                {/* Light logo */}
-                <Image
-                  src="/brand/apogee-logo-light.webp"
-                  alt="Apogee Protocol"
-                  width={1023}
-                  height={489}
-                  className="theme-logo-light h-7 w-auto object-contain"
-                />
+                <ApogeeLogo className="h-8" />
               </Link>
             </div>
             <p className="prose-width text-sm leading-relaxed text-fg-muted">

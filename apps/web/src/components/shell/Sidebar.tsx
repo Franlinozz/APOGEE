@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { ApogeeLogo } from '@/components/brand/apogee-logo';
 import {
   LayoutDashboard,
   Bot,
@@ -38,22 +38,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-14 items-center px-4 border-b border-[var(--color-line)]">
         <Link href="/" className="flex items-center" aria-label="Apogee home">
-          <Image
-            src="/brand/apogee-logo-dark.png"
-            alt="Apogee"
-            width={120}
-            height={28}
-            className="theme-logo-dark h-6 w-auto"
-            priority
-          />
-          <Image
-            src="/brand/apogee-logo-light.png"
-            alt="Apogee"
-            width={120}
-            height={28}
-            className="theme-logo-light h-6 w-auto"
-            priority
-          />
+          <ApogeeLogo className="h-7 max-w-[9.5rem]" priority />
         </Link>
       </div>
 

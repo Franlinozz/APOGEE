@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import dynamic from 'next/dynamic';
+import { ApogeeLogo } from '@/components/brand/apogee-logo';
 
 const NavConnectButton = dynamic(
   () => import('./NavConnectButton').then((m) => m.NavConnectButton),
@@ -33,24 +33,8 @@ export function Nav() {
   return (
     <header className="landing-nav fixed inset-x-0 top-0 z-50 h-14">
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Logotype — PNG brand assets, theme-aware via CSS */}
         <Link href="/" className="flex items-center" aria-label="Apogee home">
-          <Image
-            src="/brand/apogee-logo-dark.png"
-            alt="Apogee"
-            width={140}
-            height={32}
-            className="theme-logo-dark h-7 w-auto"
-            priority
-          />
-          <Image
-            src="/brand/apogee-logo-light.png"
-            alt="Apogee"
-            width={140}
-            height={32}
-            className="theme-logo-light h-7 w-auto"
-            priority
-          />
+          <ApogeeLogo className="h-8 sm:h-9" priority />
         </Link>
 
         {/* Nav links */}

@@ -5,6 +5,7 @@ import { useAccount, useSignMessage, useDisconnect } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { siweNonce, siweVerify, ApiError } from '@/lib/api';
+import { ApogeeLogo } from '@/components/brand/apogee-logo';
 import { Loader2, AlertCircle, ArrowRight, ShieldCheck, Globe, Key } from 'lucide-react';
 
 const WALLETS = [
@@ -143,12 +144,7 @@ export function ConnectWallet() {
       <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-white/[0.08] bg-[#141414] shadow-2xl">
         <div className="border-b border-white/[0.06] px-6 py-4">
           <div className="flex items-center gap-2">
-            <span
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white"
-              style={{ background: 'linear-gradient(135deg,#7C5FF1,#A78BFA)' }}
-            >
-              A
-            </span>
+            <ApogeeLogo markOnly variant="light" className="h-7" priority />
             <span className="text-sm font-semibold text-white">Apogee Protocol</span>
           </div>
         </div>
@@ -214,12 +210,7 @@ export function ConnectWallet() {
         {/* Left: wallet list */}
         <div className="p-7">
           <div className="mb-5 flex items-center gap-2">
-            <span
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white"
-              style={{ background: 'linear-gradient(135deg,#7C5FF1,#A78BFA)' }}
-            >
-              A
-            </span>
+            <ApogeeLogo markOnly variant="light" className="h-7" priority />
             <span className="text-sm font-semibold text-white">Apogee Protocol</span>
           </div>
 
