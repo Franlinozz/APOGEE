@@ -136,7 +136,7 @@ async function auroraHeartbeat(deps: HeartbeatWorkerDeps, log: Logger): Promise<
     allowStorageWrite: true,
   };
 
-  log.info({ slug, tokenId }, 'Aurora heartbeat: starting skill chain');
+  log.info({ event: 'runtime.agent.selected', slug, tokenId }, 'Aurora heartbeat: starting skill chain');
 
   const searchResult = await safeSkill(deps.skillRunner, 'web.search',
     { query: 'latest 0G blockchain AI agent news', limit: 3 }, ctx, log);
@@ -164,7 +164,7 @@ async function auroraHeartbeat(deps: HeartbeatWorkerDeps, log: Logger): Promise<
     valueWei: 500_000_000_000_000n,
   });
 
-  log.info({ slug, tokenId, receiptId: result.receiptId, txHash: result.txHash, status: result.status, memKey },
+  log.info({ event: 'receipt.mint.confirmed', slug, tokenId, receiptId: result.receiptId, txHash: result.txHash, status: result.status, memKey },
     'Aurora heartbeat complete');
 
   lastHeartbeat.aurora = ts;
@@ -197,7 +197,7 @@ async function vesperHeartbeat(deps: HeartbeatWorkerDeps, log: Logger): Promise<
     allowStorageWrite: true,
   };
 
-  log.info({ slug, tokenId }, 'Vesper heartbeat: starting skill chain');
+  log.info({ event: 'runtime.agent.selected', slug, tokenId }, 'Vesper heartbeat: starting skill chain');
 
   const memResult = await safeSkill(deps.skillRunner, 'memory.search',
     { query: 'aurora news headline', agentId: auroraTokenId, limit: 1 }, ctx, log);
@@ -228,7 +228,7 @@ async function vesperHeartbeat(deps: HeartbeatWorkerDeps, log: Logger): Promise<
     valueWei: 200_000_000_000_000n,
   });
 
-  log.info({ slug, tokenId, receiptId: result.receiptId, txHash: result.txHash, status: result.status, storageRoot },
+  log.info({ event: 'receipt.mint.confirmed', slug, tokenId, receiptId: result.receiptId, txHash: result.txHash, status: result.status, storageRoot },
     'Vesper heartbeat complete');
 
   lastHeartbeat.vesper = ts;
@@ -260,7 +260,7 @@ async function helixHeartbeat(deps: HeartbeatWorkerDeps, log: Logger): Promise<v
     allowStorageWrite: true,
   };
 
-  log.info({ slug, tokenId }, 'Helix heartbeat: starting skill chain');
+  log.info({ event: 'runtime.agent.selected', slug, tokenId }, 'Helix heartbeat: starting skill chain');
 
   const receiptQueryResult = await safeSkill(deps.skillRunner, 'chain.query',
     {
@@ -291,7 +291,7 @@ async function helixHeartbeat(deps: HeartbeatWorkerDeps, log: Logger): Promise<v
     payload,
   });
 
-  log.info({ slug, tokenId, receiptId: result.receiptId, txHash: result.txHash, status: result.status, memKey },
+  log.info({ event: 'receipt.mint.confirmed', slug, tokenId, receiptId: result.receiptId, txHash: result.txHash, status: result.status, memKey },
     'Helix heartbeat complete');
 
   lastHeartbeat.helix = ts;
@@ -346,6 +346,11 @@ export async function runHeartbeatOnce(
 
 // ── Worker factory ────────────────────────────────────────────────────────────
 
+// Per-job wall-clock timeout: if a heartbeat takes longer than this
+// (e.g. storage node stuck syncing), we abort and mark as error so the
+// next scheduled job isn't blocked.
+const HEARTBEAT_JOB_TIMEOUT_MS = 4 * 60_000; // 4 minutes
+
 export function createHeartbeatWorker(
   connection: Redis,
   deps: HeartbeatWorkerDeps,
@@ -371,18 +376,36 @@ export function createHeartbeatWorker(
         return;
       }
 
-      log.info({ agentName, tokenId, jobId: job.id }, 'Heartbeat start');
+      const start = Date.now();
+      log.info({ event: 'runtime.heartbeat.start', agentName, tokenId, jobId: job.id }, 'Heartbeat start');
+
+      let timedOut = false;
+      const timeoutHandle = setTimeout(() => { timedOut = true; }, HEARTBEAT_JOB_TIMEOUT_MS);
+
       try {
-        switch (agentName) {
-          case 'Aurora': await auroraHeartbeat(deps, log); break;
-          case 'Vesper': await vesperHeartbeat(deps, log); break;
-          case 'Helix':  await helixHeartbeat(deps, log);  break;
-          default: log.warn({ agentName }, 'Unknown agent in heartbeat job');
-        }
+        const work = async () => {
+          switch (agentName) {
+            case 'Aurora': await auroraHeartbeat(deps, log); break;
+            case 'Vesper': await vesperHeartbeat(deps, log); break;
+            case 'Helix':  await helixHeartbeat(deps, log);  break;
+            default: log.warn({ agentName }, 'Unknown agent in heartbeat job');
+          }
+        };
+        await Promise.race([
+          work(),
+          new Promise<never>((_, reject) => setTimeout(
+            () => reject(new Error(`Heartbeat for ${agentName} timed out after ${HEARTBEAT_JOB_TIMEOUT_MS / 1000}s`)),
+            HEARTBEAT_JOB_TIMEOUT_MS,
+          )),
+        ]);
+        log.info({ event: 'runtime.heartbeat.complete', agentName, tokenId, durationMs: Date.now() - start }, 'Heartbeat complete');
       } catch (err) {
-        log.error({ agentName, tokenId, err: err instanceof Error ? err.message : String(err) },
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log.error({ event: 'runtime.heartbeat.failed', agentName, tokenId, durationMs: Date.now() - start, timedOut, err: errMsg },
           'Heartbeat failed — minting error receipt');
         await mintErrorReceipt(deps.receiptMinter, tokenId, err, log);
+      } finally {
+        clearTimeout(timeoutHandle);
       }
     },
     { connection, concurrency: 1 },

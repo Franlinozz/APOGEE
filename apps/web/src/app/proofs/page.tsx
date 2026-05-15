@@ -6,7 +6,7 @@ import { buildChainscanUrl, chainscanBase } from '@/lib/chainscan';
 import { ReceiptsFeed, StorageProofsClient } from './_client';
 
 export const metadata: Metadata = { title: 'On-chain Proofs — Apogee Protocol' };
-export const revalidate = 30;
+export const revalidate = 0;
 
 const EDGE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
@@ -44,7 +44,7 @@ type ProofsApiResponse = {
 
 async function fetchProofsData(): Promise<ProofsApiResponse | null> {
   try {
-    const res = await fetch(`${EDGE_URL}/v1/proofs?chain=aristotle`, { next: { revalidate: 30 } });
+    const res = await fetch(`${EDGE_URL}/v1/proofs?chain=aristotle`, { cache: 'no-store' });
     if (!res.ok) return null;
     return await res.json() as ProofsApiResponse;
   } catch {
@@ -257,6 +257,9 @@ function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForH
   if (!meta) return null;
   const { Icon, role, capability, accent, iconBg, topBar, badgeActive, dot } = meta;
   const isActive = Boolean(lastHeartbeat);
+  const hasActivity = receiptCount > 0;
+  // Status label: only claim "Awaiting" if there is genuinely zero evidence of activity.
+  const statusLabel = isActive ? 'Active' : hasActivity ? 'Running' : 'Awaiting first heartbeat';
 
   return (
     <div className="relative rounded-2xl border border-[var(--color-line)] bg-surface overflow-hidden flex flex-col transition-[border-color,box-shadow,transform] duration-[220ms] hover:border-[var(--color-line-accent)] hover:shadow-card hover:-translate-y-0.5">
@@ -276,6 +279,11 @@ function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForH
               <span className="flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${dot}`} />
                 <span className="text-[10px] font-semibold text-fg-muted">Live</span>
+              </span>
+            ) : hasActivity ? (
+              <span className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+                <span className="text-[10px] font-semibold text-fg-muted">Active</span>
               </span>
             ) : (
               <span className="text-[10px] text-fg-faint">Idle</span>
@@ -314,9 +322,9 @@ function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForH
         </div>
 
         <div className="mt-auto pt-1">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase ${isActive ? badgeActive : 'bg-elevated text-fg-faint'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? dot : 'bg-fg-faint'}`} />
-            {isActive ? 'Active' : 'Awaiting first heartbeat'}
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase ${isActive || hasActivity ? badgeActive : 'bg-elevated text-fg-faint'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? dot : hasActivity ? dot : 'bg-fg-faint'}`} />
+            {statusLabel}
           </span>
         </div>
       </div>
@@ -469,7 +477,7 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
             </span>
             <span className="w-px h-4 bg-[var(--color-line-bright)]" />
             <span className="text-fg-muted">
-              Updated <span className="text-fg-muted">{new Date(proofs.generatedAt).toLocaleTimeString()}</span>
+              Last checked <span className="text-fg-muted">{new Date(proofs.generatedAt).toLocaleTimeString()}</span>
             </span>
           </div>
         </section>

@@ -272,16 +272,20 @@ export class ReceiptMinter {
     // the receipt is verifiable; the reconciler will re-upload and update storageRoot later.
     const effectiveStorageRoot = storageRoot.startsWith('local://') ? payloadHash : storageRoot;
 
+    this.logger.info({ event: 'receipt.mint.submit', receiptId, agentId: String(parsed.agentId), actionTag: parsed.actionTag, storageRoot: effectiveStorageRoot, isLocalFallback: storageRoot.startsWith('local://') }, 'Submitting receipt on-chain');
+
     let receipt: TransactionReceipt;
     try {
       receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei, lockWaitMs);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      this.logger.error({ event: 'receipt.mint.failed', receiptId, agentId: String(parsed.agentId), actionTag: parsed.actionTag, error: message }, 'Receipt chain submission failed');
       await this.index.update(receiptId, { status: 'failed', storageRoot: effectiveStorageRoot, storageTxHash, error: message });
       this.eventBus.publish('receipt', { ...row, storageRoot: effectiveStorageRoot, storageTxHash, status: 'failed', error: message });
       throw error;
     }
     const txHash = receipt.hash;
+    this.logger.info({ event: 'receipt.mint.confirmed', receiptId, agentId: String(parsed.agentId), actionTag: parsed.actionTag, txHash, gasUsed: receipt.gasUsed?.toString() }, 'Receipt minted on-chain');
     await this.index.update(receiptId, { txHash, storageRoot: effectiveStorageRoot, storageTxHash, status: 'minted' });
 
     // Clean up the local fallback file now that the chain tx landed.

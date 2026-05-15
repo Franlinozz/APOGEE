@@ -148,7 +148,17 @@ export class StorageClient {
       if (!treeRoot) throw new Error('0G SDK Merkle tree has no root hash');
       const rootHash: string = treeRoot;
       const sdkSigner = this.signer as unknown as Parameters<Indexer['upload']>[2];
-      const [upload, uploadErr] = await this.indexer.upload(file, this.rpcUrl, sdkSigner);
+      // 0G SDK indexer.upload has no built-in timeout; it can block indefinitely
+      // waiting for the storage node to sync. Cap at 55 seconds so the billing
+      // retry loop can fall back to a local file rather than hanging forever.
+      const UPLOAD_TIMEOUT_MS = 55_000;
+      const uploadTimeoutErr = new Error(`0G indexer.upload timed out after ${UPLOAD_TIMEOUT_MS / 1000}s — storage node may be syncing`);
+      Object.assign(uploadTimeoutErr, { code: 'UPLOAD_TIMEOUT' });
+      type SdkUpload = { rootHash?: string; txHash?: string; txHashes?: string[]; rootHashes?: string[] };
+      const [upload, uploadErr] = await Promise.race([
+        this.indexer.upload(file, this.rpcUrl, sdkSigner) as Promise<[SdkUpload, unknown]>,
+        new Promise<never>((_, reject) => setTimeout(() => reject(uploadTimeoutErr), UPLOAD_TIMEOUT_MS)),
+      ]);
       if (uploadErr) {
         const e = uploadErr as Error & { code?: unknown; reason?: unknown };
         this.logger.error({

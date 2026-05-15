@@ -1196,9 +1196,31 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     }
   }
 
+  // Restore lastHeartbeat from Redis after restarts so demo cards don't reset.
+  async function restoreHeartbeatFromRedis(): Promise<void> {
+    if (!redis) return;
+    try {
+      const raw = await redis.get('edge:lastHeartbeat');
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<typeof store.lastHeartbeat>;
+        if (saved.aurora) store.lastHeartbeat.aurora = saved.aurora;
+        if (saved.vesper) store.lastHeartbeat.vesper = saved.vesper;
+        if (saved.helix)  store.lastHeartbeat.helix  = saved.helix;
+      }
+    } catch { /* non-fatal — keep in-memory defaults */ }
+  }
+
+  async function persistHeartbeatToRedis(): Promise<void> {
+    if (!redis) return;
+    try {
+      await redis.set('edge:lastHeartbeat', JSON.stringify(store.lastHeartbeat), 'EX', 7 * 86400);
+    } catch { /* non-fatal */ }
+  }
+
   // Start background refresh on server ready; clear on close
   let chainRefreshTimer: ReturnType<typeof setInterval> | undefined;
   app.addHook('onReady', () => {
+    void restoreHeartbeatFromRedis();
     void refreshChainCache();
     void syncRuntimeHeartbeat();
     if (options.accountFactoryAddress && options.agentIdentityAddress) void runDeployAuthPreflight();
@@ -1299,8 +1321,19 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       if (heatmap[day]) heatmap[day][hour] = (heatmap[day][hour] ?? 0) + 1;
     }
 
+    // Map slugs to their on-chain tokenIds (from env vars with known fallbacks).
+    // Chain-synced receipts use numeric agentIds; runtime-pushed receipts use slug names.
+    // We match both so demo cards show correct counts regardless of how receipts arrived.
+    const DEMO_TOKEN_IDS: Record<string, string> = {
+      aurora: process.env.AURORA_AGENT_ID ?? '1',
+      vesper: process.env.VESPER_AGENT_ID ?? '2',
+      helix:  process.env.HELIX_AGENT_ID  ?? '3',
+    };
     const demoAgents = ['aurora', 'vesper', 'helix'].map(slug => {
-      const agentReceipts = mintedReceipts.filter(r => r.agentId.toLowerCase().includes(slug));
+      const tokenId = DEMO_TOKEN_IDS[slug];
+      const agentReceipts = mintedReceipts.filter(r =>
+        r.agentId.toLowerCase().includes(slug) || r.agentId === tokenId,
+      );
       return {
         slug,
         agentId: agentReceipts[0]?.agentId ?? null,
@@ -1356,6 +1389,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     if (body.aurora !== undefined) store.lastHeartbeat.aurora = body.aurora;
     if (body.vesper !== undefined) store.lastHeartbeat.vesper = body.vesper;
     if (body.helix  !== undefined) store.lastHeartbeat.helix  = body.helix;
+    void persistHeartbeatToRedis();
     return { ok: true };
   });
 
@@ -1413,6 +1447,10 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       ? { ...row, status: 'pending' }
       : row;
     store.receipts.set(normalizedRow.receiptId, normalizedRow);
+    // Also persist to Redis so demo agent receipts survive edge restarts.
+    if (redisReceiptIndex) {
+      void redisReceiptIndex.insert(normalizedRow).catch(() => undefined);
+    }
     broadcast(normalizedRow.agentId, { event: 'receipt', payload: json(normalizedRow) });
     return { ok: true };
   });
