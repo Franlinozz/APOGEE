@@ -92,12 +92,6 @@ export function ConnectWallet() {
     setErrorMsg('');
   }, [address]);
 
-  useEffect(() => {
-    if (!isConnected && openConnectModal) {
-      openConnectModal();
-    }
-  }, [isConnected, openConnectModal]);
-
   async function handleSign() {
     if (!address) return;
     setErrorMsg('');
