@@ -190,86 +190,110 @@ body {
    LANDING NAV — premium translucent glass in dark + light
 ═══════════════════════════════════════════════════════════ */
 .landing-nav {
-  background: rgba(5 7 18 / 0.64);
-  backdrop-filter: blur(18px) saturate(130%);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
-  border-bottom: 1px solid rgba(255 255 255 / 0.08);
-  box-shadow: 0 16px 42px -34px rgba(0 0 0 / 0.72);
+  background: rgba(5 7 18 / 0.72);
+  backdrop-filter: blur(20px) saturate(135%);
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
+  border-bottom: 1px solid rgba(255 255 255 / 0.075);
+  box-shadow: 0 16px 42px -36px rgba(0 0 0 / 0.72);
 }
 
 [data-theme="light"] .landing-nav {
-  background: rgba(255 255 255 / 0.56) !important;
-  border-bottom: 1px solid rgba(15 23 42 / 0.07) !important;
-  box-shadow: 0 14px 36px -32px rgba(15 23 42 / 0.36);
-  backdrop-filter: blur(18px) saturate(140%) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(140%) !important;
+  background: rgba(255 255 255 / 0.62) !important;
+  border-bottom: 1px solid rgba(15 23 42 / 0.065) !important;
+  box-shadow: 0 14px 36px -34px rgba(15 23 42 / 0.34);
+  backdrop-filter: blur(20px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(145%) !important;
 }
 
 .landing-anchor {
   scroll-margin-top: 112px;
 }
 
-/* Reference-inspired hero atmosphere: a quiet holographic runtime object. */
-.hero-hologram {
-  opacity: 0.18;
-  mix-blend-mode: screen;
+/* Paid hero sphere image: blended, decorative, and text-safe. */
+.hero-sphere-bg {
+  opacity: 1;
+  isolation: isolate;
 }
 
-.hero-hologram-object {
+.hero-sphere-image {
   position: absolute;
-  right: max(-160px, -10vw);
-  bottom: max(38px, 8vh);
-  width: min(76vw, 820px);
+  right: -8vw;
+  top: 10%;
+  width: min(60vw, 980px);
+  max-width: none;
   height: auto;
-  transform: rotate(-5deg);
-  transform-origin: center;
-  filter: blur(0.15px) drop-shadow(0 0 54px rgba(124 95 241 / 0.18));
+  opacity: 0.22;
+  object-fit: cover;
+  object-position: center right;
+  mix-blend-mode: screen;
+  filter: saturate(0.88) contrast(0.96) drop-shadow(0 0 64px rgba(124 95 241 / 0.18));
+  transform: translate3d(0, 0, 0);
 }
 
-.hero-hologram-glow {
+.hero-sphere-glow {
   position: absolute;
-  right: -12vw;
-  bottom: 4vh;
-  width: min(72vw, 760px);
-  aspect-ratio: 1;
+  right: -10vw;
+  top: 12%;
+  width: min(64vw, 980px);
+  aspect-ratio: 1.45;
   border-radius: 9999px;
   background:
-    radial-gradient(circle at 44% 46%, rgba(255 255 255 / 0.22), transparent 19%),
-    radial-gradient(circle at 48% 48%, rgba(124 95 241 / 0.22), transparent 34%),
-    radial-gradient(circle at 62% 58%, rgba(96 165 250 / 0.16), transparent 44%),
-    radial-gradient(circle at 45% 38%, rgba(34 211 238 / 0.12), transparent 52%);
-  filter: blur(20px);
+    radial-gradient(circle at 50% 42%, rgba(255 255 255 / 0.20), transparent 24%),
+    radial-gradient(circle at 60% 48%, rgba(124 95 241 / 0.18), transparent 40%),
+    radial-gradient(circle at 48% 52%, rgba(96 165 250 / 0.14), transparent 52%);
+  filter: blur(28px);
 }
 
-.hero-hologram-wash {
+.hero-sphere-wash {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgb(var(--color-bg)) 0%, rgba(8 10 18 / 0.62) 38%, transparent 78%),
-    linear-gradient(180deg, rgba(8 10 18 / 0.20) 0%, transparent 42%, rgb(var(--color-bg)) 100%);
+    linear-gradient(90deg, rgb(var(--color-bg)) 0%, rgba(8 10 18 / 0.82) 28%, rgba(8 10 18 / 0.22) 58%, rgba(8 10 18 / 0.28) 100%),
+    linear-gradient(180deg, rgba(8 10 18 / 0.52) 0%, transparent 36%, rgb(var(--color-bg)) 100%);
 }
 
-[data-theme="light"] .hero-hologram {
-  opacity: 0.24;
+[data-theme="light"] .hero-sphere-image {
+  opacity: 0.31;
   mix-blend-mode: multiply;
+  filter: saturate(0.78) contrast(0.93) brightness(1.06) drop-shadow(0 28px 90px rgba(109 76 225 / 0.10));
 }
 
-[data-theme="light"] .hero-hologram-object {
-  filter: blur(0.2px) drop-shadow(0 24px 90px rgba(109 76 225 / 0.10));
-}
-
-[data-theme="light"] .hero-hologram-glow {
+[data-theme="light"] .hero-sphere-glow {
   background:
-    radial-gradient(circle at 44% 46%, rgba(255 255 255 / 0.60), transparent 20%),
-    radial-gradient(circle at 48% 48%, rgba(109 76 225 / 0.18), transparent 36%),
-    radial-gradient(circle at 62% 58%, rgba(96 165 250 / 0.14), transparent 46%),
-    radial-gradient(circle at 45% 38%, rgba(34 211 238 / 0.10), transparent 54%);
+    radial-gradient(circle at 50% 42%, rgba(255 255 255 / 0.54), transparent 26%),
+    radial-gradient(circle at 60% 48%, rgba(109 76 225 / 0.14), transparent 43%),
+    radial-gradient(circle at 48% 52%, rgba(96 165 250 / 0.12), transparent 54%);
 }
 
-[data-theme="light"] .hero-hologram-wash {
+[data-theme="light"] .hero-sphere-wash {
   background:
-    linear-gradient(90deg, rgba(250 247 252 / 0.94) 0%, rgba(250 247 252 / 0.74) 42%, transparent 82%),
-    linear-gradient(180deg, rgba(250 247 252 / 0.40) 0%, transparent 42%, rgba(248 245 251 / 0.94) 100%);
+    linear-gradient(90deg, rgba(250 247 252 / 0.98) 0%, rgba(250 247 252 / 0.86) 32%, rgba(250 247 252 / 0.30) 62%, rgba(248 245 251 / 0.48) 100%),
+    linear-gradient(180deg, rgba(250 247 252 / 0.64) 0%, transparent 42%, rgba(248 245 251 / 0.94) 100%);
+}
+
+@media (max-width: 767px) {
+  .hero-sphere-image {
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: 4rem;
+    width: min(112vw, 620px);
+    opacity: 0.14;
+    transform: translateX(-50%);
+  }
+
+  .hero-sphere-glow {
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: 2rem;
+    width: min(110vw, 600px);
+    transform: translateX(-50%);
+  }
+
+  [data-theme="light"] .hero-sphere-image {
+    opacity: 0.20;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════

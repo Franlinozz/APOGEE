@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 /* ─────────────────────────────────────────────────────────
@@ -19,52 +20,22 @@ export function Hero() {
         style={{ background: 'var(--hero-bg)' }}
       />
 
-      {/* Reference-inspired holographic runtime object — CSS/SVG, not a raster wallpaper. */}
+      {/* Paid hero image asset — decorative background only, blended into the page. */}
       <div
         aria-hidden
-        className="hero-hologram pointer-events-none absolute inset-0 overflow-hidden"
+        className="hero-sphere-bg pointer-events-none absolute inset-0 overflow-hidden"
       >
-        <div className="hero-hologram-glow" />
-        <svg
-          viewBox="0 0 720 520"
-          className="hero-hologram-object"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <radialGradient id="heroSphereFill" cx="50%" cy="44%" r="62%">
-              <stop offset="0%" stopColor="rgba(255,255,255,0.78)" />
-              <stop offset="42%" stopColor="rgba(167,139,250,0.20)" />
-              <stop offset="72%" stopColor="rgba(96,165,250,0.13)" />
-              <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-            </radialGradient>
-            <linearGradient id="heroLine" x1="80" y1="80" x2="560" y2="440" gradientUnits="userSpaceOnUse">
-              <stop stopColor="rgba(255,255,255,0.75)" />
-              <stop offset="0.52" stopColor="rgba(167,139,250,0.50)" />
-              <stop offset="1" stopColor="rgba(125,211,252,0.40)" />
-            </linearGradient>
-            <filter id="heroSoftBlur" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="1.2" />
-            </filter>
-          </defs>
-
-          <circle cx="322" cy="254" r="164" fill="url(#heroSphereFill)" />
-          <circle cx="322" cy="254" r="164" stroke="url(#heroLine)" strokeWidth="1.1" />
-          <ellipse cx="322" cy="254" rx="164" ry="52" stroke="url(#heroLine)" strokeWidth="0.8" opacity="0.62" />
-          <ellipse cx="322" cy="254" rx="164" ry="92" stroke="url(#heroLine)" strokeWidth="0.7" opacity="0.45" />
-          <ellipse cx="322" cy="254" rx="74" ry="164" stroke="url(#heroLine)" strokeWidth="0.7" opacity="0.42" />
-          <ellipse cx="322" cy="254" rx="118" ry="164" stroke="url(#heroLine)" strokeWidth="0.7" opacity="0.35" />
-          <path d="M161 229c88-34 211-34 322 0" stroke="url(#heroLine)" strokeWidth="0.65" opacity="0.36" />
-          <path d="M161 279c88 34 211 34 322 0" stroke="url(#heroLine)" strokeWidth="0.65" opacity="0.36" />
-          <path d="M483 162c36 20 71 44 106 72M492 193c45 13 82 30 111 52M498 229c42 7 79 18 112 33M499 268c42 2 80 7 115 18M494 305c37 1 70 5 98 13" stroke="url(#heroLine)" strokeLinecap="round" strokeWidth="1" opacity="0.42" />
-          <path d="M160 254c104-80 222-80 326 0M160 254c104 80 222 80 326 0" stroke="url(#heroLine)" strokeWidth="0.7" opacity="0.28" />
-
-          <circle cx="566" cy="126" r="18" fill="rgba(255,255,255,0.38)" filter="url(#heroSoftBlur)" />
-          <circle cx="595" cy="345" r="10" fill="rgba(125,211,252,0.30)" />
-          <circle cx="144" cy="385" r="8" fill="rgba(167,139,250,0.25)" />
-          <circle cx="214" cy="118" r="5" fill="rgba(255,255,255,0.38)" />
-        </svg>
-        <div className="hero-hologram-wash" />
+        <div className="hero-sphere-glow" />
+        <Image
+          src="/brand/apogee-hero-sphere.png"
+          alt=""
+          width={1280}
+          height={720}
+          className="hero-sphere-image"
+          priority
+          aria-hidden
+        />
+        <div className="hero-sphere-wash" />
       </div>
 
       {/* Orbital field — anchored to bottom third so it sits below the headline */}
