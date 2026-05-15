@@ -177,8 +177,9 @@ type TabId = (typeof TABS)[number]['id'];
 
 function TabNav({ current }: { current: TabId }) {
   return (
-    <div className="flex gap-1 p-1 rounded-xl bg-elevated border border-[var(--color-line)] w-fit">
-      {TABS.map(t => (
+    <div className="mx-auto flex w-full max-w-full justify-center overflow-x-auto">
+      <div className="flex w-max gap-1 rounded-xl border border-[var(--color-line)] bg-elevated p-1 shadow-sm">
+        {TABS.map(t => (
         <Link
           key={t.id}
           href={`?tab=${t.id}`}
@@ -190,7 +191,8 @@ function TabNav({ current }: { current: TabId }) {
         >
           {t.label}
         </Link>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

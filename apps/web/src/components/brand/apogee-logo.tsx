@@ -1,7 +1,11 @@
 /* eslint-disable @next/next/no-img-element -- SVG brand assets are served directly from /public to avoid Next Image SVG friction. */
 
+type LogoVariant = 'auto' | 'light' | 'dark';
+type LogoMode = 'nav' | 'sidebar' | 'auth' | 'footer' | 'mark';
+
 type ApogeeLogoProps = {
-  variant?: 'auto' | 'light' | 'dark';
+  variant?: LogoVariant;
+  mode?: LogoMode;
   markOnly?: boolean;
   className?: string;
   priority?: boolean;
@@ -18,46 +22,69 @@ const ASSETS = {
   },
 } as const;
 
+const MODE_CLASS: Record<LogoMode, string> = {
+  nav: 'h-14 w-[112px] max-w-[120px]',
+  sidebar: 'h-16 w-[104px] max-w-[110px]',
+  auth: 'h-9 w-14 max-w-[3.5rem]',
+  footer: 'h-24 w-full max-w-[200px] sm:max-w-[280px] lg:max-w-[360px]',
+  mark: 'h-9 w-14 max-w-[3.5rem]',
+};
+
 function srcFor(variant: 'light' | 'dark', markOnly: boolean): string {
   return ASSETS[markOnly ? 'mark' : 'logo'][variant];
 }
 
+function imageClass(themeClass?: string): string {
+  return [
+    themeClass,
+    'h-full w-full max-h-full max-w-full shrink-0 object-contain overflow-visible',
+  ].filter(Boolean).join(' ');
+}
+
 export function ApogeeLogo({
   variant = 'auto',
-  markOnly = false,
+  mode = 'nav',
+  markOnly,
   className = '',
   priority = false,
 }: ApogeeLogoProps) {
-  const baseClass = ['block h-auto w-auto object-contain', className].filter(Boolean).join(' ');
+  const useMark = markOnly ?? mode === 'mark' ?? false;
+  const wrapperClass = [
+    'inline-flex shrink-0 items-center justify-center overflow-visible leading-none',
+    MODE_CLASS[mode],
+    className,
+  ].filter(Boolean).join(' ');
 
   if (variant === 'light' || variant === 'dark') {
     return (
-      <img
-        src={srcFor(variant, markOnly)}
-        alt="Apogee"
-        className={baseClass}
-        loading={priority ? 'eager' : 'lazy'}
-        decoding="async"
-      />
+      <span className={wrapperClass} aria-label="Apogee">
+        <img
+          src={srcFor(variant, useMark)}
+          alt="Apogee"
+          className={imageClass()}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+        />
+      </span>
     );
   }
 
   return (
-    <>
+    <span className={wrapperClass} aria-label="Apogee">
       <img
-        src={srcFor('light', markOnly)}
+        src={srcFor('light', useMark)}
         alt="Apogee"
-        className={`theme-logo-dark ${baseClass}`}
+        className={imageClass('theme-logo-dark')}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
       />
       <img
-        src={srcFor('dark', markOnly)}
+        src={srcFor('dark', useMark)}
         alt="Apogee"
-        className={`theme-logo-light ${baseClass}`}
+        className={imageClass('theme-logo-light')}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
       />
-    </>
+    </span>
   );
 }

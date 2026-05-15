@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="420" viewBox="240 290 980 420" preserveAspectRatio="xMidYMid meet">
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="460" viewBox="240 300 980 460" preserveAspectRatio="xMidYMid meet">
   <title>APOGEE logo</title>
   <g transform="translate(0.000000,1086.000000) scale(0.100000,-0.100000)" fill="#FFFFFF" stroke="none">
     <path d="M7178 7518 c-47 -74 -108 -170 -136 -214 -29 -43 -134 -208 -234 -366 -101 -159 -260 -408 -354 -555 -222 -348 -394 -623 -394 -630 0 -3 16 7 36 22 48 37 232 142 371 213 93 47 116 63 133 94 12 21 54 89 93 151 40 63 146 231 237 375 91 144 201 319 246 388 l81 125 153 -258 c143 -242 187 -315 201 -335 5 -7 277 46 287 57 2 2 -80 142 -181 312 -101 169 -240 403 -307 518 -68 116 -128 216 -135 223 -10 11 -29 -13 -97 -120z" />

@@ -42,8 +42,8 @@ export function Footer() {
           {/* Brand */}
           <div className="lg:col-span-2">
             <div className="mb-4">
-              <Link href="/" aria-label="Apogee home" className="inline-flex items-center">
-                <ApogeeLogo className="h-8" />
+              <Link href="/" aria-label="Apogee home" className="inline-flex max-w-full items-center overflow-visible">
+                <ApogeeLogo mode="footer" />
               </Link>
             </div>
             <p className="prose-width text-sm leading-relaxed text-fg-muted">

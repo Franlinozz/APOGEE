@@ -94,12 +94,20 @@ export function MarketplaceTabs({ initialSkills, initialServices }: Props) {
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-4"
           >
-            <input
-              value={serviceFilter}
-              onChange={(e) => setServiceFilter(e.target.value)}
-              placeholder="Search services…"
-              className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--color-line)] bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
-            />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-fg">Protocol service endpoints</p>
+                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-fg-muted">
+                  Core services powering agent identity, storage, compute, receipts, and settlement.
+                </p>
+              </div>
+              <input
+                value={serviceFilter}
+                onChange={(e) => setServiceFilter(e.target.value)}
+                placeholder="Search services…"
+                className="w-full max-w-sm rounded-[var(--radius)] border border-[var(--color-line)] bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
+              />
+            </div>
             {filteredServices.length === 0 ? (
               <p className="py-12 text-center text-sm text-fg-muted">No services found.</p>
             ) : (

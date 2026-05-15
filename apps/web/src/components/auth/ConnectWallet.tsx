@@ -144,7 +144,7 @@ export function ConnectWallet() {
       <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-white/[0.08] bg-[#141414] shadow-2xl">
         <div className="border-b border-white/[0.06] px-6 py-4">
           <div className="flex items-center gap-2">
-            <ApogeeLogo markOnly variant="light" className="h-7" priority />
+            <ApogeeLogo mode="auth" markOnly variant="light" priority />
             <span className="text-sm font-semibold text-white">Apogee Protocol</span>
           </div>
         </div>
@@ -210,7 +210,7 @@ export function ConnectWallet() {
         {/* Left: wallet list */}
         <div className="p-7">
           <div className="mb-5 flex items-center gap-2">
-            <ApogeeLogo markOnly variant="light" className="h-7" priority />
+            <ApogeeLogo mode="auth" markOnly variant="light" priority />
             <span className="text-sm font-semibold text-white">Apogee Protocol</span>
           </div>
 

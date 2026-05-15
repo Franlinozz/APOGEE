@@ -31,10 +31,10 @@ const NAV_LINKS = [
 
 export function Nav() {
   return (
-    <header className="landing-nav fixed inset-x-0 top-0 z-50 h-14">
-      <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center" aria-label="Apogee home">
-          <ApogeeLogo className="h-8 sm:h-9" priority />
+    <header className="landing-nav fixed inset-x-0 top-0 z-50 h-[72px] overflow-visible sm:h-20">
+      <div className="mx-auto flex h-full max-w-7xl items-center justify-between overflow-visible px-4 sm:px-6 lg:px-8">
+        <Link href="/" className="flex items-center overflow-visible" aria-label="Apogee home">
+          <ApogeeLogo mode="nav" priority />
         </Link>
 
         {/* Nav links */}

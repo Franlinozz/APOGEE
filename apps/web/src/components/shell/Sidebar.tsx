@@ -36,9 +36,9 @@ export function Sidebar() {
   return (
     <aside className="app-sidebar flex h-full w-56 flex-col border-r border-[var(--color-line)] bg-surface">
       {/* Logo */}
-      <div className="flex h-14 items-center px-4 border-b border-[var(--color-line)]">
-        <Link href="/" className="flex items-center" aria-label="Apogee home">
-          <ApogeeLogo className="h-7 max-w-[9.5rem]" priority />
+      <div className="flex h-20 items-center overflow-visible border-b border-[var(--color-line)] px-4">
+        <Link href="/" className="flex items-center overflow-visible" aria-label="Apogee home">
+          <ApogeeLogo mode="sidebar" priority />
         </Link>
       </div>
 
