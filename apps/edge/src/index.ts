@@ -1465,7 +1465,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     if (!deployment) return reply.status(404).send({ statusCode: 404, title: 'deployment not found', tokenId });
     const existing = await deploymentStore.getOnboarding(tokenId);
     if (existing && existing.status !== 'running') {
-      await deploymentStore.setOnboarding({ ...existing, status: 'pending', attempts: 0, updatedAt: nowIso() });
+      // Reset stages too — the old billing code may have marked stages 'done' even when the TX failed.
+      await deploymentStore.setOnboarding({ ...existing, status: 'pending', stages: {}, attempts: 0, updatedAt: nowIso() });
     }
     void runOnboarding(deployment).catch((err) => app.log.warn({ tokenId, err }, 'internal retry-onboarding failed'));
     return { ok: true, tokenId, message: 'Onboarding retry queued' };
@@ -1666,7 +1667,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     // Reset failed/stuck onboarding so runOnboarding will retry it.
     const existing = await deploymentStore.getOnboarding(tokenId);
     if (existing && existing.status !== 'running') {
-      await deploymentStore.setOnboarding({ ...existing, status: 'pending', updatedAt: nowIso() });
+      // Reset stages too — old billing code may have marked stages 'done' even when TX failed.
+      await deploymentStore.setOnboarding({ ...existing, status: 'pending', stages: {}, attempts: 0, updatedAt: nowIso() });
     }
     void runOnboarding(deployment).catch((err) => app.log.warn({ tokenId, err }, 'retry-onboarding background job failed'));
     return { ok: true, tokenId, message: 'Onboarding retry queued' };
@@ -2147,9 +2149,9 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     void app.close().finally(() => process.exit(0));
   });
 
-  // On startup, scan Redis for any non-complete onboarding records and retry them.
-  // This ensures previously failed onboarding (e.g. from ethers v6 estimateGas bug)
-  // is automatically re-attempted after a deploy that fixes the root cause.
+  // On startup, scan Redis for onboarding records that have any failed receipts.
+  // Resets those records (including 'complete' ones where the receipt TX never landed)
+  // and re-runs the onboarding so they get properly anchored on-chain.
   if (redis) {
     app.addHook('onReady', async () => {
       try {
@@ -2164,13 +2166,27 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
         for (const tokenId of tokenIds) {
           const record = await deploymentStore.getOnboarding(tokenId);
-          if (!record || record.status === 'complete' || record.status === 'running') continue;
+          if (!record || record.status === 'running') continue;
           const deployment = await deploymentStore.get(tokenId);
           if (!deployment) continue;
-          // Reset attempts so a clean retry can run without the >=3 failure cap.
-          await deploymentStore.setOnboarding({ ...record, status: 'pending', attempts: 0, updatedAt: nowIso() });
+
+          // Check if any onboarding receipt for this agent is still 'failed'.
+          // Load directly from Redis so we have up-to-date status even before
+          // the chain sync populates store.receipts.
+          const onboardingReceiptPattern = `onboarding:${options.chainId}:${tokenId}:`;
+          const clientKey = await redis.get(`receipt-client:${onboardingReceiptPattern}deployment.authorized`)
+            .then((id) => id ? redis.get(`receipt:${id}`) : null).catch(() => null);
+          const deployAuthReceipt = clientKey ? JSON.parse(clientKey) as { status?: string } : null;
+          const hasFailedReceipt = deployAuthReceipt?.status === 'failed' ||
+            record.status !== 'complete';
+
+          if (!hasFailedReceipt) continue;
+
+          // Reset stages so runOnboarding re-attempts each stage driven by receipt status,
+          // not by the (possibly stale) stages dict from the old run.
+          await deploymentStore.setOnboarding({ ...record, status: 'pending', stages: {}, attempts: 0, updatedAt: nowIso() });
           void enqueueOnboarding(deployment).catch((err) => app.log.warn({ tokenId, err }, 'startup onboarding retry failed'));
-          app.log.info({ tokenId, previousStatus: record.status }, 'startup: queued onboarding retry for non-complete record');
+          app.log.info({ tokenId, previousStatus: record.status }, 'startup: queued onboarding retry for agent with failed receipts');
         }
       } catch (err) {
         app.log.warn({ err }, 'startup onboarding scan failed');
