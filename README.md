@@ -23,7 +23,7 @@
 [![Built on 0G](https://img.shields.io/badge/built%20on-0G%20Network-f59e0b?style=flat-square)](https://0g.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
-[**Live App**](https://apogeeprotocol.vercel.app) · [**On-chain Proofs**](https://apogeeprotocol.vercel.app/proofs) · [**Demo Video**](https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb) · [**X Post**](https://x.com/ApogeeProtocol/status/2055641847821664765?s=20) · [**API Docs**](https://apogeeedge-production.up.railway.app/docs/api) · [**Judge Guide**](docs/JUDGE_GUIDE.md) · [**Tutorial**](docs/TUTORIAL.md)
+[**Live App**](https://apogeeprotocol.vercel.app) · [**On-chain Proofs**](https://apogeeprotocol.vercel.app/proofs) · [**Demo Video**](https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb) · [**X Post**](https://x.com/ApogeeProtocol/status/2055641847821664765?s=20) · [**API Docs**](https://apogeeedge-production.up.railway.app/docs/api) · [**Judge Guide**](docs/JUDGE_GUIDE.md) · [**Tutorial**](docs/TUTORIAL.md) · [**Technical Write-up**](https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94)
 
 </div>
 
@@ -279,4 +279,5 @@ MIT © 2026 Francis Okafor — [github.com/Franlinozz/APOGEE](https://github.com
 **Contact:** Open an issue or follow [@apogeeprotocol](https://x.com/apogeeprotocol) on X.  
 **Demo video:** [youtu.be/3XEJRv1ZkLo](https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb)  
 **X post:** [x.com/ApogeeProtocol/status/2055641847821664765](https://x.com/ApogeeProtocol/status/2055641847821664765?s=20)  
+**Technical write-up:** [Building an Autonomous Agent Runtime on 0G — Engineering Deep Dive into Apogee](https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94)  
 **Hackathon:** [0G Hackathon on HackQuest](https://hackquest.io) · Submitted 2026-05-16

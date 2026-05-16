@@ -24,6 +24,15 @@ const CARDS = [
     badgeColor: 'bg-accent/15 text-accent-light',
   },
   {
+    href: 'https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94',
+    external: true,
+    title: 'Engineering Deep Dive',
+    description:
+      'How Apogee integrates 0G Chain, 0G Storage, 0G Compute, agent identities, on-chain receipts, programmable spending policies, and runtime services.',
+    badge: 'Technical Write-up',
+    badgeColor: 'bg-accent/10 text-accent-light',
+  },
+  {
     href: 'https://github.com/Franlinozz/APOGEE/blob/main/docs/ARCHITECTURE.md',
     external: true,
     title: 'Architecture',
