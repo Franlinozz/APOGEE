@@ -1457,6 +1457,20 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     return { ok: true };
   });
 
+  app.post('/internal/retry-onboarding', { schema: { hide: true } }, async (request, reply) => {
+    const secret = request.headers['x-internal-secret'];
+    if (secret !== process.env.INTERNAL_SECRET) return problem(reply, 401, 'Unauthorized', 'Invalid internal secret.');
+    const { tokenId } = z.object({ tokenId: z.string().min(1) }).parse(request.body);
+    const deployment = await deploymentStore.get(tokenId);
+    if (!deployment) return reply.status(404).send({ statusCode: 404, title: 'deployment not found', tokenId });
+    const existing = await deploymentStore.getOnboarding(tokenId);
+    if (existing && existing.status !== 'running') {
+      await deploymentStore.setOnboarding({ ...existing, status: 'pending', attempts: 0, updatedAt: nowIso() });
+    }
+    void runOnboarding(deployment).catch((err) => app.log.warn({ tokenId, err }, 'internal retry-onboarding failed'));
+    return { ok: true, tokenId, message: 'Onboarding retry queued' };
+  });
+
   async function deployAgentForUser(user: AuthUser, body: z.infer<typeof agentCreateSchema>, reply: FastifyReply, authorizationProof?: AuthorizationProof): Promise<AgentRecord | FastifyReply> {
     if (body.owner && !sameAddress(body.owner, user.address)) return problem(reply, 403, 'Forbidden', 'Cannot provision an agent for a different owner');
     let provisioned: Awaited<ReturnType<typeof provisionAgentOnChain>>;
