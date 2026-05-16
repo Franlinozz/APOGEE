@@ -2147,6 +2147,37 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     void app.close().finally(() => process.exit(0));
   });
 
+  // On startup, scan Redis for any non-complete onboarding records and retry them.
+  // This ensures previously failed onboarding (e.g. from ethers v6 estimateGas bug)
+  // is automatically re-attempted after a deploy that fixes the root cause.
+  if (redis) {
+    app.addHook('onReady', async () => {
+      try {
+        const onboardingPrefix = `onboarding:${options.chainId}:`;
+        let cursor = '0';
+        const tokenIds: string[] = [];
+        do {
+          const [next, keys] = await redis.scan(cursor, 'MATCH', `${onboardingPrefix}*`, 'COUNT', 100);
+          cursor = next;
+          for (const key of keys) tokenIds.push(key.slice(onboardingPrefix.length));
+        } while (cursor !== '0');
+
+        for (const tokenId of tokenIds) {
+          const record = await deploymentStore.getOnboarding(tokenId);
+          if (!record || record.status === 'complete' || record.status === 'running') continue;
+          const deployment = await deploymentStore.get(tokenId);
+          if (!deployment) continue;
+          // Reset attempts so a clean retry can run without the >=3 failure cap.
+          await deploymentStore.setOnboarding({ ...record, status: 'pending', attempts: 0, updatedAt: nowIso() });
+          void enqueueOnboarding(deployment).catch((err) => app.log.warn({ tokenId, err }, 'startup onboarding retry failed'));
+          app.log.info({ tokenId, previousStatus: record.status }, 'startup: queued onboarding retry for non-complete record');
+        }
+      } catch (err) {
+        app.log.warn({ err }, 'startup onboarding scan failed');
+      }
+    });
+  }
+
   return app;
 }
 
