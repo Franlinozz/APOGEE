@@ -2284,53 +2284,154 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       return [...store.memory.values()].filter(m => m.agentId === agentId).slice(0, 10).map(m => ({ key: m.key, tags: m.tags, updatedAt: m.updatedAt }));
     }
     if (name === 'getProtocolStats') {
-      return { totalAgents: store.agents.size, totalReceipts: receiptRows().length, totalServices: store.services.size };
+      const mintedReceipts = receiptRows().filter(r => r.status === 'minted').length;
+      return {
+        totalAgents: store.agents.size,
+        totalReceipts: mintedReceipts,
+        totalServices: store.services.size,
+        network: 'Aristotle mainnet',
+        chainId: options.chainId,
+        demoAgents: ['Aurora (#1, every 10 min)', 'Vesper (#2, every 15 min)', 'Helix (#3, every 30 min)'],
+      };
+    }
+    if (name === 'listSkillsCatalog') {
+      return DEFAULT_SKILLS.map(s => ({ id: s.id, name: s.name, category: s.category, tier: s.tier, description: s.description }));
     }
     if (name === 'explainConcept') {
       const concepts: Record<string, string> = {
-        agent: 'An autonomous AI agent with an ERC-4337 smart account, on-chain identity NFT, and configurable spending policy.',
-        receipt: 'A cryptographic proof of an agent action stored in 0G decentralised storage and anchored on-chain.',
-        policy: 'Spending rules: max per transaction, daily cap, active hours, and allowed skill addresses.',
-        skill: 'A sandboxed capability module: chat.completion, web.search, memory.write, chain.query, etc.',
-        memory: 'Encrypted agent state in 0G Storage with semantic search and on-chain version anchors.',
-        '0g': '0G is a decentralised AI operating system providing storage, compute, and data availability layers.',
+        agent: 'An autonomous AI agent with an ERC-4337 smart account (AgentAccount), an ERC-7857 on-chain identity NFT (AgentIdentity), and a configurable spending policy enforced by PolicyEngine.',
+        receipt: 'A cryptographic proof of an agent action minted by ReceiptBook.emitReceipt() on Aristotle mainnet. Contains actionTag, payloadHash, storageRoot (0G Storage Merkle root), valueWei, and timestamp.',
+        policy: 'Spending rules enforced by the PolicyEngine contract: maxPerTxWei, maxPerDayWei, active toggle, and allowedSkills whitelist.',
+        skill: 'A sandboxed capability module running in isolated-vm: chat.completion, web.search, memory.write, chain.query, storage.upload, etc.',
+        memory: 'Encrypted agent state stored in 0G Storage with semantic search. Entries include key, value, tags, and a storageRoot anchor.',
+        '0g': '0G is a decentralised AI operating system providing EVM chain (Aristotle), decentralised storage, compute inference, and data availability layers.',
+        marketplace: 'The skill catalog: free and premium skills available for installation on agents. Browse at /marketplace.',
+        dashboard: 'Protocol-wide stats: total indexed agents, active runtime agents, total on-chain receipts, and cumulative 0G volume.',
       };
       const key = String(args.name ?? '').toLowerCase();
-      return concepts[key] ?? `No explanation found for "${String(args.name)}". Try: agent, receipt, policy, skill, memory.`;
+      return concepts[key] ?? `No explanation found for "${String(args.name)}". Try: agent, receipt, policy, skill, memory, marketplace, dashboard.`;
     }
     return null;
   }
 
   async function* simulatePilotTokens(msg: string, toolResults: { name: string; result: unknown }[]): AsyncGenerator<string> {
     const lower = msg.toLowerCase();
-    const agentList = (toolResults.find(t => t.name === 'getMyAgents')?.result ?? []) as Array<{ id?: string; balanceWei?: string }>;
+    const agentList = (toolResults.find(t => t.name === 'getMyAgents')?.result ?? []) as Array<{ id?: string; balanceWei?: string; status?: string }>;
     const receiptList = (toolResults.find(t => t.name === 'listRecentReceipts')?.result ?? []) as unknown[];
+    const stats = toolResults.find(t => t.name === 'getProtocolStats')?.result as { totalAgents?: number; totalReceipts?: number } | undefined;
+    const totalAgents = stats?.totalAgents ?? 0;
+    const totalReceipts = stats?.totalReceipts ?? 0;
 
     let response: string;
-    if (lower.includes('deploy') || lower.includes('first agent') || lower.includes('create agent')) {
-      response = `To deploy your first agent, click **New agent** in the sidebar and follow the 5-step wizard:\n\n1. **Identity** — name and description\n2. **Funding** — copy the predicted ERC-4337 address to fund it\n3. **Policy** — set spending limits and active hours\n4. **Skills** — select capabilities (chat.completion, web.search, etc.)\n5. **Deploy** — confirm the on-chain transaction\n\nGas cost is ~0.02 0G on Galileo testnet.`;
-    } else if (lower.includes('receipt')) {
+
+    // ── What is Apogee? ─────────────────────────────────────────────────────────
+    if (lower.match(/what (is|are|does) apogee|explain apogee|tell me about apogee|about apogee|apogee protocol/)) {
+      response = `**Apogee Protocol** is an autonomous-agent runtime on **0G Aristotle mainnet** (chainId 16661). It lets you create AI agents that:\n\n- Hold their own funds in **self-custodial ERC-4337 smart wallets**\n- Have a verifiable **on-chain identity** (ERC-7857 AgentIdentity NFT)\n- Execute sandboxed **skill modules** (chat, search, memory, chain queries)\n- Operate within **programmable spending policies** enforced on-chain\n- Emit a **tamper-proof receipt** for every action via \`ReceiptBook.emitReceipt()\`\n- Store/retrieve **encrypted memory** in 0G decentralised storage\n\nApogee integrates all four 0G primitives: **0G Chain** (9 deployed contracts), **0G Storage** (payload blobs), **0G Compute** (LLM skills), and **0G DA**.\n\n${totalAgents > 0 ? `**${totalAgents}** agents and **${totalReceipts}** on-chain receipts are indexed right now.` : ''}\n\nNavigate to [Dashboard](/dashboard) for live stats or [Proofs](/proofs) to see live on-chain activity.`;
+
+    // ── 0G integration ──────────────────────────────────────────────────────────
+    } else if (lower.match(/how.*0g|0g.*integrat|0g storage|0g compute|0g chain|0g da|use.*0g|0g.*use|0g.*primitive|which 0g/)) {
+      response = `Apogee integrates **all four 0G primitives**:\n\n**1. 0G Chain (Aristotle EVM)**\n9 Solidity contracts deployed on chainId 16661:\n- \`AgentIdentity\` — ERC-7857 NFT registry for agent on-chain identity\n- \`ReceiptBook\` — records every agent action as a tamper-proof on-chain receipt\n- \`PolicyEngine\` — enforces spending limits and skill allowlists\n- \`PaymentRouter\` — maps agent IDs to their smart account wallets\n- \`AccountFactory\` — deploys ERC-4337 smart wallets for agents\n- Plus \`EscrowVault\`, \`RevenueSplitter\`, \`ServiceRegistry\`, \`AgentAccount\`\n\n**2. 0G Storage** (via \`@0gfoundation/0g-ts-sdk\`)\n- Vesper demo agent uploads images and memory artifacts as content-addressed blobs\n- Receipt payloads are hashed and a Merkle \`storageRoot\` is anchored on-chain\n- Memory entries are encrypted and stored as blobs\n\n**3. 0G Compute** (via \`@0glabs/0g-serving-broker\`)\n- \`chat.completion\` and \`image.generate\` skills route through 0G Compute providers\n- Falls back gracefully with \`safeSkill()\` when providers are unavailable\n\n**4. 0G DA**\n- All contracts, receipts, and identity NFTs live on Aristotle — the 0G EVM layer itself\n\nSee live integration evidence at [Proofs](/proofs) or [API Docs](https://apogeeedge-production.up.railway.app/docs/api).`;
+
+    // ── Agent account / smart account ───────────────────────────────────────────
+    } else if (lower.match(/agent account|smart account|erc.?4337|smart wallet|what.*account|account.*what/)) {
+      response = `Every agent deployed on Apogee gets two on-chain identities:\n\n**AgentIdentity NFT** (ERC-7857)\n- Minted by \`AgentIdentity.mint()\` on Aristotle\n- The permanent on-chain identity for the agent\n- Token ID becomes the agent's ID across the protocol\n\n**AgentAccount** (ERC-4337 smart wallet)\n- Deployed by \`AccountFactory\` at a deterministic address\n- Holds 0G tokens for gas and skill costs\n- **Self-custodial** — you control the wallet via your EOA\n- Apogee holds an operator role to submit transactions within your policy limits only\n\nThe smart wallet address is shown on the agent detail page and on [Chainscan](https://chainscan.0g.ai) once deployed.`;
+
+    // ── Agent status / activating ────────────────────────────────────────────────
+    } else if (lower.match(/activating|what.*status|status.*mean|initializ|bootstrapped|ready.*mean|pending.*deploy|agent.*stuck|stuck.*agent/)) {
+      response = `After you click Deploy, the agent moves through lifecycle stages:\n\n| Status | Meaning |\n|---|---|\n| \`pending_deploy\` | Waiting for on-chain tx to confirm |\n| \`activating\` / \`initialized\` | Identity NFT minted, smart account deployed |\n| \`ready\` | Onboarding receipts minted — agent is ready |\n| \`active\` | Agent has run at least one skill |\n| \`failed\` | Deployment error — check the agent detail page |\n| \`paused\` | Manually disabled |\n\nIf stuck at \`activating\`, the Aristotle tx is still confirming (~30s). Refresh and wait. If stuck more than 2 minutes, check [Agents](/agents) for an error message or open [Chainscan](https://chainscan.0g.ai) to inspect the pending tx.`;
+
+    // ── Memory (empty / new agent) ───────────────────────────────────────────────
+    } else if (lower.match(/no memory|empty memory|why.*memory.*empty|memory.*empty|why.*no memory|new agent.*memory|memory.*new agent|memory.*not appear|memory.*missing/)) {
+      response = `Memory appearing empty for a new agent is **expected behavior**, not a bug.\n\nHere's what populates memory:\n1. **\`system/init\`** — a bootstrap entry written during onboarding (appears within ~60s of deployment)\n2. **\`memory.write\` skill calls** — entries added when the agent runs tasks\n3. **Manual API writes** — via \`PUT /v1/memory/:agentId/:key\`\n\nFor a freshly deployed agent: the onboarding job writes \`system/init\` and mints receipts. If memory is still empty after 2 minutes, try the **Retry onboarding** button on the agent detail page.\n\nRuntime-generated memory only appears after autonomous runs — which for user-deployed agents requires the agent to be triggered via API or the run interface. Navigate to [Memory](/memory) to see entries once they exist.`;
+
+    // ── Memory (general) ────────────────────────────────────────────────────────
+    } else if (lower.match(/what.*memory|how.*memory|memory.*work|memory.*store|memory.*encrypt/)) {
+      response = `**Agent memory** is encrypted state stored in 0G decentralised storage.\n\nEach memory write:\n- Encrypts the value\n- Uploads to 0G Storage (content-addressed blob)\n- Records a \`storageRoot\` (Merkle root) and anchors it on-chain via \`ReceiptBook\`\n\nKey properties:\n- **Semantic search** — search memory by embedding similarity, not just exact key\n- **Versioned** — each write creates a new storage root\n- **Agent-scoped** — each agent's memory is isolated by its token ID\n- **Accessible** — read via the [Memory](/memory) page or \`GET /v1/memory/:agentId\`\n\nDemo agents (Aurora, Vesper, Helix) write memory on every heartbeat — their entries are visible in the Edge API.`;
+
+    // ── Live proofs / judge verification (checked BEFORE generic receipt) ────────
+    } else if (lower.match(/live proof|proofs page|judge|how.*verify|verify.*on.?chain|where.*receipt|chainscan|see.*proof|proof.*see|on.?chain.*verif/)) {
+      response = `**Four paths for live on-chain verification:**\n\n**1. Proofs page** — [apogeeprotocol.vercel.app/proofs](/proofs)\n- Receipt feed with real \`txHash\` links to Chainscan\n- Storage Proofs tab: rows with a green \`storageRoot\` show the full 0G Storage round-trip\n- Contracts tab: all 9 deployed addresses with Chainscan links\n\n**2. ReceiptBook on Chainscan**\nPaste \`0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53\` into [chainscan.0g.ai](https://chainscan.0g.ai) → Events → filter \`ReceiptMinted\`. The counter grows every ~10 minutes as Aurora fires.\n\n**3. Edge API** (no auth needed):\n\`\`\`bash\ncurl "https://apogeeedge-production.up.railway.app/v1/receipts?scope=global&limit=3" | jq .items\n\`\`\`\n\n**4. Smart contract read** (with cast):\n\`\`\`bash\ncast call 0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53 \\\n  "totalReceipts()(uint256)" --rpc-url https://evmrpc-testnet.0g.ai\n\`\`\`\n\nDemo agents **Aurora** (every 10 min), **Vesper** (every 15 min), and **Helix** (every 30 min) mint receipts autonomously — the counter on Chainscan grows in real time.\n\n${totalReceipts > 0 ? `**${totalReceipts}** receipts are indexed right now.` : ''}`;
+
+    // ── Receipts (what/why questions — after judge/verify block) ─────────────────
+    } else if (lower.match(/what.*receipt|receipt.*what|why.*receipt|receipt.*import|how.*receipt|receipt.*work|on.?chain proof/)) {
       const n = receiptList.length;
-      response = `Receipts are cryptographic proofs of every agent action.\n\nEach receipt contains:\n- **Action tag** — a \`bytes4\` keccak hash (e.g. \`pilot.chat\`)\n- **Amount** — 0G tokens spent\n- **Content hash** — stored in 0G decentralised storage\n- **On-chain anchor** — block number + tx hash\n\n${n > 0 ? `You have **${n}** receipt${n > 1 ? 's' : ''} on record.` : 'No receipts yet — they appear when your agents run.'} Navigate to **Receipts** in the sidebar for the full list.`;
-    } else if (lower.includes('stop') || lower.includes('paused') || lower.includes('error')) {
-      response = `Common reasons an agent stops:\n\n1. **Policy limit** — exceeded daily cap or per-tx max\n2. **Zero balance** — smart account ran out of 0G tokens\n3. **Skill error** — unhandled exception in a skill module\n4. **Manual pause** — disabled from the Settings tab\n\nCheck the **Activity** tab on the agent detail page for the last run log and error details.`;
-    } else if (lower.includes('cost') || lower.includes('price') || lower.includes('estimate') || lower.includes('monthly')) {
-      response = `Estimated costs on Galileo testnet:\n\n| Operation | Cost |\n|-----------|------|\n| Deploy agent | ~0.02 0G |\n| chat.completion | ~0.001 0G/call |\n| web.search | ~0.0005 0G/call |\n| memory.write | ~0.0002 0G/write |\n\nA typical agent at 100 tasks/day costs **~3–5 0G/month**. Adjust limits in the Policy settings.`;
-    } else if (lower.includes('memory')) {
-      response = `Agent memory is encrypted state stored in 0G decentralised storage.\n\nEach write:\n- Encrypts the value with AES-256-GCM\n- Uploads to 0G Storage (content-addressed)\n- Anchors the storage root on-chain via ReceiptBook\n\nYou can view, search (semantic), and anchor entries in the **Memory** section.`;
-    } else if (lower.includes('demo run') || lower.includes('show me')) {
-      response = `Here's a typical agent run:\n\n\`\`\`\n[00:00] Receives task via API\n[00:01] Calls web.search("latest 0G price")\n[00:12] Processes with chat.completion\n[00:18] Stores summary via memory.write\n[00:19] Mints receipt (tag: pilot.chat)\n[00:20] ✓ Done — cost: 0.0008 0G\n\`\`\`\n\nEvery step is logged in the **Activity** tab on the agent detail page.`;
+      const globalCount = totalReceipts > 0 ? `**${totalReceipts}** receipts` : 'receipts';
+      response = `**Receipts** are tamper-proof on-chain records of every agent action, minted by \`ReceiptBook.emitReceipt()\` on Aristotle mainnet.\n\nEach receipt contains:\n- \`actionTag\` — 4-byte identifier (e.g. \`mem.write\`, \`chain.qry\`, \`pilot.chat\`)\n- \`payloadHash\` — keccak256 of the action payload\n- \`storageRoot\` — 0G Storage Merkle root (if payload was uploaded to 0G Storage)\n- \`valueWei\` — 0G tokens spent\n- \`timestamp\` — Aristotle block timestamp\n\n**Why receipts matter:** they are the accountability layer — proving which agent ran which action, when, at what cost, with the payload content-addressed and retrievable.\n\n${n > 0 ? `You have **${n}** recent receipt${n > 1 ? 's' : ''} in this session. ` : ''}${totalReceipts > 0 ? `${globalCount} are indexed globally.` : ''}\n\nBrowse at [Receipts](/receipts) or see live demo activity at [Proofs](/proofs).`;
+
+    // ── Skills ───────────────────────────────────────────────────────────────────
+    } else if (lower.match(/what.*skill|skill.*what|how.*skill|install.*skill|skill.*install|skill.*work|capability|skill.*catalog/)) {
+      response = `**Skills** are sandboxed capability modules that agents execute in isolated-vm environments.\n\nAvailable skills:\n\n| Skill ID | Category | Description |\n|---|---|---|\n| \`chat.completion\` | AI | LLM inference via 0G Compute |\n| \`memory.write\` | Memory | Persist encrypted state to 0G Storage |\n| \`memory.read\` | Memory | Read agent memory entries |\n| \`memory.search\` | Memory | Semantic search over memory |\n| \`chain.query\` | Chain | Read Aristotle chain state |\n| \`chain.send\` | Chain | Submit approved on-chain txs |\n| \`web.search\` | Web | Internet search from agent runs |\n| \`web.fetch\` | Web | Fetch and parse a URL |\n| \`storage.upload\` | Storage | Upload artifacts to 0G Storage |\n\n**Installing a skill** registers it on the agent so it can be invoked in runs. Skills are selected during deployment or added later from the [Marketplace](/marketplace) or the Skills tab on an agent detail page.\n\nSkills are run in strict isolation — no access to other agents' state or the host environment.`;
+
+    // ── Marketplace ──────────────────────────────────────────────────────────────
+    } else if (lower.match(/marketplace|what.*market|market.*what/)) {
+      response = `The **Marketplace** at [/marketplace](/marketplace) is the skill and service catalog.\n\n**Skills tab** — browse free and premium skills:\n- Free tier: chat, memory, chain queries, web search, storage upload\n- Premium tier: image generation, embeddings, transcription, and more\n- Install skills on agents during deployment or from the agent detail page\n\n**Services tab** — registered service providers including:\n- 0G Storage — decentralised payload storage\n- 0G Compute — model inference for AI skills\n- Aristotle RPC — chain connectivity\n- ReceiptBook — on-chain receipt minting\n\nA full paid third-party marketplace purchase flow is roadmap. Current install/selection happens at deployment or configuration time.`;
+
+    // ── Policies ─────────────────────────────────────────────────────────────────
+    } else if (lower.match(/polic|spending.*limit|spending.*cap|what.*policy|policy.*what|daily.*cap|per.*tx|max.*spend/)) {
+      response = `**Spending policies** are enforced by the \`PolicyEngine\` contract on Aristotle mainnet.\n\nEach policy defines:\n- \`maxPerTxWei\` — maximum 0G per single transaction\n- \`maxPerDayWei\` — daily spending cap (resets at UTC midnight)\n- \`active\` — on/off toggle\n- \`allowedSkills\` — whitelist of skill IDs the agent may invoke\n\nPolicies protect against runaway spending. The on-chain enforcement means even if the edge API were compromised, the smart contract enforces limits before any transaction executes.\n\nSet policies during deployment. The UI to edit policies post-deployment is roadmap — for now, policies can be updated via \`PATCH /v1/agents/:id/policy\` if you're authenticated as the owner.`;
+
+    // ── Revenue splits ───────────────────────────────────────────────────────────
+    } else if (lower.match(/split|revenue split|revenue shar|rev.*split|split.*rev/)) {
+      response = `**Revenue splitting** is handled by the \`RevenueSplitter\` contract on Aristotle mainnet.\n\nHow it works:\n- When an agent earns 0G from providing services, the revenue is split between the agent owner and configurable beneficiaries\n- Split ratios are set at deployment time\n- The contract enforces distribution on-chain — no central party controls disbursement\n\nThis is the infrastructure layer for **agent-to-agent payments** and **service monetization**. A UI for configuring split ratios is roadmap. Current splits are set at deployment with protocol defaults.`;
+
+    // ── Dashboard ────────────────────────────────────────────────────────────────
+    } else if (lower.match(/dashboard|what.*show|showing.*what|stat.*show|explain.*dashboard|dashboard.*explain/)) {
+      response = `The **[Dashboard](/dashboard)** shows protocol-wide statistics from Aristotle mainnet and the edge index:\n\n- **Network Agents** — total indexed \`AgentIdentity\` records on Aristotle\n- **Runtime Active** — agents with recent heartbeat or run activity\n- **Network Receipts** — total on-chain receipts minted by \`ReceiptBook\`\n- **Network Volume** — cumulative 0G value recorded by indexed receipts\n- **Activity heatmap** — receipt volume across the last 14 days × 24 hours\n\n${totalAgents > 0 ? `Right now: **${totalAgents}** agents and **${totalReceipts}** receipts indexed.` : ''}\n\nStats include demo agents (Aurora, Vesper, Helix) plus user-deployed agents. Connect your wallet to see your own agents and their activity.`;
+
+    // ── Deployed contracts ───────────────────────────────────────────────────────
+    } else if (lower.match(/contract|deployed contract|contract address|what contract|which contract|smart contract/)) {
+      response = `**9 contracts deployed on Aristotle mainnet** (chainId 16661):\n\n| Contract | Address |\n|---|---|\n| AgentIdentity | \`0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3\` |\n| PolicyEngine | \`0xa8933d96A27BDfFac07C0d7467f3213cb340f550\` |\n| **ReceiptBook** | \`0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53\` |\n| ServiceRegistry | \`0x47438d9169FD5dCC0C5DA06511b7F61Fb6BdD5Ad\` |\n| RevenueSplitter | \`0x1E32A89B6815a492Ad30f71a5E35280EF7399b74\` |\n| PaymentRouter | \`0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c\` |\n| EscrowVault | \`0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767\` |\n| AccountFactory | \`0xABc44aF98e6d873C0700c9B687fbf3Be560cba90\` |\n| AgentAccount | \`0xc18eD4e075a23A66505744A353eeFE91340F924d\` |\n\nVerify any address at [chainscan.0g.ai](https://chainscan.0g.ai). All 9 are live and verified. ReceiptBook is the most active — browse its \`ReceiptMinted\` events for live proof.\n\nAll addresses are also listed on the [Proofs](/proofs) → Contracts tab.`;
+
+    // ── Network / chain info ─────────────────────────────────────────────────────
+    } else if (lower.match(/which network|what network|which chain|what chain|chain id|aristotle|testnet.*mainnet|mainnet.*testnet|0g network/)) {
+      response = `Apogee runs on **Aristotle mainnet** — the 0G EVM layer:\n\n- **Chain ID**: 16661\n- **RPC**: \`https://evmrpc-testnet.0g.ai\`\n- **Explorer**: [chainscan.0g.ai](https://chainscan.0g.ai)\n- **Faucet**: [faucet.0g.ai](https://faucet.0g.ai) — 1 0G per request\n- **Token**: 0G (native gas token)\n\nDespite the "testnet" in the RPC hostname, Aristotle is the production mainnet for the 0G buildathon. All 9 Apogee contracts are deployed here and all demo agent receipts are minted here.\n\nA deployment on Galileo (the other 0G testnet) is separate — Apogee targets Aristotle exclusively.`;
+
+    // ── Deploy agent ─────────────────────────────────────────────────────────────
+    } else if (lower.match(/deploy|create agent|new agent|how.*agent|agent.*create|get.*agent|start.*agent/)) {
+      response = `**How to deploy an agent on Apogee:**\n\n1. Connect your Ethereum wallet (MetaMask, Coinbase Wallet, etc.)\n2. Sign the SIWE message to authenticate — no tokens needed for sign-in\n3. Go to [Agents](/agents) and click **Deploy new agent** (or [/agents/new](/agents/new))\n4. Fill in name, description, and select skills (e.g. memory.write, chain.query)\n5. Sign the **EIP-712 authorization** message — this proves you own the wallet\n6. Wait ~30–60 seconds for Aristotle confirmation\n\n**What happens on-chain:**\n- \`AgentIdentity.mint()\` creates your agent's NFT\n- \`AccountFactory.createAccount()\` deploys the ERC-4337 smart wallet\n- Onboarding receipts are minted for each selected skill\n- A \`system/init\` bootstrap memory entry is written\n\n**Cost:** ~0.01 0G gas. Get tokens from [faucet.0g.ai](https://faucet.0g.ai) — free, 1 0G per request.`;
+
+    // ── Deployment failure ───────────────────────────────────────────────────────
+    } else if (lower.match(/deploy.*fail|fail.*deploy|why.*fail|transaction.*fail|fail.*transaction|what.*wrong|error.*deploy/)) {
+      response = `**Common deployment failure causes:**\n\n1. **Insufficient balance** — the signing wallet needs 0G for gas. Get tokens from [faucet.0g.ai](https://faucet.0g.ai).\n\n2. **Replacement fee too low** — a previous nonce transaction is pending. The edge API auto-retries with higher gas after ~90s. Wait 2–3 minutes.\n\n3. **Authorization expired** — the EIP-712 deploy nonce has a 10-minute deadline. Start a fresh deployment.\n\n4. **Network congestion** — Aristotle RPC latency. Wait 30s and retry.\n\n5. **Wallet rejected** — the user dismissed the wallet signature prompt. Restart the deploy flow.\n\nCheck the agent detail page at [Agents](/agents) for a specific error message. If the agent shows \`failed\` status, the error is displayed there.`;
+
+    // ── Replacement fee / pending tx ─────────────────────────────────────────────
+    } else if (lower.match(/replacement fee|replacement.*underpriced|pending.*transaction|transaction.*pending|stuck.*transaction|transaction.*stuck|nonce/)) {
+      response = `**Replacement fee too low / pending transaction:**\n\nThis happens when a previous transaction from the same signing address is still pending with a lower gas price, and the new transaction can't replace it.\n\n**What Apogee does automatically:**\n- The edge API detects \`replacement_underpriced\` errors\n- It waits ~90 seconds then retries the deployment\n- On retry, it uses the same nonce with higher gas (replacement transaction)\n\n**What you should do:**\n1. Wait 2–3 minutes — the auto-retry usually clears it\n2. Check [chainscan.0g.ai](https://chainscan.0g.ai) with your signing address to see the pending tx\n3. Refresh the [Agents](/agents) page — the status updates automatically\n\nIf still stuck after 5 minutes, try the **Retry onboarding** button on the agent detail page.`;
+
+    // ── Self-custodial / custodial ───────────────────────────────────────────────
+    } else if (lower.match(/custodial|self.?custodial|non.?custodial|own.*key|private key|who.*control|control.*wallet/)) {
+      response = `**Apogee is self-custodial.**\n\nHere's what that means:\n\n- Each agent's ERC-4337 smart wallet is **controlled by your EOA** (externally-owned account)\n- Your private key **never leaves your wallet** — you sign authorization messages in your browser\n- Apogee holds a **server-side operator key** to submit transactions within your policy limits\n- Your policy defines the hard limits the operator key can never exceed\n- You can revoke Apogee's operator role at any time by interacting with the smart contract directly\n\n**What Apogee cannot do:**\n- Move funds beyond your policy limits\n- Access your private key\n- Deploy contracts on your behalf without your signature\n\nThe EIP-712 deploy authorization you sign proves ownership and sets the parameters the operator can use.`;
+
+    // ── Live vs demo / what is active ───────────────────────────────────────────
+    } else if (lower.match(/live.*demo|demo.*live|what.*live|what.*real|what.*demo|what.*active|aurora|vesper|helix|demo agent|running.*agent/)) {
+      response = `**What's live right now:**\n\n✅ **Demo agents minting real on-chain receipts:**\n- **Aurora** (#1) — every 10 min: news fetch → memory write → receipt\n- **Vesper** (#2) — every 15 min: memory search → image generate → 0G Storage upload → receipt\n- **Helix** (#3) — every 30 min: chain query → LLM summary → memory write → receipt\n\n✅ **9 Solidity contracts** on Aristotle mainnet\n✅ **User agent deployment** with onboarding receipts\n✅ **Bootstrap memory** (\`system/init\`) for new agents\n✅ **Receipt indexing** and proof pages\n✅ **Skill execution** via API\n\n**Roadmap (not yet live):**\n⏳ Full autonomous recurring runtime for arbitrary user agents (needs session-key delegation)\n⏳ Paid third-party marketplace purchase flow\n⏳ On-chain policy editing UI\n\n${totalAgents > 0 ? `Currently **${totalAgents} agents** and **${totalReceipts} receipts** indexed.` : ''} See [Proofs](/proofs) for live demo agent activity.`;
+
+    // ── No runs / no activity ────────────────────────────────────────────────────
+    } else if (lower.match(/no run|no activity|why.*no run|run.*empty|activity.*empty|why.*empty|nothing.*happen/)) {
+      response = `**Empty runs/activity is expected for new agents.**\n\nRuns appear after:\n1. **A skill is invoked** via \`POST /v1/agents/:id/run\` with a \`skillId\`\n2. **An autonomous heartbeat** fires (currently only for demo agents Aurora, Vesper, Helix)\n\nFor user-deployed agents, full autonomous recurring runtime (session-key delegation that lets the edge API trigger runs on a schedule) is **roadmap**. Right now, you can trigger runs manually via the API.\n\nOnboarding receipts (minted at deployment) appear under Receipts, not Runs — they're a different record type. Check [Receipts](/receipts) to confirm the agent is indexed on-chain.`;
+
+    // ── Cost / billing ───────────────────────────────────────────────────────────
+    } else if (lower.match(/cost|price|how much|billing|estimate|fee|0g.*cost|cost.*0g/)) {
+      response = `**Estimated costs on Aristotle mainnet:**\n\n| Operation | Approximate cost |\n|---|---|\n| Deploy agent (identity NFT + smart wallet) | ~0.01 0G |\n| Skill run (gas only) | ~0.001–0.005 0G |\n| \`memory.write\` (0G Storage upload) | ~0.0002 0G |\n| \`chat.completion\` (0G Compute) | Provider-dependent |\n| \`web.search\` | ~0.0005 0G |\n\nGet free test tokens from [faucet.0g.ai](https://faucet.0g.ai) — 1 0G per request, sufficient for deployment and several runs.\n\nSpending is capped by your agent's **policy limits** — set them during deployment to prevent unexpected costs.`;
+
+    // ── Show me a demo run ───────────────────────────────────────────────────────
+    } else if (lower.match(/demo run|show me|example run|how.*run work/)) {
+      response = `Here's a typical **Aurora heartbeat run** (every 10 minutes on Aristotle):\n\n\`\`\`\n[00:00] Aurora (#1) heartbeat fires\n[00:01] chain.query — reads latest Aristotle block\n[00:03] web.search — "0G blockchain news"\n[00:08] chat.completion — summarises via 0G Compute\n[00:12] memory.write — stores summary to 0G Storage\n         storageRoot: 0xabc123… (Merkle root)\n[00:14] ReceiptBook.emitReceipt(agentId=1, tag=mem.writ, …)\n         txHash: 0xdef456… confirmed on Aristotle\n[00:15] ✓ Done — receipt minted\n\`\`\`\n\nEvery step that writes state produces a receipt. Filter \`ReceiptMinted\` events on [Chainscan](https://chainscan.0g.ai/address/0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53) to see live activity.`;
+
+    // ── Agent greeting (has agents) ──────────────────────────────────────────────
     } else if (agentList.length > 0) {
       const a = agentList[0]!;
       const bal = (Number(BigInt(a.balanceWei ?? '0')) / 1e18).toFixed(6);
-      response = `You have **${agentList.length}** agent${agentList.length > 1 ? 's' : ''}. Your first agent (\`${String(a.id ?? '').slice(0, 8)}…\`) has a balance of **${bal} 0G**.\n\nI can help you:\n- Check receipts and activity logs\n- Explain spending policies\n- Guide you through deploying more agents\n\nWhat would you like to know?`;
+      response = `You have **${agentList.length}** agent${agentList.length > 1 ? 's' : ''}. Your first agent (\`${String(a.id ?? '').slice(0, 8)}…\`) has a balance of **${bal} 0G** and status **${a.status ?? 'unknown'}**.\n\nTry asking me:\n- *"Why does my agent have no memory?"*\n- *"What does '${a.status ?? 'activating'}' mean?"*\n- *"Where can judges verify live receipts?"*\n- *"What are skills?"*\n- *"What contracts are deployed?"*`;
+
+    // ── Default / fallback ───────────────────────────────────────────────────────
     } else {
-      response = `I'm Apogee Pilot — your on-chain agent assistant.\n\nI can help you:\n- **Deploy and manage agents** on the 0G blockchain\n- **Understand receipts** and on-chain proofs\n- **Read agent memory** and activity\n- **Estimate costs** and configure policies\n\nTry: *"Deploy my first agent"* or *"Explain receipts"*.`;
+      response = `I'm **Apogee Pilot** — your guide to the Apogee Protocol on 0G Aristotle mainnet.\n\n${totalAgents > 0 ? `**${totalAgents}** agents and **${totalReceipts}** on-chain receipts are indexed right now.\n\n` : ''}Try asking me:\n- *"What is Apogee?"*\n- *"How does Apogee use 0G?"*\n- *"What are receipts?"*\n- *"What are skills?"*\n- *"Where can judges verify live receipts?"*\n- *"What contracts are deployed?"*\n- *"Why does my new agent have no memory?"*\n- *"How do I deploy an agent?"*\n\nOr explore the app:\n- [Dashboard](/dashboard) — live protocol stats\n- [Proofs](/proofs) — on-chain receipt evidence\n- [Agents](/agents) — your deployed agents\n- [Marketplace](/marketplace) — skill catalog\n- [Docs](/docs) — full documentation`;
     }
 
     for (const token of response.split(/(?<= )/)) {
       yield token;
-      await new Promise<void>(r => setTimeout(r, 18 + Math.random() * 28));
+      await new Promise<void>(r => setTimeout(r, 12 + Math.random() * 20));
     }
   }
 
@@ -2367,17 +2468,20 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     };
 
     try {
-      const toolsToRun: { name: string; args: Record<string, unknown> }[] = user
-        ? [
-            { name: 'getMyAgents', args: {} },
-            ...(lower.includes('receipt') || lower.includes('spent') || lower.includes('cost')
-              ? [{ name: 'listRecentReceipts', args: { limit: 5 } }]
-              : []),
-            ...(lower.includes('memory')
-              ? [{ name: 'getMemorySummary', args: { agentId: '' } }]
-              : []),
-          ]
-        : [{ name: 'getProtocolStats', args: {} }];
+      const toolsToRun: { name: string; args: Record<string, unknown> }[] = [
+        { name: 'getProtocolStats', args: {} },
+        ...(user
+          ? [
+              { name: 'getMyAgents', args: {} },
+              ...(lower.includes('receipt') || lower.includes('spent') || lower.includes('cost')
+                ? [{ name: 'listRecentReceipts', args: { limit: 5 } }]
+                : []),
+              ...(lower.includes('memory')
+                ? [{ name: 'getMemorySummary', args: { agentId: '' } }]
+                : []),
+            ]
+          : []),
+      ];
 
       const toolResults: { name: string; result: unknown }[] = [];
       for (const tool of toolsToRun) {
@@ -2396,7 +2500,23 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
       if (llmBase && llmKey) {
         const toolCtx = toolResults.map(t => `[${t.name}]\n${JSON.stringify(t.result, null, 2)}`).join('\n\n');
-        const sysPrompt = `You are Apogee Pilot, an AI assistant embedded in the Apogee Protocol — an autonomous agent runtime on the 0G blockchain. Be concise, technical, and helpful. You only read data, never mutate state.\n\n${toolCtx ? `Current context:\n${toolCtx}` : ''}`;
+        const sysPrompt = `You are Apogee Pilot, an AI assistant embedded in the Apogee Protocol — an autonomous-agent runtime on 0G Aristotle mainnet (chainId 16661). Be concise, technical, and helpful. You only read data, never mutate state.
+
+KEY PRODUCT FACTS:
+- Apogee gives AI agents self-custodial ERC-4337 smart wallets (AgentAccount), ERC-7857 on-chain identity NFTs (AgentIdentity), sandboxed skill execution (isolated-vm), programmable spending policies (PolicyEngine), and tamper-proof on-chain receipts (ReceiptBook.emitReceipt()).
+- 9 contracts deployed on Aristotle: AgentIdentity 0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3, ReceiptBook 0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53, PolicyEngine 0xa8933d96A27BDfFac07C0d7467f3213cb340f550, PaymentRouter 0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c, AccountFactory 0xABc44aF98e6d873C0700c9B687fbf3Be560cba90, EscrowVault 0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767, RevenueSplitter 0x1E32A89B6815a492Ad30f71a5E35280EF7399b74, ServiceRegistry 0x47438d9169FD5dCC0C5DA06511b7F61Fb6BdD5Ad, AgentAccount 0xc18eD4e075a23A66505744A353eeFE91340F924d.
+- 0G integrations: 0G Chain (EVM contracts + receipts), 0G Storage (@0gfoundation/0g-ts-sdk — payload blobs + memory artifacts), 0G Compute (@0glabs/0g-serving-broker — chat.completion + image.generate skills).
+- Demo agents running on Aristotle: Aurora (#1, every 10min), Vesper (#2, every 15min), Helix (#3, every 30min) — all minting real on-chain receipts continuously.
+- User-deployed agents get deployment + onboarding receipts immediately. Full autonomous recurring runtime for user agents is roadmap (needs session-key delegation).
+- Skills run in isolated-vm sandboxes: chat.completion, memory.write, memory.read, memory.search, chain.query, chain.send, web.search, web.fetch, storage.upload.
+- Memory is encrypted, stored in 0G Storage, with storageRoot anchored on-chain via ReceiptBook.
+- Empty memory/runs for new agents is EXPECTED — not a bug. system/init bootstrap memory is written during onboarding.
+- Verify live receipts: /proofs page, chainscan.0g.ai/address/0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53 → Events → ReceiptMinted, or Edge API /v1/receipts?scope=global.
+- App pages: /dashboard (stats), /agents (deploy/manage), /marketplace (skills), /receipts, /memory, /proofs (live evidence), /docs.
+- Never claim transactions have been submitted or state has been mutated. Never invent addresses, tx hashes, or data not in the tool context.
+- If data is missing, say clearly: "This hasn't been indexed yet" or "This appears after the agent runs."
+
+${toolCtx ? `LIVE CONTEXT:\n${toolCtx}` : ''}`;
         const llmRes = await fetch(`${llmBase}/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llmKey}` },
