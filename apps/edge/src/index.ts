@@ -2152,35 +2152,51 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   // 90 seconds after startup: find all onboarding receipts still marked 'failed'
   // and re-run their onboarding. By then, store.receipts is populated from Redis
   // (the first health/receipt request triggers syncReceipts which takes ~60s).
-  // Also resets the onboarding stages dict in case the old billing idempotency
-  // marked stages 'done' without a successful chain TX.
+  // Repeats every 3 minutes so transient TX-lock contention does not permanently block.
+  // NOTE: 'running' in Redis at startup is ALWAYS stale (written by the dead previous
+  // process) — we reset it unconditionally. For periodic runs we skip only if the
+  // record was updated within the last 5 minutes (a genuinely in-flight onboarding).
   if (redis && redisReceiptIndex) {
-    setTimeout(() => {
-      void (async () => {
-        try {
-          const allReceipts = await redisReceiptIndex.list();
-          const failedOnboardingAgents = new Set<string>();
-          for (const r of allReceipts) {
-            if (r.status === 'failed' && r.clientReceiptId?.startsWith(`onboarding:${options.chainId}:`)) {
-              failedOnboardingAgents.add(r.agentId);
-            }
+    const retryFailedOnboardings = async (isFirstRun: boolean) => {
+      try {
+        const allReceipts = await redisReceiptIndex.list();
+        const failedOnboardingAgents = new Set<string>();
+        for (const r of allReceipts) {
+          if (r.status === 'failed' && r.clientReceiptId?.startsWith(`onboarding:${options.chainId}:`)) {
+            failedOnboardingAgents.add(r.agentId);
           }
-          if (failedOnboardingAgents.size === 0) return;
-          app.log.info({ agents: [...failedOnboardingAgents] }, 'startup: found agents with failed onboarding receipts — queuing retries');
-          for (const tokenId of failedOnboardingAgents) {
-            const deployment = await deploymentStore.get(tokenId);
-            if (!deployment) continue;
-            const existing = await deploymentStore.getOnboarding(tokenId);
-            if (existing?.status === 'running') continue;
-            // Reset stages so runOnboarding re-attempts via receipt status, not stale stages dict.
-            await deploymentStore.setOnboarding({ ...(existing ?? { key: onboardingKey(options.chainId, tokenId), chainId: options.chainId, tokenId, stages: {}, updatedAt: nowIso() }), status: 'pending', stages: {}, attempts: 0, updatedAt: nowIso() });
-            void runOnboarding(deployment).catch((err) => app.log.warn({ tokenId, err }, 'startup onboarding retry failed'));
-            app.log.info({ tokenId }, 'startup: queued onboarding retry for agent with failed receipts');
-          }
-        } catch (err) {
-          app.log.warn({ err }, 'startup onboarding retry scan failed');
         }
-      })();
+        if (failedOnboardingAgents.size === 0) return;
+        app.log.info({ agents: [...failedOnboardingAgents] }, 'startup: found agents with failed onboarding receipts — queuing retries');
+        for (const tokenId of failedOnboardingAgents) {
+          const deployment = await deploymentStore.get(tokenId);
+          if (!deployment) {
+            app.log.warn({ tokenId }, 'startup: skipping — no deployment record in Redis');
+            continue;
+          }
+          const existing = await deploymentStore.getOnboarding(tokenId);
+          // On the first startup run, any 'running' status is stale (the previous
+          // process crashed). On periodic runs, skip only if the record was updated
+          // recently (i.e., runOnboarding is genuinely in-flight in this process).
+          const updatedMs = existing?.updatedAt ? Date.parse(existing.updatedAt) : 0;
+          const isActivelyRunning = !isFirstRun && existing?.status === 'running' && (Date.now() - updatedMs) < 5 * 60_000;
+          if (isActivelyRunning) {
+            app.log.info({ tokenId }, 'startup: skipping — onboarding is actively running');
+            continue;
+          }
+          // Reset stages so runOnboarding re-attempts via receipt status, not stale stages dict.
+          await deploymentStore.setOnboarding({ ...(existing ?? { key: onboardingKey(options.chainId, tokenId), chainId: options.chainId, tokenId, stages: {}, updatedAt: nowIso() }), status: 'pending', stages: {}, attempts: 0, updatedAt: nowIso() });
+          void runOnboarding(deployment).catch((err) => app.log.warn({ tokenId, err }, 'startup onboarding retry failed'));
+          app.log.info({ tokenId }, 'startup: queued onboarding retry for agent with failed receipts');
+        }
+      } catch (err) {
+        app.log.warn({ err }, 'startup onboarding retry scan failed');
+      }
+    };
+    setTimeout(() => {
+      void retryFailedOnboardings(true);
+      // Keep retrying every 3 minutes until cleared (handles TX-lock contention, etc.)
+      setInterval(() => void retryFailedOnboardings(false), 3 * 60_000);
     }, 90_000);
   }
 
