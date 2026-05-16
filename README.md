@@ -18,10 +18,12 @@
 [![GitHub Stars](https://img.shields.io/github/stars/Franlinozz/APOGEE?style=flat-square&color=7c3aed)](https://github.com/Franlinozz/APOGEE)
 [![Live Demo](https://img.shields.io/badge/live-apogeeprotocol.vercel.app-7c3aed?style=flat-square)](https://apogeeprotocol.vercel.app)
 [![On-chain Proofs](https://img.shields.io/badge/proofs-aristotle%20mainnet-10b981?style=flat-square)](https://apogeeprotocol.vercel.app/proofs)
+[![Demo Video](https://img.shields.io/badge/demo-YouTube-red?style=flat-square&logo=youtube)](https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb)
+[![X / Twitter](https://img.shields.io/badge/X-post-000?style=flat-square&logo=x)](https://x.com/ApogeeProtocol/status/2055641847821664765?s=20)
 [![Built on 0G](https://img.shields.io/badge/built%20on-0G%20Network-f59e0b?style=flat-square)](https://0g.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
-[**Live App**](https://apogeeprotocol.vercel.app) · [**On-chain Proofs**](https://apogeeprotocol.vercel.app/proofs) · [**API Docs**](https://apogeeedge-production.up.railway.app/docs/api) · [**Judge Guide**](docs/JUDGE_GUIDE.md) · [**Tutorial**](docs/TUTORIAL.md)
+[**Live App**](https://apogeeprotocol.vercel.app) · [**On-chain Proofs**](https://apogeeprotocol.vercel.app/proofs) · [**Demo Video**](https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb) · [**X Post**](https://x.com/ApogeeProtocol/status/2055641847821664765?s=20) · [**API Docs**](https://apogeeedge-production.up.railway.app/docs/api) · [**Judge Guide**](docs/JUDGE_GUIDE.md) · [**Tutorial**](docs/TUTORIAL.md)
 
 </div>
 
@@ -275,6 +277,6 @@ Three agents are live on Aristotle mainnet. Receipts are visible at [apogeeproto
 MIT © 2026 Francis Okafor — [github.com/Franlinozz/APOGEE](https://github.com/Franlinozz/APOGEE)
 
 **Contact:** Open an issue or follow [@apogeeprotocol](https://x.com/apogeeprotocol) on X.  
-**Demo video:** [youtube.com/watch?v=PLACEHOLDER](https://youtube.com) — *update before final submission*  
-**X post:** [x.com/apogeeprotocol](https://x.com/apogeeprotocol) — *link announcement thread after posting*  
+**Demo video:** [youtu.be/3XEJRv1ZkLo](https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb)  
+**X post:** [x.com/ApogeeProtocol/status/2055641847821664765](https://x.com/ApogeeProtocol/status/2055641847821664765?s=20)  
 **Hackathon:** [0G Hackathon on HackQuest](https://hackquest.io) · Submitted 2026-05-16

@@ -34,7 +34,8 @@ compute (0G Compute via `@0glabs/0g-serving-broker`), and native token payments.
 | Edge API docs | https://apogeeedge-production.up.railway.app/docs/api |
 | GitHub repository | https://github.com/Franlinozz/APOGEE |
 | Chainscan explorer | https://chainscan.0g.ai |
-| X / Twitter | https://x.com/apogeeprotocol |
+| X / Twitter | https://x.com/ApogeeProtocol/status/2055641847821664765?s=20 |
+| Demo video | https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb |
 
 ---
 

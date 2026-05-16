@@ -22,9 +22,11 @@ const NAV_COLS = [
   {
     title: 'Community',
     links: [
-      { label: 'GitHub',   href: 'https://github.com/Franlinozz/APOGEE', external: true },
-      { label: '0G Docs',  href: 'https://docs.0g.ai', external: true },
-      { label: 'Explorer', href: 'https://chainscan.0g.ai', external: true },
+      { label: 'GitHub',      href: 'https://github.com/Franlinozz/APOGEE', external: true },
+      { label: 'Demo video',  href: 'https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb', external: true },
+      { label: 'X / Twitter', href: 'https://x.com/ApogeeProtocol/status/2055641847821664765?s=20', external: true },
+      { label: '0G Docs',     href: 'https://docs.0g.ai', external: true },
+      { label: 'Explorer',    href: 'https://chainscan.0g.ai', external: true },
     ],
   },
 ] as const;

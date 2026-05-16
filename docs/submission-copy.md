@@ -64,9 +64,9 @@ React, Next.js, Web3, Ethers, Node.js, Solidity, TypeScript, 0G
 | **MVP / Live App** | https://apogeeprotocol.vercel.app/ |
 | **Proof page** | https://apogeeprotocol.vercel.app/proofs |
 | **GitHub** | https://github.com/Franlinozz/APOGEE |
-| **X / Twitter** | https://x.com/apogeeprotocol |
-| **Demo video** | *(add YouTube link before final submission)* |
-| **X announcement post** | *(add thread link after posting)* |
+| **X / Twitter** | https://x.com/ApogeeProtocol/status/2055641847821664765?s=20 |
+| **Demo video** | https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb |
+| **X announcement post** | https://x.com/ApogeeProtocol/status/2055641847821664765?s=20 |
 
 ---
 
