@@ -189,9 +189,10 @@ export class ReceiptMinter {
     const parsed = mintSchema.parse(action);
 
     // Idempotency check (read-only, no mutex needed).
+    // Failed receipts are NOT returned early — they fall through for a retry.
     if (parsed.clientReceiptId) {
       const existing = await this.index.findByClientReceiptId(parsed.clientReceiptId);
-      if (existing) return {
+      if (existing && existing.status !== 'failed') return {
         receiptId: existing.receiptId,
         txHash: existing.txHash,
         storageRoot: existing.storageRoot,

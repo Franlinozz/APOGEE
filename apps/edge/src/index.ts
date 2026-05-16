@@ -778,6 +778,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   const hasBootstrapReceipt = (tokenId: string, actionTag: string, skillId?: string): boolean => [...store.receipts.values()].some((receipt) => {
     if (receipt.agentId !== tokenId || receipt.actionTag !== actionTag) return false;
+    if (receipt.status === 'failed') return false;
     if (!skillId) return true;
     return receipt.clientReceiptId === `onboarding:${options.chainId}:${tokenId}:skill:${skillId}`;
   });
@@ -868,6 +869,8 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         const stage = `skill.installed:${skillId}`;
         if (onboarding.stages[stage] || hasBootstrapReceipt(record.tokenId, 'skill.installed', skillId)) continue;
         const installedAt = nowIso();
+        // Register skill before the mint so it's visible even if chain anchoring fails.
+        store.skills.set(`${record.tokenId}:${skillId}`, { agentId: record.tokenId, skillId, installedAt });
         await stack.receiptMinter.mint({
           agentId: record.tokenId,
           actionTag: 'skill.installed',
@@ -875,7 +878,6 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
           valueWei: 0n,
           clientReceiptId: `onboarding:${record.chainId}:${record.tokenId}:skill:${skillId}`,
         });
-        store.skills.set(`${record.tokenId}:${skillId}`, { agentId: record.tokenId, skillId, installedAt });
         onboarding.stages[stage] = true;
         await deploymentStore.setOnboarding({ ...onboarding, updatedAt: nowIso() });
       }
@@ -1637,6 +1639,23 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     if (reply.sent || 'statusCode' in agent) return agent;
     await hiddenAgentStore.unsetHidden(options.chainId, agent.owner, agentTokenId(agent));
     return { ok: true };
+  });
+
+  app.post('/v1/agents/:id/retry-onboarding', { schema: { tags: ['agents'], params: z.object({ id: idSchema }) } }, async (request, reply) => {
+    const user = await requireAuth(request);
+    const { id } = z.object({ id: idSchema }).parse(request.params);
+    const agent = await ownedAgent(reply, user, id);
+    if (reply.sent || 'statusCode' in agent) return agent;
+    const tokenId = agentTokenId(agent);
+    const deployment = await deploymentStore.get(tokenId);
+    if (!deployment) return reply.status(404).send({ statusCode: 404, title: 'deployment record not found' });
+    // Reset failed/stuck onboarding so runOnboarding will retry it.
+    const existing = await deploymentStore.getOnboarding(tokenId);
+    if (existing && existing.status !== 'running') {
+      await deploymentStore.setOnboarding({ ...existing, status: 'pending', updatedAt: nowIso() });
+    }
+    void runOnboarding(deployment).catch((err) => app.log.warn({ tokenId, err }, 'retry-onboarding background job failed'));
+    return { ok: true, tokenId, message: 'Onboarding retry queued' };
   });
 
   app.patch('/v1/agents/:id/policy', { schema: { tags: ['agents'], params: z.object({ id: idSchema }), body: policyPatchSchema } }, async (request, reply) => {

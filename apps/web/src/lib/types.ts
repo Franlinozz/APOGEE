@@ -69,6 +69,7 @@ export interface Receipt {
   storageRoot?: string;
   attestationDigest?: string;
   status: 'pending' | 'confirmed' | 'failed';
+  error?: string;
   createdAt: string;
 }
 

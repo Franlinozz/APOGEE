@@ -17,6 +17,7 @@ function normalizeReceipt(row: Record<string, unknown>): Receipt {
     storageRoot: typeof row['storageRoot'] === 'string' ? row['storageRoot'] : undefined,
     attestationDigest: typeof row['attestationDigest'] === 'string' ? row['attestationDigest'] : typeof row['payloadHash'] === 'string' ? row['payloadHash'] : undefined,
     status: row['status'] === 'failed' ? 'failed' : row['status'] === 'pending' ? 'pending' : 'confirmed',
+    error: typeof row['error'] === 'string' ? row['error'] : undefined,
     createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : new Date().toISOString(),
   };
 }

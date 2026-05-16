@@ -73,7 +73,7 @@ export function AgentDetailTabs({ agent, receipts, runs, memoryEntries, installe
         {activeTab === 'overview' && <OverviewTab agent={agent} receipts={receipts} runs={runs} memoryEntries={memoryEntries} installedSkills={installedSkills} />}
         {activeTab === 'activity' && <ActivityTab receipts={receipts} runs={runs} />}
         {activeTab === 'memory' && <MemoryTab agentId={agent.id} entries={memoryEntries} />}
-        {activeTab === 'skills' && <SkillsTab installedSkills={installedSkills} skillCatalog={skillCatalog} />}
+        {activeTab === 'skills' && <SkillsTab agent={agent} installedSkills={installedSkills} skillCatalog={skillCatalog} />}
         {activeTab === 'policy' && <PolicyTab agent={agent} installedSkills={installedSkills} />}
         {activeTab === 'splits' && <SplitsTab />}
         {activeTab === 'settings' && <SettingsTab agent={agent} />}
@@ -145,6 +145,17 @@ function AuthorizationProofTile({ agent }: { agent: Agent }) {
   );
 }
 
+function activityBadge(status: string, txHash: string | undefined): { variant: 'success' | 'danger' | 'warning' | 'neutral'; label: string } {
+  if (status === 'confirmed' || status === 'success' || status === 'succeeded' || status === 'minted') return { variant: 'success', label: status };
+  if (status === 'failed' || status === 'error') {
+    // No txHash means the TX was never submitted (e.g. pre-fix chain client error).
+    // The action still happened — show as a warning rather than a hard failure.
+    if (!txHash) return { variant: 'warning', label: 'not anchored' };
+    return { variant: 'danger', label: 'reverted' };
+  }
+  return { variant: 'warning', label: status };
+}
+
 function ActivityTab({ receipts, runs }: { receipts: Receipt[]; runs: Run[] }) {
   const events = [
     ...receipts.map((receipt) => ({ id: receipt.id, type: 'receipt', label: receipt.skillId ?? 'receipt.minted', status: receipt.status, time: receipt.createdAt, txHash: receipt.txHash, storageRoot: receipt.storageRoot })),
@@ -155,24 +166,27 @@ function ActivityTab({ receipts, runs }: { receipts: Receipt[]; runs: Run[] }) {
 
   return (
     <div className="space-y-2">
-      {events.map((event) => (
-        <div key={`${event.type}:${event.id}`} className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-3 text-sm transition-[background-color] duration-100 hover:bg-accent/[0.04]">
-          <div>
-            <p className="font-medium text-fg">{event.label}</p>
-            <p className="font-mono text-xs text-fg-faint">
-              {short(event.id)}
-              {buildChainscanUrl({ txHash: event.txHash, chainId: 16661 }) && (
-                <a className="ml-2 text-accent hover:underline" href={buildChainscanUrl({ txHash: event.txHash, chainId: 16661 })!} target="_blank" rel="noreferrer">tx ↗</a>
-              )}
-              {event.storageRoot && /^0x[a-fA-F0-9]{64}$/.test(event.storageRoot) && <span className="ml-2 text-fg-faint">storage {short(event.storageRoot)}</span>}
-            </p>
+      {events.map((event) => {
+        const badge = activityBadge(event.status, event.txHash);
+        return (
+          <div key={`${event.type}:${event.id}`} className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-3 text-sm transition-[background-color] duration-100 hover:bg-accent/[0.04]">
+            <div>
+              <p className="font-medium text-fg">{event.label}</p>
+              <p className="font-mono text-xs text-fg-faint">
+                {short(event.id)}
+                {buildChainscanUrl({ txHash: event.txHash, chainId: 16661 }) && (
+                  <a className="ml-2 text-accent hover:underline" href={buildChainscanUrl({ txHash: event.txHash, chainId: 16661 })!} target="_blank" rel="noreferrer">tx ↗</a>
+                )}
+                {event.storageRoot && /^0x[a-fA-F0-9]{64}$/.test(event.storageRoot) && <span className="ml-2 text-fg-faint">storage {short(event.storageRoot)}</span>}
+              </p>
+            </div>
+            <div className="text-right">
+              <Badge variant={badge.variant} className="capitalize">{badge.label}</Badge>
+              <p className="mt-1 text-xs text-fg-muted">{fmtDate(event.time)}</p>
+            </div>
           </div>
-          <div className="text-right">
-            <Badge variant={event.status === 'confirmed' || event.status === 'success' || event.status === 'succeeded' ? 'success' : event.status === 'failed' || event.status === 'error' ? 'danger' : 'warning'} className="capitalize">{event.status}</Badge>
-            <p className="mt-1 text-xs text-fg-muted">{fmtDate(event.time)}</p>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -197,24 +211,35 @@ function MemoryTab({ agentId, entries }: { agentId: string; entries: MemoryEntry
   );
 }
 
-function SkillsTab({ installedSkills, skillCatalog }: { installedSkills: InstalledSkill[]; skillCatalog: SkillManifest[] }) {
-  if (installedSkills.length === 0) return <Empty title="No selected skills indexed" body="Skill selections are stored during deployment. Existing older agents may show empty until reconfigured or indexed from a new deployment." />;
+function SkillsTab({ agent, installedSkills, skillCatalog }: { agent: Agent; installedSkills: InstalledSkill[]; skillCatalog: SkillManifest[] }) {
+  const fallbackIds = installedSkills.length === 0 ? (agent.deployment?.selectedSkillIds ?? []) : [];
+  if (installedSkills.length === 0 && fallbackIds.length === 0) {
+    return <Empty title="No selected skills indexed" body="Skill selections are stored during deployment. Existing older agents may show empty until reconfigured or indexed from a new deployment." />;
+  }
+  const items: { skillId: string; installedAt: string; pending: boolean }[] = installedSkills.length > 0
+    ? installedSkills.map((s) => ({ skillId: s.skillId, installedAt: s.installedAt, pending: false }))
+    : fallbackIds.map((id) => ({ skillId: id, installedAt: agent.deployment?.createdAt ?? agent.createdAt, pending: true }));
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {installedSkills.map((install) => {
-        const manifest = skillCatalog.find((skill) => skill.id === install.skillId);
-        return (
-          <div key={install.skillId} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-medium text-sm text-fg">{manifest?.name ?? install.skillId}</p>
-              <Badge variant="success">selected</Badge>
+    <div className="space-y-3">
+      {fallbackIds.length > 0 && (
+        <p className="text-xs text-fg-muted">Skills were selected at deployment. On-chain receipt not yet indexed — re-deploying or retrying onboarding will anchor them.</p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {items.map((item) => {
+          const manifest = skillCatalog.find((skill) => skill.id === item.skillId);
+          return (
+            <div key={item.skillId} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-medium text-sm text-fg">{manifest?.name ?? item.skillId}</p>
+                <Badge variant={item.pending ? 'warning' : 'success'}>{item.pending ? 'selected' : 'selected'}</Badge>
+              </div>
+              <p className="mt-1 font-mono text-xs text-fg-faint">{item.skillId}</p>
+              <p className="mt-2 text-xs text-fg-muted">{manifest?.description ?? 'Selected skill metadata is not in the current catalog.'}</p>
+              <p className="mt-3 text-xs text-fg-faint">Selected {fmtDate(item.installedAt)}</p>
             </div>
-            <p className="mt-1 font-mono text-xs text-fg-faint">{install.skillId}</p>
-            <p className="mt-2 text-xs text-fg-muted">{manifest?.description ?? 'Selected skill metadata is not in the current catalog.'}</p>
-            <p className="mt-3 text-xs text-fg-faint">Selected {fmtDate(install.installedAt)}</p>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
