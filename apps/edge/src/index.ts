@@ -522,8 +522,323 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   void app.register(jwt, { secret: options.jwtSecret ?? 'dev-only-apogee-edge-secret-change-me' });
   void app.register(rateLimit, { global: true, max: 600, timeWindow: '1 minute', keyGenerator: (request) => request.headers.authorization ?? request.ip });
   void app.register(swagger, {
-    openapi: { openapi: '3.1.0', info: { title: 'APOGEE Edge API', version: '0.4.0' } },
-    transform: jsonSchemaTransform,
+    mode: 'static',
+    specification: {
+      document: {
+        openapi: '3.1.0',
+        info: { title: 'APOGEE Edge API', version: '0.4.0', description: 'Autonomous-agent runtime API on 0G Aristotle mainnet (chainId 16661).' },
+        servers: [{ url: '/v1', description: 'Edge API v1' }],
+        components: {
+          securitySchemes: {
+            bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'JWT from POST /v1/auth/siwe/verify' },
+          },
+          schemas: {
+            Problem: { type: 'object', properties: { type: { type: 'string' }, title: { type: 'string' }, status: { type: 'integer' }, detail: { type: 'string' }, instance: { type: 'string' } }, required: ['type', 'title', 'status', 'detail'] },
+            Agent: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' }, name: { type: 'string' }, owner: { type: 'string' }, ownerAddress: { type: 'string' },
+                accountAddress: { type: 'string' }, identityTokenId: { type: 'string' }, metadataRoot: { type: 'string' },
+                balanceWei: { type: 'string' }, status: { type: 'string', enum: ['pending_deploy','deployed','activating','initialized','ready','active','paused','failed','deploying','error'] },
+                createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' },
+              },
+              required: ['id', 'name', 'owner', 'ownerAddress', 'balanceWei', 'status', 'createdAt', 'updatedAt'],
+            },
+            Receipt: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' }, agentId: { type: 'string' }, actionTag: { type: 'string' },
+                payloadHash: { type: 'string' }, storageRoot: { type: 'string' }, valueWei: { type: 'string' },
+                txHash: { type: 'string' }, storageTxHash: { type: 'string' }, timestamp: { type: 'string', format: 'date-time' },
+                status: { type: 'string' }, clientReceiptId: { type: 'string' },
+              },
+              required: ['id', 'agentId'],
+            },
+            Skill: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' }, name: { type: 'string' }, version: { type: 'string' }, description: { type: 'string' },
+                category: { type: 'string' }, tier: { type: 'string', enum: ['free', 'premium'] }, pricePerCallWei: { type: 'string' },
+                tags: { type: 'array', items: { type: 'string' } },
+              },
+              required: ['id', 'name', 'version', 'description', 'category', 'tier', 'pricePerCallWei', 'tags'],
+            },
+            Page: {
+              type: 'object',
+              properties: {
+                items: { type: 'array', items: {} },
+                nextCursor: { type: 'string' },
+                total: { type: 'integer' },
+              },
+              required: ['items'],
+            },
+          },
+        },
+        paths: {
+          '/auth/siwe/nonce': {
+            post: {
+              summary: 'Request a SIWE nonce', operationId: 'siweNonce', tags: ['Auth'],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { address: { type: 'string', description: 'EVM address' }, domain: { type: 'string' }, uri: { type: 'string' }, chainId: { type: 'integer', default: 16661 } }, required: ['address'] } } } },
+              responses: { '200': { description: 'Nonce + SIWE message string', content: { 'application/json': { schema: { type: 'object', properties: { nonce: { type: 'string' }, message: { type: 'string' } }, required: ['nonce', 'message'] } } } }, '400': { description: 'Bad request', content: { 'application/json': { schema: { '$ref': '#/components/schemas/Problem' } } } } },
+            },
+          },
+          '/auth/siwe/verify': {
+            post: {
+              summary: 'Verify a signed SIWE message and return a JWT', operationId: 'siweVerify', tags: ['Auth'],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { message: { type: 'string' }, signature: { type: 'string' } }, required: ['message', 'signature'] } } } },
+              responses: { '200': { description: 'JWT token', content: { 'application/json': { schema: { type: 'object', properties: { token: { type: 'string' }, address: { type: 'string' } }, required: ['token', 'address'] } } } }, '401': { description: 'Invalid signature' } },
+            },
+          },
+          '/auth/deploy-nonce': {
+            get: {
+              summary: 'Request a deploy-authorization nonce (requires JWT)', operationId: 'deployNonce', tags: ['Auth'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'owner', in: 'query', required: true, schema: { type: 'string' }, description: 'Owner EVM address' }],
+              responses: { '200': { description: 'Deploy nonce', content: { 'application/json': { schema: { type: 'object', properties: { owner: { type: 'string' }, nonce: { type: 'string' }, deadline: { type: 'integer' }, chainId: { type: 'integer', example: 16661 } }, required: ['owner', 'nonce', 'deadline', 'chainId'] } } } }, '401': { description: 'Unauthorized' } },
+            },
+          },
+          '/health': {
+            get: {
+              summary: 'Service health', operationId: 'health', tags: ['System'],
+              responses: { '200': { description: 'Health status', content: { 'application/json': { schema: { type: 'object', properties: { ok: { type: 'boolean' }, uptimeSec: { type: 'number' }, version: { type: 'string' }, db: { type: 'object', properties: { ok: { type: 'boolean' }, note: { type: 'string' } } }, redis: { type: 'object', properties: { ok: { type: 'boolean' }, note: { type: 'string' } } }, runtime: { type: 'object', properties: { workers: { type: 'integer' }, lastHeartbeat: { type: 'object', properties: { aurora: { type: 'string', nullable: true }, vesper: { type: 'string', nullable: true }, helix: { type: 'string', nullable: true } } } } } }, required: ['ok', 'uptimeSec', 'version'] } } } } },
+            },
+          },
+          '/stats': {
+            get: {
+              summary: 'Protocol-level statistics', operationId: 'stats', tags: ['System'],
+              responses: { '200': { description: 'Stats object', content: { 'application/json': { schema: { type: 'object', properties: { totalAgents: { type: 'integer' }, totalReceipts: { type: 'integer' }, totalValueWei: { type: 'string' } } } } } } },
+            },
+          },
+          '/proofs': {
+            get: {
+              summary: 'Public proof summary for demo agents', operationId: 'proofs', tags: ['System'],
+              responses: { '200': { description: 'Proof summary', content: { 'application/json': { schema: { type: 'object' } } } } },
+            },
+          },
+          '/receipts': {
+            get: {
+              summary: 'List receipts', operationId: 'listReceipts', tags: ['Receipts'],
+              parameters: [
+                { name: 'agentId', in: 'query', schema: { type: 'string' }, description: 'Filter by agent ID' },
+                { name: 'scope', in: 'query', schema: { type: 'string', enum: ['owned', 'global'], default: 'owned' } },
+                { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 100 } },
+                { name: 'cursor', in: 'query', schema: { type: 'string' } },
+              ],
+              responses: { '200': { description: 'Paginated receipts', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { '$ref': '#/components/schemas/Receipt' } }, nextCursor: { type: 'string' } } } } } } },
+            },
+          },
+          '/receipts/heatmap': {
+            get: {
+              summary: 'Receipt activity heatmap', operationId: 'receiptsHeatmap', tags: ['Receipts'],
+              parameters: [
+                { name: 'days', in: 'query', schema: { type: 'integer', default: 14 } },
+                { name: 'scope', in: 'query', schema: { type: 'string', enum: ['owned', 'global'], default: 'global' } },
+              ],
+              responses: { '200': { description: 'Heatmap data', content: { 'application/json': { schema: { type: 'object' } } } } },
+            },
+          },
+          '/receipts/{id}': {
+            get: {
+              summary: 'Get a receipt by ID', operationId: 'getReceipt', tags: ['Receipts'],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Receipt', content: { 'application/json': { schema: { '$ref': '#/components/schemas/Receipt' } } } }, '404': { description: 'Not found' } },
+            },
+          },
+          '/agents': {
+            post: {
+              summary: 'Create and deploy an agent', operationId: 'createAgent', tags: ['Agents'], security: [{ bearerAuth: [] }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { owner: { type: 'string' }, name: { type: 'string', maxLength: 120 }, description: { type: 'string', maxLength: 1000 }, skills: { type: 'array', items: { type: 'string' } }, policy: { type: 'object' } } } } } },
+              responses: { '201': { description: 'Created agent', content: { 'application/json': { schema: { '$ref': '#/components/schemas/Agent' } } } }, '401': { description: 'Unauthorized' } },
+            },
+            get: {
+              summary: 'List agents', operationId: 'listAgents', tags: ['Agents'], security: [{ bearerAuth: [] }],
+              parameters: [
+                { name: 'scope', in: 'query', schema: { type: 'string', enum: ['owned', 'global'], default: 'owned' } },
+                { name: 'limit', in: 'query', schema: { type: 'integer', default: 25 } },
+                { name: 'cursor', in: 'query', schema: { type: 'string' } },
+                { name: 'includeHidden', in: 'query', schema: { type: 'boolean', default: false } },
+              ],
+              responses: { '200': { description: 'Paginated agents', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { '$ref': '#/components/schemas/Agent' } }, nextCursor: { type: 'string' } } } } } } },
+            },
+          },
+          '/agents/deploy-authorized': {
+            post: {
+              summary: 'Deploy an agent with an EIP-712 owner-signed authorization', operationId: 'deployAuthorized', tags: ['Agents'],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { form: { type: 'object' }, authorization: { type: 'object', properties: { owner: { type: 'string' }, nonce: { type: 'string' }, deadline: { type: 'integer' }, signature: { type: 'string' } }, required: ['owner', 'nonce', 'deadline', 'signature'] } }, required: ['form', 'authorization'] } } } },
+              responses: { '201': { description: 'Created agent', content: { 'application/json': { schema: { '$ref': '#/components/schemas/Agent' } } } }, '400': { description: 'Bad request' } },
+            },
+          },
+          '/agents/{id}': {
+            get: {
+              summary: 'Get agent by ID', operationId: 'getAgent', tags: ['Agents'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Agent', content: { 'application/json': { schema: { '$ref': '#/components/schemas/Agent' } } } }, '404': { description: 'Not found' } },
+            },
+          },
+          '/agents/{id}/hide': {
+            post: {
+              summary: 'Hide an agent from listings', operationId: 'hideAgent', tags: ['Agents'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'OK' }, '401': { description: 'Unauthorized' } },
+            },
+          },
+          '/agents/{id}/unhide': {
+            post: {
+              summary: 'Unhide an agent', operationId: 'unhideAgent', tags: ['Agents'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'OK' }, '401': { description: 'Unauthorized' } },
+            },
+          },
+          '/agents/{id}/retry-onboarding': {
+            post: {
+              summary: 'Retry onboarding receipts for an agent', operationId: 'retryOnboarding', tags: ['Agents'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '202': { description: 'Queued' }, '404': { description: 'Not found' } },
+            },
+          },
+          '/agents/{id}/policy': {
+            patch: {
+              summary: 'Update agent spending policy', operationId: 'patchAgentPolicy', tags: ['Agents'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { maxPerTxWei: { type: 'string' }, maxPerDayWei: { type: 'string' }, active: { type: 'boolean' }, summary: { type: 'string' } } } } } },
+              responses: { '200': { description: 'Updated policy' }, '401': { description: 'Unauthorized' } },
+            },
+          },
+          '/agents/{id}/skills': {
+            get: {
+              summary: 'List skills installed on an agent', operationId: 'listAgentSkills', tags: ['Skills'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Installed skills', content: { 'application/json': { schema: { type: 'array', items: { '$ref': '#/components/schemas/Skill' } } } } } },
+            },
+            post: {
+              summary: 'Install a skill on an agent', operationId: 'installSkill', tags: ['Skills'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { skillId: { type: 'string' }, version: { type: 'string' }, config: {} }, required: ['skillId'] } } } },
+              responses: { '201': { description: 'Installed' }, '401': { description: 'Unauthorized' } },
+            },
+          },
+          '/agents/{id}/skills/{skillId}': {
+            delete: {
+              summary: 'Uninstall a skill from an agent', operationId: 'uninstallSkill', tags: ['Skills'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'skillId', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '204': { description: 'Removed' }, '401': { description: 'Unauthorized' } },
+            },
+          },
+          '/agents/{id}/run': {
+            post: {
+              summary: 'Execute a skill run on an agent', operationId: 'runSkill', tags: ['Runs'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { skillId: { type: 'string' }, input: {}, idempotencyKey: { type: 'string' } }, required: ['skillId'] } } } },
+              responses: { '202': { description: 'Run queued', content: { 'application/json': { schema: { type: 'object', properties: { id: { type: 'string' }, agentId: { type: 'string' }, status: { type: 'string' }, createdAt: { type: 'string' } } } } } }, '401': { description: 'Unauthorized' } },
+            },
+          },
+          '/agents/{id}/runs': {
+            get: {
+              summary: 'List runs for an agent', operationId: 'listAgentRuns', tags: ['Runs'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Runs list', content: { 'application/json': { schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object' } } } } } } } },
+            },
+          },
+          '/agents/{agentId}/memory': {
+            get: {
+              summary: 'List memory entries for an agent', operationId: 'listAgentMemory', tags: ['Memory'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'agentId', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Memory entries', content: { 'application/json': { schema: { type: 'array', items: { type: 'object' } } } } } },
+            },
+          },
+          '/runs/{runId}': {
+            get: {
+              summary: 'Get a run by ID', operationId: 'getRun', tags: ['Runs'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'runId', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Run details' }, '404': { description: 'Not found' } },
+            },
+          },
+          '/runs/{runId}/receipts': {
+            get: {
+              summary: 'Get receipts for a run', operationId: 'getRunReceipts', tags: ['Runs'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'runId', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Receipts for the run', content: { 'application/json': { schema: { type: 'array', items: { '$ref': '#/components/schemas/Receipt' } } } } } },
+            },
+          },
+          '/skills': {
+            get: {
+              summary: 'List available skills in the marketplace', operationId: 'listSkills', tags: ['Skills'],
+              parameters: [
+                { name: 'tier', in: 'query', schema: { type: 'string', enum: ['free', 'premium'] } },
+                { name: 'category', in: 'query', schema: { type: 'string' } },
+              ],
+              responses: { '200': { description: 'Skills catalog', content: { 'application/json': { schema: { type: 'array', items: { '$ref': '#/components/schemas/Skill' } } } } } },
+            },
+          },
+          '/services': {
+            post: {
+              summary: 'Register a service listing', operationId: 'createService', tags: ['Services'], security: [{ bearerAuth: [] }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { agentId: { type: 'string' }, serviceId: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, priceWei: { type: 'string' }, description: { type: 'string' } }, required: ['agentId', 'serviceId', 'priceWei'] } } } },
+              responses: { '201': { description: 'Created service' }, '401': { description: 'Unauthorized' } },
+            },
+            get: {
+              summary: 'List service listings', operationId: 'listServices', tags: ['Services'],
+              parameters: [{ name: 'tag', in: 'query', schema: { type: 'string' } }, { name: 'tags', in: 'query', schema: { type: 'string' }, description: 'Comma-separated tags' }],
+              responses: { '200': { description: 'Services', content: { 'application/json': { schema: { type: 'array', items: { type: 'object' } } } } } },
+            },
+          },
+          '/quote': {
+            post: {
+              summary: 'Request a payment quote for a service call', operationId: 'requestQuote', tags: ['Billing'], security: [{ bearerAuth: [] }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { payeeAgentId: { type: 'string' }, payerAgentId: { type: 'string' }, serviceId: { type: 'string' }, requestedAmount: { type: 'string' }, ttlSec: { type: 'integer' } }, required: ['payeeAgentId', 'serviceId'] } } } },
+              responses: { '200': { description: 'Quote', content: { 'application/json': { schema: { type: 'object', properties: { quoteHash: { type: 'string' }, amount: { type: 'string' }, deadline: { type: 'integer' }, payeeReceiver: { type: 'string' }, signature: { type: 'string' }, nonce: { type: 'string' } } } } } } },
+            },
+          },
+          '/settle': {
+            post: {
+              summary: 'Settle a quote (record payment receipt)', operationId: 'settle', tags: ['Billing'], security: [{ bearerAuth: [] }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { quoteHash: { type: 'string' }, payerSignature: { type: 'string' }, txHash: { type: 'string' }, clientReceiptId: { type: 'string' }, payerAgentId: { type: 'string' } }, required: ['quoteHash'] } } } },
+              responses: { '200': { description: 'Receipt', content: { 'application/json': { schema: { '$ref': '#/components/schemas/Receipt' } } } } },
+            },
+          },
+          '/refund/{paymentId}': {
+            post: {
+              summary: 'Request a refund for a payment', operationId: 'refund', tags: ['Billing'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'paymentId', in: 'path', required: true, schema: { type: 'string' } }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { reason: { type: 'string' }, agentId: { type: 'string' }, clientReceiptId: { type: 'string' } }, required: ['reason'] } } } },
+              responses: { '200': { description: 'Refund result' }, '404': { description: 'Payment not found' } },
+            },
+          },
+          '/memory/{agentId}': {
+            get: {
+              summary: 'List memory entries for an agent', operationId: 'listMemory', tags: ['Memory'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'agentId', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Memory entries', content: { 'application/json': { schema: { type: 'array', items: { type: 'object' } } } } } },
+            },
+          },
+          '/memory/{agentId}/{key}': {
+            get: {
+              summary: 'Get a memory entry', operationId: 'getMemory', tags: ['Memory'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'agentId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'key', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '200': { description: 'Memory entry' }, '404': { description: 'Not found' } },
+            },
+            put: {
+              summary: 'Write a memory entry', operationId: 'putMemory', tags: ['Memory'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'agentId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'key', in: 'path', required: true, schema: { type: 'string' } }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { value: {}, tags: { type: 'array', items: { type: 'string' } } }, required: ['value'] } } } },
+              responses: { '200': { description: 'Written' }, '401': { description: 'Unauthorized' } },
+            },
+            delete: {
+              summary: 'Delete a memory entry', operationId: 'deleteMemory', tags: ['Memory'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'agentId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'key', in: 'path', required: true, schema: { type: 'string' } }],
+              responses: { '204': { description: 'Deleted' }, '401': { description: 'Unauthorized' } },
+            },
+          },
+          '/memory/{agentId}/search': {
+            post: {
+              summary: 'Semantic search over agent memory', operationId: 'searchMemory', tags: ['Memory'], security: [{ bearerAuth: [] }],
+              parameters: [{ name: 'agentId', in: 'path', required: true, schema: { type: 'string' } }],
+              requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'integer', default: 10, maximum: 50 } }, required: ['query'] } } } },
+              responses: { '200': { description: 'Matching memory entries', content: { 'application/json': { schema: { type: 'array', items: { type: 'object' } } } } } },
+            },
+          },
+        },
+      },
+    },
   });
   void app.register(swaggerUi, { routePrefix: '/docs/api' });
   void app.register(websocket);
