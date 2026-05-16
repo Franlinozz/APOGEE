@@ -9,7 +9,7 @@ variables (names only — never commit secrets), and operational procedures.
 
 ### 1. Web App (Vercel)
 
-**URL:** https://apogee-red.vercel.app  
+**URL:** https://apogeeprotocol.vercel.app  
 **Framework:** Next.js 14.2.x, App Router, standalone output  
 **Deploy trigger:** Push to `main` branch
 

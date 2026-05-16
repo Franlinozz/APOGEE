@@ -124,7 +124,7 @@
 - Replaced hardcoded "unavailable" banner in `StorageProofsTab` with a data-driven table. Edge `storageProofSample` filter: `r.storageRoot && !r.storageRoot.startsWith('local://') && r.storageRoot !== r.payloadHash`.
 - Created hackathon submission documentation package: `README.md` (bilingual EN + ZH), `docs/REVIEWER.md`, `docs/API.md`, `docs/ARCHITECTURE.md` (Mermaid sequence diagrams), `docs/TUTORIAL.md` (15-min paid translator agent walkthrough), `docs/video-script.md` (3-min demo storyboard), `docs/ADR/0001` through `docs/ADR/0003`, `docs/deck-outline.md` (10-slide pitch deck), `docs/x-posts.md` (3-post launch thread), `docs/diagrams/architecture.svg` (SVG system diagram).
 - Chinese README summary (5 paragraphs) flagged for native-speaker review before submission.
-- HackQuest submission deadline: 2026-05-16 23:59 UTC+8. ReceiptBook headline contract: `0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53`. Submission URL: https://apogee-red.vercel.app.
+- HackQuest submission deadline: 2026-05-16 23:59 UTC+8. ReceiptBook headline contract: `0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53`. Submission URL: https://apogeeprotocol.vercel.app.
 
 ## 2026-05-10 — Prompt 8 verification + chatbot visibility fix
 

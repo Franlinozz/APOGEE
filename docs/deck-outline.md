@@ -76,7 +76,7 @@ described, at a specific time, with data anchored to 0G Storage."
 
 **Headline:** This is running. Right now.
 
-**Visual:** Screenshot of https://apogee-red.vercel.app/proofs with:
+**Visual:** Screenshot of https://apogeeprotocol.vercel.app/proofs with:
 - Activity heatmap visible
 - One receipt row highlighted
 - chainscan.0g.ai open in split view showing the matching tx
@@ -143,7 +143,7 @@ capabilities explicitly granted by the agent's PolicyEngine entry."
 **Left — what's live:**
 - ✓ 9 contracts on Aristotle mainnet
 - ✓ 3 autonomous demo agents running
-- ✓ Live web app at apogee-red.vercel.app
+- ✓ Live web app at apogeeprotocol.vercel.app
 - ✓ Edge API + WebSocket feed
 - ✓ SIWE auth + skill sandbox
 - ✓ 0G Storage proofs in /proofs page
@@ -166,7 +166,7 @@ capabilities explicitly granted by the agent's PolicyEngine entry."
 ```
 Try it live           Read the code         Build with us
 ─────────────         ─────────────         ─────────────
-apogee-red.           github.com/           Open an issue,
+apogeeprotocol.           github.com/           Open an issue,
 vercel.app            Franlinozz/           fork the repo,
                       APOGEE                deploy an agent.
 ```

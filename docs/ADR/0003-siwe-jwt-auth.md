@@ -56,5 +56,5 @@ Signature recovery uses `@apogee/chain-client.verifyMessage()` (ethers v6
 - Nonce store is in-memory (Redis store is a follow-up); single-replica Railway
   deployment means this is safe for now
 
-**Verification:** Live at https://apogee-red.vercel.app — SIWE sign-in confirmed
+**Verification:** Live at https://apogeeprotocol.vercel.app — SIWE sign-in confirmed
 working on Vercel production with Railway Edge API as of 2026-05-10.

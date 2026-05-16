@@ -16,12 +16,12 @@
 *Self-custodial smart wallets · on-chain receipts · encrypted persistent memory · paid skills marketplace · 0G Compute backbone — every agent action verifiable on Aristotle mainnet.*
 
 [![GitHub Stars](https://img.shields.io/github/stars/Franlinozz/APOGEE?style=flat-square&color=7c3aed)](https://github.com/Franlinozz/APOGEE)
-[![Live Demo](https://img.shields.io/badge/live-apogee--red.vercel.app-7c3aed?style=flat-square)](https://apogee-red.vercel.app)
-[![On-chain Proofs](https://img.shields.io/badge/proofs-aristotle%20mainnet-10b981?style=flat-square)](https://apogee-red.vercel.app/proofs)
+[![Live Demo](https://img.shields.io/badge/live-apogeeprotocol.vercel.app-7c3aed?style=flat-square)](https://apogeeprotocol.vercel.app)
+[![On-chain Proofs](https://img.shields.io/badge/proofs-aristotle%20mainnet-10b981?style=flat-square)](https://apogeeprotocol.vercel.app/proofs)
 [![Built on 0G](https://img.shields.io/badge/built%20on-0G%20Network-f59e0b?style=flat-square)](https://0g.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
-[**Live App**](https://apogee-red.vercel.app) · [**On-chain Proofs**](https://apogee-red.vercel.app/proofs) · [**API Docs**](https://apogeeedge-production.up.railway.app/docs/api) · [**Judge Guide**](docs/JUDGE_GUIDE.md) · [**Tutorial**](docs/TUTORIAL.md)
+[**Live App**](https://apogeeprotocol.vercel.app) · [**On-chain Proofs**](https://apogeeprotocol.vercel.app/proofs) · [**API Docs**](https://apogeeedge-production.up.railway.app/docs/api) · [**Judge Guide**](docs/JUDGE_GUIDE.md) · [**Tutorial**](docs/TUTORIAL.md)
 
 </div>
 
@@ -38,7 +38,7 @@
 
 **0G 网络集成**涵盖三个核心层面：**0G Chain** 用于智能合约部署、代理间支付路由和收据永久锚定；**0G Storage** 用于代理 payload 的 Merkle 树上传、基于 AES-256-GCM 加密的记忆存储与检索，以及 64 MB LRU 内存缓存加速；**0G Compute** 通过 `@0glabs/0g-serving-broker` 作为推理主干，支持聊天补全、向量嵌入、图像生成和语音转文字能力，并自动处理 Provider 确认、ChatID 提取及 `processResponse()` 结算流程。三条网络通路均已在 Aristotle 主网上完成实测验证。
 
-**三位演示代理**——Aurora（新闻分析）、Vesper（创意媒体生成）和 Helix（链上数据分析）——已在 Aristotle 主网上完成部署并每 10 至 30 分钟自动运行一次心跳循环：拉取外部数据、调用相应技能、将 payload 上传至 0G Storage 获取 Merkle 根哈希，最后通过 `ReceiptBook.emitReceipt()` 在主网上铸造收据。所有收据实时可查，访问 [apogee-red.vercel.app/proofs](https://apogee-red.vercel.app/proofs) 即可查看自动刷新的收据流、技能行动标签和链上交易哈希。
+**三位演示代理**——Aurora（新闻分析）、Vesper（创意媒体生成）和 Helix（链上数据分析）——已在 Aristotle 主网上完成部署并每 10 至 30 分钟自动运行一次心跳循环：拉取外部数据、调用相应技能、将 payload 上传至 0G Storage 获取 Merkle 根哈希，最后通过 `ReceiptBook.emitReceipt()` 在主网上铸造收据。所有收据实时可查，访问 [apogeeprotocol.vercel.app/proofs](https://apogeeprotocol.vercel.app/proofs) 即可查看自动刷新的收据流、技能行动标签和链上交易哈希。
 
 **技术栈**严格遵循黑客松要求：TypeScript 5.5（strict 模式）、Solidity 0.8.24（`cancun` EVM 版本）、Prisma 5 + PostgreSQL 16、Redis 7 + BullMQ 5、Pino 9 日志、Zod 4 全量验证、ethers v6（纯服务端）、wagmi 2 + viem 2（浏览器端）。项目托管于 Vercel（前端）和 Railway（边缘 API 与运行时），代码完整开源。
 
@@ -208,7 +208,7 @@ Full deployment guide: [docs/REVIEWER.md](docs/REVIEWER.md)
 
 ## Demo Agents
 
-Three agents are live on Aristotle mainnet. Receipts are visible at [apogee-red.vercel.app/proofs](https://apogee-red.vercel.app/proofs) with auto-refresh.
+Three agents are live on Aristotle mainnet. Receipts are visible at [apogeeprotocol.vercel.app/proofs](https://apogeeprotocol.vercel.app/proofs) with auto-refresh.
 
 | Agent | Token ID | Address | Heartbeat | Primary Skills |
 |-------|----------|---------|-----------|----------------|
@@ -274,5 +274,7 @@ Three agents are live on Aristotle mainnet. Receipts are visible at [apogee-red.
 
 MIT © 2026 Francis Okafor — [github.com/Franlinozz/APOGEE](https://github.com/Franlinozz/APOGEE)
 
-**Contact:** Open an issue or DM [@apogee_0g](https://x.com) on X.  
+**Contact:** Open an issue or follow [@apogeeprotocol](https://x.com/apogeeprotocol) on X.  
+**Demo video:** [youtube.com/watch?v=PLACEHOLDER](https://youtube.com) — *update before final submission*  
+**X post:** [x.com/apogeeprotocol](https://x.com/apogeeprotocol) — *link announcement thread after posting*  
 **Hackathon:** [0G Hackathon on HackQuest](https://hackquest.io) · Submitted 2026-05-16

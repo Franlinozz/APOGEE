@@ -9,7 +9,7 @@
 ## Pre-production checklist
 
 - [ ] Browser: Chrome, dark mode, 1920×1080
-- [ ] Open tabs: chainscan.0g.ai, apogee-red.vercel.app, Railway logs
+- [ ] Open tabs: chainscan.0g.ai, apogeeprotocol.vercel.app, Railway logs
 - [ ] Wallet: MetaMask connected to Aristotle (chainId 16661)
 - [ ] Terminal: `cast` installed, DEPLOYER_KEY exported
 
@@ -50,7 +50,7 @@ The problem:
 
 ### [0:35 – 1:05] THE SOLUTION — /proofs PAGE TOUR (30 sec)
 
-**Visual:** Navigate to https://apogee-red.vercel.app/proofs
+**Visual:** Navigate to https://apogeeprotocol.vercel.app/proofs
 
 **Screen actions + VO (combined):**
 
@@ -92,7 +92,7 @@ the four 0G primitive boxes
 
 ### [1:35 – 2:05] DEVELOPER EXPERIENCE — signing in and deploying
 
-**Visual:** Navigate to https://apogee-red.vercel.app → click Launch App
+**Visual:** Navigate to https://apogeeprotocol.vercel.app → click Launch App
 
 **Screen actions + VO:**
 
@@ -159,7 +159,7 @@ the four 0G primitive boxes
 ```
 APOGEE PROTOCOL
 github.com/Franlinozz/APOGEE
-apogee-red.vercel.app
+apogeeprotocol.vercel.app
 
 Built for HackQuest × 0G Buildathon 2026
 ```

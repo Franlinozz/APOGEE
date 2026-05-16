@@ -28,12 +28,13 @@ compute (0G Compute via `@0glabs/0g-serving-broker`), and native token payments.
 
 | Resource | URL |
 |---|---|
-| Live web app | https://apogee-red.vercel.app |
-| /proofs page (live on-chain data) | https://apogee-red.vercel.app/proofs |
+| Live web app | https://apogeeprotocol.vercel.app |
+| /proofs page (live on-chain data) | https://apogeeprotocol.vercel.app/proofs |
 | Edge API (health) | https://apogeeedge-production.up.railway.app/health |
 | Edge API docs | https://apogeeedge-production.up.railway.app/docs/api |
 | GitHub repository | https://github.com/Franlinozz/APOGEE |
 | Chainscan explorer | https://chainscan.0g.ai |
+| X / Twitter | https://x.com/apogeeprotocol |
 
 ---
 
@@ -78,7 +79,7 @@ All three agents mint receipts via `ReceiptBook.mint()` on Aristotle. Filter
 
 ## 5-minute walkthrough
 
-1. **Open the landing page** — https://apogee-red.vercel.app
+1. **Open the landing page** — https://apogeeprotocol.vercel.app
    - Apogee is the runtime layer for autonomous agents on 0G / Aristotle.
    - The core promise is self-custodial wallets, encrypted memory infrastructure, and verifiable receipts for agent actions.
 
@@ -123,7 +124,7 @@ All three agents mint receipts via `ReceiptBook.mint()` on Aristotle. Filter
 
 ### Step 1 — /proofs page (5 min)
 
-1. Open https://apogee-red.vercel.app/proofs
+1. Open https://apogeeprotocol.vercel.app/proofs
 2. The **On-chain Receipts** tab shows indexed receipt events fetched from the Edge API which reads from Aristotle mainnet and local lifecycle records.
 3. Click any real `txHash` link — it opens chainscan.0g.ai showing the on-chain transaction.
 4. The **Storage Proofs** tab shows receipts that include a `storageRoot` from 0G Storage where available.
@@ -147,7 +148,7 @@ Returns indexed receipts. Verify any populated `txHash` on chainscan.
 
 ### Step 4 — SIWE sign-in (5 min)
 
-1. Visit https://apogee-red.vercel.app
+1. Visit https://apogeeprotocol.vercel.app
 2. Click **Launch App** → **Connect Wallet**
 3. Sign the SIWE message with any Ethereum wallet. No 0G token spend is required for sign-in.
 4. You land on the **Dashboard** showing global Aristotle network statistics.

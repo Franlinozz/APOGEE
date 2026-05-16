@@ -3,9 +3,8 @@
 **HackQuest × 0G Buildathon 2026**  
 Submission deadline: 2026-05-16 23:59 UTC+8
 
-This guide is written for judges. It takes ≤ 30 minutes to complete the full
-verification walk-through. Every step can be done in a browser — no wallet or
-tokens required unless you want to go deeper.
+This guide is written for judges. The 5-minute path below requires only a
+browser — no wallet or tokens needed. The full walkthrough takes ≤ 30 minutes.
 
 ---
 
@@ -13,22 +12,51 @@ tokens required unless you want to go deeper.
 
 | What | Where |
 |---|---|
-| Live web app | https://apogee-red.vercel.app |
-| **Live proofs page** | **https://apogee-red.vercel.app/proofs** |
+| Live web app | https://apogeeprotocol.vercel.app |
+| **Live proofs page** | **https://apogeeprotocol.vercel.app/proofs** |
 | Edge API health | https://apogeeedge-production.up.railway.app/health |
 | Interactive API docs | https://apogeeedge-production.up.railway.app/docs/api |
 | GitHub repo | https://github.com/Franlinozz/APOGEE |
 | Block explorer | https://chainscan.0g.ai |
+| X / Twitter | https://x.com/apogeeprotocol |
+
+---
+
+## 5-minute judge path (browser only)
+
+1. **Landing page** — https://apogeeprotocol.vercel.app  
+   Read the hero: autonomous agents, self-custodial wallets, encrypted memory,
+   verifiable receipts on 0G Aristotle mainnet.
+
+2. **Proofs page** — https://apogeeprotocol.vercel.app/proofs  
+   - Three demo agent cards (Aurora / Vesper / Helix) with receipt counts and
+     last-heartbeat timestamps.
+   - Scrolling receipt feed that auto-refreshes every 10 seconds.
+   - Click any **tx** link in a receipt row → opens `chainscan.0g.ai/tx/<hash>`
+     showing the confirmed Aristotle mainnet transaction from `ReceiptBook.emitReceipt()`.
+   - Switch to **Storage Proofs** tab → rows with a green `storageRoot` show the
+     full round-trip: payload → 0G Storage Merkle root → on-chain receipt anchor.
+   - Switch to **Contracts** tab → all 9 deployed addresses with chainscan links.
+
+3. **ReceiptBook on Chainscan** — https://chainscan.0g.ai/address/0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53  
+   Events tab → filter `ReceiptMinted`. Counter grows every 10 minutes as
+   Aurora's heartbeat fires.
+
+4. **Docs** — https://apogeeprotocol.vercel.app/docs  
+   Architecture overview, skill catalog, contract addresses.
+
+5. **Optional** — Connect any Ethereum wallet, sign the SIWE message, explore
+   the Dashboard (global stats), Agents (deploy flow), and Marketplace (skill catalog).
 
 ---
 
 ## Step 1 — Verify the live /proofs page (5 min)
 
-1. Open **https://apogee-red.vercel.app/proofs**
+1. Open **https://apogeeprotocol.vercel.app/proofs**
 
 2. **Overview tab** — you will see:
-   - Three demo agent cards (Aurora / Vesper / Helix) with "Live" indicators and
-     receipt counts
+   - Three demo agent cards (Aurora / Vesper / Helix) with "Live" or "Running"
+     indicators and receipt counts
    - An activity heatmap for the last 14 days × 24 hours
    - A scrolling receipt feed that auto-refreshes every 10 seconds
 
@@ -67,7 +95,7 @@ Click any address in the Contracts tab, or paste into chainscan directly:
 `https://chainscan.0g.ai/address/0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53`
 → Events tab → filter by `ReceiptMinted`
 
-The counter should be growing as Aurora heartbeats fire every 10 minutes.
+The counter grows as demo agents fire heartbeats every 10–30 minutes.
 
 ---
 
@@ -82,13 +110,10 @@ Expected response (shape):
 {
   "ok": true,
   "uptimeSec": 3600,
-  "chain": {
-    "aristotle": { "ok": true, "blockNumber": 123456, "latencyMs": 42 }
-  },
   "lastHeartbeat": {
-    "aurora": "2026-05-12T10:00:00.000Z",
-    "vesper": "2026-05-12T09:55:00.000Z",
-    "helix":  "2026-05-12T09:30:00.000Z"
+    "aurora": "2026-05-16T10:00:00.000Z",
+    "vesper": "2026-05-16T09:55:00.000Z",
+    "helix":  "2026-05-16T09:30:00.000Z"
   }
 }
 ```
@@ -129,13 +154,12 @@ On the /proofs Overview tab, each agent card shows:
 - `Address` → links to the agent's smart-contract wallet on chainscan
 - `Receipts minted` → total on-chain receipt count
 - `Last heartbeat` → UTC timestamp of most recent heartbeat
-- `Uptime` → hours running continuously
 
 ---
 
 ## Step 6 — Sign in and explore the app (5 min, optional)
 
-1. Open https://apogee-red.vercel.app and click **Launch App**
+1. Open https://apogeeprotocol.vercel.app and click **Launch App**
 2. **Connect Wallet** → sign the SIWE message (any Ethereum wallet, no tokens needed)
 3. The **Dashboard** shows protocol-wide statistics, receipt heatmap, and recent
    activity pulled from Aristotle mainnet
@@ -150,7 +174,7 @@ On the /proofs Overview tab, each agent card shows:
 |---|---|
 | Wallet sign-in (SIWE) | Signs without error; lands on /dashboard |
 | Dashboard loads | Stat tiles, heatmap, recent receipts visible |
-| /proofs — Overview | Agent cards show "Live" status; receipt feed scrolling |
+| /proofs — Overview | Agent cards show receipt counts; feed scrolling |
 | /proofs — Storage Proofs | Rows with green storageRoot values; storageTxHash links resolve |
 | /proofs — Contracts | 9 contracts with working chainscan links |
 | Receipt tx links | Open chainscan.0g.ai and show confirmed Aristotle tx |
@@ -164,7 +188,8 @@ On the /proofs Overview tab, each agent card shows:
 
 | Limitation | Impact |
 |---|---|
-| 0G Compute providers on Aristotle are intermittent | `image.generate` and `chat.completion` may return stub output; heartbeat still mints receipt |
-| `PILOT_LLM_BASE_URL` not set in production | Pilot responses are context-aware simulations, not live LLM calls |
-| Storage proofs tab may show empty on first load | Vesper runs every 15 min; storageRoot requires a successful 0G upload; auto-reconciler retries |
+| Demo agents run on fixed 10/15/30-min schedules | Aurora, Vesper, and Helix mint receipts automatically; their heartbeat is the live proof of recurring autonomy |
+| User-created agents receive deployment and bootstrap receipts | Full autonomous recurring runtime for arbitrary user agents (session-key/delegation) is roadmap |
+| 0G Compute providers on Aristotle are intermittent | `image.generate` and `chat.completion` may return stub output; heartbeat still mints receipt via `safeSkill()` fallback |
+| Storage proofs tab may show empty on first load | Vesper runs every 15 min; storageRoot requires a successful 0G upload; auto-reconciler retries every 60s |
 | No mobile MetaMask deep-link | Wallet connect requires desktop browser |

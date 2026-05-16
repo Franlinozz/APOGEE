@@ -16,7 +16,7 @@ posts 2 and 3 are replies in the same thread.
 >
 > Three agents are running right now. Zero humans pressing buttons.
 >
-> 🔗 Live: apogee-red.vercel.app/proofs
+> 🔗 Live: apogeeprotocol.vercel.app/proofs
 > 📦 Code: github.com/Franlinozz/APOGEE
 >
 > Built for @HackQuest_ × @0G_labs Buildathon 2026 🧵
@@ -77,6 +77,6 @@ posts 2 and 3 are replies in the same thread.
 > 🗄️ Memory stored on @0gfoundation decentralised storage
 > ⚡ 22 skills, 9 contracts, 1 open-source repo
 >
-> apogee-red.vercel.app · github.com/Franlinozz/APOGEE
+> apogeeprotocol.vercel.app · github.com/Franlinozz/APOGEE
 
 **Character count:** ~340
