@@ -267,8 +267,25 @@ function SettingsTab({ agent }: { agent: Agent }) {
   const [typed, setTyped] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [retryMsg, setRetryMsg] = useState<string | null>(null);
   const required = agent.identityTokenId ?? agent.id;
   const canConfirm = typed.trim() === required || typed.trim() === agent.name;
+  const canRetry = agent.status === 'failed' || agent.status === 'activating' || agent.status === 'error';
+
+  async function retryOnboarding() {
+    setRetrying(true);
+    setRetryMsg(null);
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/retry-onboarding`, { method: 'POST' });
+      const body = await res.json().catch(() => ({})) as { message?: string; title?: string };
+      setRetryMsg(res.ok ? (body.message ?? 'Retry queued. Refresh in ~30 seconds to see updated receipts.') : (body.title ?? 'Retry failed'));
+    } catch {
+      setRetryMsg('Network error — check your connection');
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   async function hide() {
     if (!canConfirm) return;
@@ -296,6 +313,14 @@ function SettingsTab({ agent }: { agent: Agent }) {
         <p className="mt-1 text-xs text-fg-muted">Current status: <span className="capitalize text-fg">{agent.status.replace('_', ' ')}</span></p>
         <p className="mt-1 text-xs text-fg-faint">Pause/resume is not wired to an on-chain control yet, so these actions are intentionally disabled.</p>
       </div>
+      {canRetry && (
+        <div className="rounded-[var(--radius-lg)] border border-accent/30 bg-accent/5 p-4">
+          <p className="font-medium text-fg">Retry onboarding</p>
+          <p className="mt-1 text-xs text-fg-muted">Bootstrap receipts failed during deployment. Retry anchors lifecycle events on-chain and repopulates your skills index.</p>
+          {retryMsg && <p className={`mt-2 text-xs ${retryMsg.includes('Retry') ? 'text-fg-muted' : 'text-danger'}`}>{retryMsg}</p>}
+          <button onClick={retryOnboarding} disabled={retrying} className="mt-3 rounded-[var(--radius)] border border-accent/40 px-3 py-1.5 text-xs text-accent hover:bg-accent/10 disabled:opacity-50">{retrying ? 'Queuing…' : 'Retry onboarding'}</button>
+        </div>
+      )}
       <div className="rounded-[var(--radius-lg)] border border-warning/30 bg-warning/5 p-4">
         <p className="font-medium text-fg">Workspace visibility</p>
         <p className="mt-1 text-xs text-fg-muted">Hide rushed or test agents from your local workspace without touching chain state.</p>
