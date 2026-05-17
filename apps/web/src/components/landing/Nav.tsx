@@ -17,6 +17,11 @@ const NavThemeToggle = dynamic(
   { ssr: false },
 );
 
+const LandingMobileMenu = dynamic(
+  () => import('./LandingMobileMenu').then((m) => m.LandingMobileMenu),
+  { ssr: false },
+);
+
 const NAV_LINKS = [
   { href: '/#product', label: 'Product' },
   { href: '/#skills',  label: 'Skills' },
@@ -54,6 +59,7 @@ export function Nav() {
         <div className="flex items-center gap-2">
           <NavThemeToggle compact />
           <NavConnectButton />
+          <LandingMobileMenu />
         </div>
       </div>
     </header>

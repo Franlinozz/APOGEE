@@ -113,7 +113,7 @@ export function FaucetButton() {
         type="button"
         onClick={() => void switchChainAsync({ chainId: aristotle.id })}
         className={`${gradientClass}`}
-        style={{ background: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)' }}
+        style={{ background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)' }}
       >
         <Droplets className="h-3.5 w-3.5" />
         Switch to Aristotle Mainnet
@@ -127,7 +127,7 @@ export function FaucetButton() {
         type="button"
         onClick={() => void requestFaucet()}
         className={gradientClass}
-        style={{ background: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)' }}
+        style={{ background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)' }}
       >
         <Droplets className="h-3.5 w-3.5" />
         Request 0.1 $0G
@@ -137,7 +137,7 @@ export function FaucetButton() {
 
   if (state.phase === 'sending') {
     return (
-      <button disabled className={`${gradientClass} opacity-80 cursor-wait`} style={{ background: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)' }}>
+      <button disabled className={`${gradientClass} opacity-80 cursor-wait`} style={{ background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)' }}>
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
         Sending 0.1 $0G…
       </button>
