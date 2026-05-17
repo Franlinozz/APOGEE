@@ -54,6 +54,9 @@ importers:
       '@apogee/chain-client':
         specifier: workspace:*
         version: link:../../packages/chain-client
+      '@apogee/compute-client':
+        specifier: workspace:*
+        version: link:../../packages/compute-client
       '@apogee/core':
         specifier: workspace:*
         version: link:../../packages/core

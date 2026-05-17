@@ -1,6 +1,8 @@
 import { cookies } from 'next/headers';
 import { type NextRequest } from 'next/server';
 
+export const runtime = 'nodejs';
+
 const EDGE_URL = process.env.EDGE_API_URL?.replace(/\/$/, '');
 
 export async function POST(request: NextRequest) {
@@ -8,7 +10,11 @@ export async function POST(request: NextRequest) {
     const errData = JSON.stringify({ message: 'Pilot service not configured.' });
     return new Response(`event: error\ndata: ${errData}\n\n`, {
       status: 503,
-      headers: { 'Content-Type': 'text/event-stream' },
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+      },
     });
   }
 
@@ -29,8 +35,9 @@ export async function POST(request: NextRequest) {
   return new Response(upstream.body, {
     status: upstream.status,
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Content-Type': upstream.headers.get('Content-Type') ?? 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
     },
   });

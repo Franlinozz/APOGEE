@@ -53,6 +53,19 @@ sequenceDiagram
     W-->>U: rendered response + receipt link
 ```
 
+
+### 2.3 Apogee Pilot inference and receipts
+
+Apogee Pilot is exposed both as the floating in-app launcher and as the full-page `/apogee-pilot` chat surface. The browser posts to `apps/web` at `/api/pilot/chat`; the Next.js route runs on the Node.js runtime and forwards the stream plus the `apogee-jwt` cookie as a Bearer token to Edge `/v1/pilot/chat` without buffering.
+
+Edge serves Pilot with a three-tier inference strategy:
+
+1. **0G Compute primary** — `@apogee/compute-client.chat({ messages, stream: true })`; model selection is left to the configured provider/default metadata.
+2. **HTTP LLM fallback** — existing `PILOT_LLM_BASE_URL` / `PILOT_LLM_API_KEY` OpenAI-compatible stream, also used when `APOGEE_PILOT_USE_COMPUTE=false`.
+3. **Simulated fallback** — deterministic `simulatePilotTokens()` responses when both live inference paths are unavailable.
+
+Every completed authenticated Pilot chat mints a non-blocking ReceiptBook receipt with action tag `PILO` (explicit bytes4 convention for Pilot chat). Pilot is not an agent iNFT, so receipts use `agentId=0` as a system sentinel; `ReceiptBook.emitReceipt` permits this and existing system contracts already emit `agentId=0` receipts. If a client cancels after tokens have streamed, Edge mints the same receipt payload with `cancelled: true`; zero-token aborts do not mint. Conversation history remains bounded in-memory LRU state on Edge and no Prisma migration is used for Ship 1.
+
 ### 2.2 Heartbeat Loop (Aurora — every 10 min)
 
 ```mermaid
