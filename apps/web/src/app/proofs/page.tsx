@@ -400,7 +400,7 @@ function OverviewTab({ proofs }: { proofs: ProofsApiResponse }) {
 
 // ── Storage Proofs tab ────────────────────────────────────────────────────────
 
-function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
+function StorageProofsTab({ proofSample, totalReceipts }: { proofSample: StorageProofRow[]; totalReceipts?: number }) {
   return (
     <div className="animate-fade-up space-y-6">
       <div>
@@ -432,7 +432,7 @@ function StorageProofsTab({ proofSample }: { proofSample: StorageProofRow[] }) {
         storageRoot and payloadHash are content-addressed proofs, not transaction hashes — only the mint tx links to a block explorer.
       </p>
 
-      <StorageProofsClient proofSample={proofSample} />
+      <StorageProofsClient proofSample={proofSample} totalReceipts={totalReceipts} />
     </div>
   );
 }
@@ -489,7 +489,7 @@ export default async function ProofsPage({ searchParams }: { searchParams: { tab
 
         {/* Tab content */}
         {tab === 'overview'  && <div className="animate-fade-up"><OverviewTab proofs={proofs} /></div>}
-        {tab === 'storage'   && <div className="animate-fade-up"><StorageProofsTab proofSample={proofs.storageProofSample} /></div>}
+        {tab === 'storage'   && <div className="animate-fade-up"><StorageProofsTab proofSample={proofs.storageProofSample} totalReceipts={proofs.totalReceipts} /></div>}
         {tab === 'contracts' && <div className="animate-fade-up"><ContractsTab /></div>}
 
       </section>

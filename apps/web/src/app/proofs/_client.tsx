@@ -22,6 +22,7 @@ type ReceiptIndexRow = {
 type ProofsData = {
   receipts: ReceiptIndexRow[];
   generatedAt: string;
+  totalReceipts?: number;
 };
 
 // ── Pagination controls ───────────────────────────────────────────────────────
@@ -31,18 +32,27 @@ function Pagination({
   totalPages,
   total,
   onChange,
+  pageSize = PAGE_SIZE,
+  networkTotal,
 }: {
   page: number;
   totalPages: number;
   total: number;
   onChange: (p: number) => void;
+  pageSize?: number;
+  networkTotal?: number;
 }) {
   if (totalPages <= 1) return null;
-  const from = (page - 1) * PAGE_SIZE + 1;
-  const to = Math.min(page * PAGE_SIZE, total);
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
   return (
     <div className="flex items-center justify-between pt-2 text-xs text-fg-muted">
-      <span>Showing {from}–{to} of {total}</span>
+      <span>
+        Showing {from}–{to} of latest {total}
+        {networkTotal && networkTotal > total ? (
+          <span className="ml-2 text-fg-faint">· Network total: {networkTotal.toLocaleString()}</span>
+        ) : null}
+      </span>
       <div className="flex gap-2">
         <button
           onClick={() => onChange(page - 1)}
@@ -244,6 +254,7 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
             totalPages={totalPages}
             total={receipts.length}
             onChange={setPage}
+            networkTotal={data.totalReceipts}
           />
 
           <p className="text-[10px] text-fg-faint pt-1">
@@ -277,7 +288,7 @@ function fmtStorageTag(tag: string): string {
   return parts[parts.length - 1] ?? tag;
 }
 
-export function StorageProofsClient({ proofSample }: { proofSample: StorageProofRow[] }) {
+export function StorageProofsClient({ proofSample, totalReceipts }: { proofSample: StorageProofRow[]; totalReceipts?: number }) {
   const [page, setPage] = useState(1);
 
   useEffect(() => { setPage(1); }, [proofSample.length]);
@@ -357,7 +368,7 @@ export function StorageProofsClient({ proofSample }: { proofSample: StorageProof
         </table>
       </div>
 
-      <Pagination page={safePage} totalPages={totalPages} total={total} onChange={setPage} />
+      <Pagination page={safePage} totalPages={totalPages} total={total} onChange={setPage} pageSize={STORAGE_PAGE_SIZE} networkTotal={totalReceipts} />
     </div>
   );
 }
