@@ -309,10 +309,25 @@ export function WizardStepDeploy({ state, onBack, onDone }: Props) {
       )}
 
       {status.phase === 'done' && (
-        <div className={`relative rounded-[var(--radius-lg)] border border-success/30 bg-success/10 p-4 text-center ${confetti ? 'animate-pulse' : ''}`}>
-          <CheckCircle className="mx-auto mb-2 h-8 w-8 text-success" />
-          <p className="text-sm font-semibold text-fg">Agent deployed!</p>
-          <p className="mt-1 font-mono text-xs text-fg-muted">ID: {status.txHash.slice(0, 16)}…</p>
+        <div className="space-y-3">
+          <div className={`relative rounded-[var(--radius-lg)] border border-success/30 bg-success/10 p-4 text-center ${confetti ? 'animate-pulse' : ''}`}>
+            <CheckCircle className="mx-auto mb-2 h-8 w-8 text-success" />
+            <p className="text-sm font-semibold text-fg">Agent deployed!</p>
+            <p className="mt-1 font-mono text-xs text-fg-muted">ID: {status.txHash.slice(0, 16)}…</p>
+          </div>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-4 text-center space-y-2">
+            <p className="text-xs text-fg-muted leading-relaxed">
+              Please submit your dashboard screenshot and testing notes. It helps Apogee improve.
+            </p>
+            <a
+              href="https://docs.google.com/forms/d/e/1FAIpQLSfGZKS0ZliSNTXH0bOpRc7GaILtPjSusiQE_UPvuz_GlhjBMg/viewform?usp=publish-editor"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[var(--radius)] border border-[var(--color-line-accent)] bg-accent/10 px-4 text-xs font-semibold text-accent-light transition-colors hover:bg-accent/20"
+            >
+              Share feedback ↗
+            </a>
+          </div>
         </div>
       )}
 

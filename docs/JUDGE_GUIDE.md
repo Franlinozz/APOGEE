@@ -195,3 +195,16 @@ On the /proofs Overview tab, each agent card shows:
 | 0G Compute providers on Aristotle are intermittent | `image.generate` and `chat.completion` may return stub output; heartbeat still mints receipt via `safeSkill()` fallback |
 | Storage proofs tab may show empty on first load | Vesper runs every 15 min; storageRoot requires a successful 0G upload; auto-reconciler retries every 60s |
 | No mobile MetaMask deep-link | Wallet connect requires desktop browser |
+
+---
+
+## User Testing & Feedback
+
+User testing is collected through a public Apogee feedback form. Testers are asked to create a demo agent, submit a dashboard screenshot, and optionally share an X/Twitter post about their experience.
+
+| Resource | Link |
+|---|---|
+| **Feedback form** | https://docs.google.com/forms/d/e/1FAIpQLSfGZKS0ZliSNTXH0bOpRc7GaILtPjSusiQE_UPvuz_GlhjBMg/viewform?usp=publish-editor |
+| **Judge response sheet** | https://docs.google.com/spreadsheets/d/1Zu_tG6afAMV92juF4A7MLaUhYwMQ0OGtUUVBakjnjcw/edit?usp=sharing |
+
+Judges can inspect the live response sheet for raw feedback evidence including dashboard screenshots, agent deployment results, and public X/Twitter feedback links.

@@ -2418,15 +2418,35 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     } else if (lower.match(/demo run|show me|example run|how.*run work/)) {
       response = `Here's a typical **Aurora heartbeat run** (every 10 minutes on Aristotle):\n\n\`\`\`\n[00:00] Aurora (#1) heartbeat fires\n[00:01] chain.query — reads latest Aristotle block\n[00:03] web.search — "0G blockchain news"\n[00:08] chat.completion — summarises via 0G Compute\n[00:12] memory.write — stores summary to 0G Storage\n         storageRoot: 0xabc123… (Merkle root)\n[00:14] ReceiptBook.emitReceipt(agentId=1, tag=mem.writ, …)\n         txHash: 0xdef456… confirmed on Aristotle\n[00:15] ✓ Done — receipt minted\n\`\`\`\n\nEvery step that writes state produces a receipt. Filter \`ReceiptMinted\` events on [Chainscan](https://chainscan.0g.ai/address/0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53) to see live activity.`;
 
+    // ── Faucet / getting 0G tokens ───────────────────────────────────────────────
+    } else if (lower.match(/faucet|get.*token|0g.*token|request.*0g|need.*0g|get.*0g|how.*fund|fund.*agent|0g.*faucet|send.*0g/)) {
+      response = `**How to get 0G tokens:**\n\n**Option 1 — In-app faucet** (quickest)\nOn the [Deploy Agent](/agents/new) page (Step 1 — Agent Identity), click **"Request 0.1 \$0G"** to receive a small amount of 0G directly to your connected wallet. One request per 24 hours.\n\n**Option 2 — Official 0G faucet**\nVisit [faucet.0g.ai](https://faucet.0g.ai) — 1 0G per request, no limit. Connect any Ethereum wallet on Aristotle mainnet (chainId 16661).\n\n**Why you need 0G:**\n- Agent deployment costs ~0.01 0G gas (identity NFT + smart wallet)\n- Skill runs cost 0.001–0.005 0G per call\n- 0G Storage uploads require small amounts for the storage market\n\n**Network:** Aristotle mainnet · RPC: \`https://evmrpc-testnet.0g.ai\` · Chain ID: 16661`;
+
+    // ── Feedback / testing ───────────────────────────────────────────────────────
+    } else if (lower.match(/feedback|testing|submit.*feedback|share.*feedback|user.*test|test.*user|response.*sheet|form/)) {
+      response = `**User Testing & Feedback:**\n\nApogee collects user feedback through a public form. Testers are asked to:\n1. Deploy a demo agent on Apogee\n2. Submit a dashboard screenshot\n3. Share testing notes (optionally link an X/Twitter post)\n\n**Links:**\n- [Feedback form](https://docs.google.com/forms/d/e/1FAIpQLSfGZKS0ZliSNTXH0bOpRc7GaILtPjSusiQE_UPvuz_GlhjBMg/viewform?usp=publish-editor) — submit your experience\n- [Judge response sheet](https://docs.google.com/spreadsheets/d/1Zu_tG6afAMV92juF4A7MLaUhYwMQ0OGtUUVBakjnjcw/edit?usp=sharing) — raw feedback evidence for judges\n\nAfter a successful agent deployment, a **"Share feedback"** button appears automatically in the wizard.`;
+
+    // ── Technical write-up / article ─────────────────────────────────────────────
+    } else if (lower.match(/write.?up|article|medium|technical.*blog|blog.*technical|engineering.*deep|deep.*dive|how.*built|built.*how/)) {
+      response = `**Technical Write-up:**\n\n[Building an Autonomous Agent Runtime on 0G — Engineering Deep Dive into Apogee](https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94)\n\nThe article covers:\n- Why 0G Chain, Storage, and Compute were chosen for the agent runtime\n- How ERC-4337 smart wallets + ERC-7857 identity NFTs compose the agent model\n- The receipt accountability layer (ReceiptBook.emitReceipt)\n- BullMQ heartbeat loop, isolated-vm skill sandboxes, and 0G Storage integration\n- Architecture decisions and trade-offs\n\nAlso available from the [Docs](/docs) page under "Engineering Deep Dive".`;
+
+    // ── GitHub / source code ─────────────────────────────────────────────────────
+    } else if (lower.match(/github|source.*code|code.*source|repo|repository|open.*source/)) {
+      response = `**Apogee GitHub Repository:**\n\n[github.com/Franlinozz/APOGEE](https://github.com/Franlinozz/APOGEE)\n\nMonorepo structure:\n\`\`\`\nAPOGEE/\n├── apps/web/        Next.js 14 frontend (Vercel)\n├── apps/edge/       Fastify API + WebSocket (Railway)\n├── apps/runtime/    BullMQ heartbeat workers (Railway)\n├── packages/\n│   ├── contracts/   9 Solidity contracts\n│   ├── billing/     Receipt minting + settlement\n│   ├── chain-client/ ethers v6 0G Chain wrapper\n│   ├── storage-client/ 0G Storage SDK wrapper\n│   ├── compute-client/ 0G Compute broker wrapper\n│   ├── memory/      Encrypted agent memory\n│   └── skills-runtime/ isolated-vm sandbox\n└── skills/\n    ├── core/        12 free skills\n    └── premium/     10 paid skills\n\`\`\`\n\nAll source code, contracts, and deployment scripts are open-source under MIT license.`;
+
+    // ── Demo video / YouTube ─────────────────────────────────────────────────────
+    } else if (lower.match(/demo video|youtube|video|watch|demo.*link/)) {
+      response = `**Apogee Demo Video:**\n\n[youtu.be/3XEJRv1ZkLo](https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb)\n\nThe demo shows:\n- Deploying an agent on 0G Aristotle mainnet\n- Viewing live receipts on the Proofs page\n- The skill marketplace and memory interface\n- Aurora, Vesper, and Helix demo agents running autonomously\n\nAlso see the [X/Twitter announcement](https://x.com/ApogeeProtocol/status/2055641847821664765?s=20) for highlights.`;
+
     // ── Agent greeting (has agents) ──────────────────────────────────────────────
     } else if (agentList.length > 0) {
       const a = agentList[0]!;
       const bal = (Number(BigInt(a.balanceWei ?? '0')) / 1e18).toFixed(6);
-      response = `You have **${agentList.length}** agent${agentList.length > 1 ? 's' : ''}. Your first agent (\`${String(a.id ?? '').slice(0, 8)}…\`) has a balance of **${bal} 0G** and status **${a.status ?? 'unknown'}**.\n\nTry asking me:\n- *"Why does my agent have no memory?"*\n- *"What does '${a.status ?? 'activating'}' mean?"*\n- *"Where can judges verify live receipts?"*\n- *"What are skills?"*\n- *"What contracts are deployed?"*`;
+      response = `You have **${agentList.length}** agent${agentList.length > 1 ? 's' : ''}. Your first agent (\`${String(a.id ?? '').slice(0, 8)}…\`) has a balance of **${bal} 0G** and status **${a.status ?? 'unknown'}**.\n\nTry asking me:\n- *"Why does my agent have no memory?"*\n- *"What does '${a.status ?? 'activating'}' mean?"*\n- *"Where can judges verify live receipts?"*\n- *"How do I get 0G tokens?"*\n- *"Where is the feedback form?"*`;
 
     // ── Default / fallback ───────────────────────────────────────────────────────
     } else {
-      response = `I'm **Apogee Pilot** — your guide to the Apogee Protocol on 0G Aristotle mainnet.\n\n${totalAgents > 0 ? `**${totalAgents}** agents and **${totalReceipts}** on-chain receipts are indexed right now.\n\n` : ''}Try asking me:\n- *"What is Apogee?"*\n- *"How does Apogee use 0G?"*\n- *"What are receipts?"*\n- *"What are skills?"*\n- *"Where can judges verify live receipts?"*\n- *"What contracts are deployed?"*\n- *"Why does my new agent have no memory?"*\n- *"How do I deploy an agent?"*\n\nOr explore the app:\n- [Dashboard](/dashboard) — live protocol stats\n- [Proofs](/proofs) — on-chain receipt evidence\n- [Agents](/agents) — your deployed agents\n- [Marketplace](/marketplace) — skill catalog\n- [Docs](/docs) — full documentation`;
+      response = `I'm **Apogee Pilot** — your guide to the Apogee Protocol on 0G Aristotle mainnet.\n\n${totalAgents > 0 ? `**${totalAgents}** agents and **${totalReceipts}** on-chain receipts are indexed right now.\n\n` : ''}Try asking me:\n- *"What is Apogee?"*\n- *"How does Apogee use 0G?"*\n- *"How do I get 0G tokens?"*\n- *"How do I deploy an agent?"*\n- *"What are receipts / skills / memory?"*\n- *"Where can judges verify live receipts?"*\n- *"Where is the feedback form?"*\n- *"Where is the technical write-up?"*\n\nOr explore the app:\n- [Dashboard](/dashboard) · [Proofs](/proofs) · [Agents](/agents) · [Marketplace](/marketplace) · [Docs](/docs)`;
     }
 
     for (const token of response.split(/(?<= )/)) {
@@ -2513,6 +2533,12 @@ KEY PRODUCT FACTS:
 - Empty memory/runs for new agents is EXPECTED — not a bug. system/init bootstrap memory is written during onboarding.
 - Verify live receipts: /proofs page, chainscan.0g.ai/address/0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53 → Events → ReceiptMinted, or Edge API /v1/receipts?scope=global.
 - App pages: /dashboard (stats), /agents (deploy/manage), /marketplace (skills), /receipts, /memory, /proofs (live evidence), /docs.
+- Faucet: In-app faucet button on /agents/new step 1 gives 0.1 0G per wallet per 24h. Official 0G faucet: faucet.0g.ai.
+- Feedback form: https://docs.google.com/forms/d/e/1FAIpQLSfGZKS0ZliSNTXH0bOpRc7GaILtPjSusiQE_UPvuz_GlhjBMg/viewform?usp=publish-editor
+- Judge response sheet: https://docs.google.com/spreadsheets/d/1Zu_tG6afAMV92juF4A7MLaUhYwMQ0OGtUUVBakjnjcw/edit?usp=sharing
+- Technical write-up: https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94
+- GitHub: https://github.com/Franlinozz/APOGEE
+- Demo video: https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb
 - Never claim transactions have been submitted or state has been mutated. Never invent addresses, tx hashes, or data not in the tool context.
 - If data is missing, say clearly: "This hasn't been indexed yet" or "This appears after the agent runs."
 
@@ -2574,6 +2600,108 @@ ${toolCtx ? `LIVE CONTEXT:\n${toolCtx}` : ''}`;
   });
 
   // ── End pilot ──────────────────────────────────────────────────────────────
+
+  // ── Faucet ─────────────────────────────────────────────────────────────────
+
+  const FAUCET_AMOUNT_WEI = BigInt(Math.round(Number(process.env.FAUCET_AMOUNT_OG ?? '0.1') * 1e18));
+  const FAUCET_COOLDOWN_MS = (Number(process.env.FAUCET_COOLDOWN_HOURS ?? '24')) * 60 * 60 * 1_000;
+  const FAUCET_KEY = process.env.FAUCET_PRIVATE_KEY ?? '';
+
+  const faucetCooldownKey = (addr: string) => `faucet-cooldown:${addr.toLowerCase()}`;
+  type FaucetRecord = { address: string; txHash: string; amount: string; sentAt: string; cooldownUntil: string };
+
+  const faucetCooldowns = new Map<string, FaucetRecord>();
+  let faucetNonce: number | null = null;
+  const faucetMutex = new Mutex();
+
+  async function getFaucetRecord(address: string): Promise<FaucetRecord | null> {
+    if (redis) {
+      const raw = await redis.get(faucetCooldownKey(address));
+      if (!raw) return null;
+      return JSON.parse(raw) as FaucetRecord;
+    }
+    return faucetCooldowns.get(address.toLowerCase()) ?? null;
+  }
+
+  async function setFaucetRecord(record: FaucetRecord): Promise<void> {
+    if (redis) {
+      await redis.set(faucetCooldownKey(record.address), JSON.stringify(record), 'PX', FAUCET_COOLDOWN_MS + 60_000);
+    } else {
+      faucetCooldowns.set(record.address.toLowerCase(), record);
+    }
+  }
+
+  app.get('/v1/faucet/status', {
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    schema: { tags: ['faucet'], querystring: z.object({ address: addressSchema }) },
+  }, async (request, reply) => {
+    if (!FAUCET_KEY) return reply.send({ enabled: false, eligible: false });
+    const { address } = request.query as { address: string };
+    const record = await getFaucetRecord(address);
+    if (!record) return reply.send({ enabled: true, eligible: true });
+    const cooldownUntil = new Date(record.cooldownUntil).getTime();
+    if (Date.now() >= cooldownUntil) return reply.send({ enabled: true, eligible: true });
+    return reply.send({ enabled: true, eligible: false, cooldownUntil: record.cooldownUntil, txHash: record.txHash });
+  });
+
+  app.post('/v1/faucet/request', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    schema: { tags: ['faucet'], body: z.object({ address: addressSchema }) },
+  }, async (request, reply) => {
+    if (!FAUCET_KEY) return problem(reply, 503, 'Faucet disabled', 'FAUCET_PRIVATE_KEY is not configured.');
+    const body = request.body as { address: string };
+    const recipient = getAddress(body.address);
+
+    const existing = await getFaucetRecord(recipient);
+    if (existing) {
+      const cooldownUntil = new Date(existing.cooldownUntil).getTime();
+      if (Date.now() < cooldownUntil) {
+        return problem(reply, 429, 'Cooldown active', `Already sent to ${recipient}. Try again after ${existing.cooldownUntil}.`);
+      }
+    }
+
+    return faucetMutex.runExclusive(async () => {
+      const re_existing = await getFaucetRecord(recipient);
+      if (re_existing) {
+        const cooldownUntil = new Date(re_existing.cooldownUntil).getTime();
+        if (Date.now() < cooldownUntil) {
+          return problem(reply, 429, 'Cooldown active', `Already sent to ${recipient}. Try again after ${re_existing.cooldownUntil}.`);
+        }
+      }
+
+      const rpcUrl = process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc-testnet.0g.ai';
+      const provider = new JsonRpcProvider(rpcUrl, 16661, { staticNetwork: true });
+      const { Wallet: EthersWallet } = await import('ethers');
+      const wallet = new EthersWallet(FAUCET_KEY, provider);
+      const faucetAddress = wallet.address;
+
+      const [balance, currentNonce, feeData] = await Promise.all([
+        provider.getBalance(faucetAddress),
+        provider.getTransactionCount(faucetAddress, 'latest'),
+        provider.getFeeData(),
+      ]);
+
+      if (balance < FAUCET_AMOUNT_WEI + 1_000_000_000_000_000n) {
+        app.log.warn({ faucetAddress, balance: balance.toString() }, 'faucet balance too low');
+        return problem(reply, 503, 'Faucet empty', 'Faucet balance is too low. Try the official faucet at faucet.0g.ai.');
+      }
+
+      if (faucetNonce === null || currentNonce > faucetNonce) faucetNonce = currentNonce;
+      const nonce = faucetNonce++;
+
+      const gasPrice = (feeData.gasPrice ?? 1_000_000_000n) * 12n / 10n;
+      const tx = await wallet.sendTransaction({ to: recipient, value: FAUCET_AMOUNT_WEI, nonce, gasPrice, gasLimit: 21_000n });
+      app.log.info({ recipient, nonce, txHash: tx.hash, amount: FAUCET_AMOUNT_WEI.toString() }, 'faucet: sent');
+
+      const cooldownUntil = new Date(Date.now() + FAUCET_COOLDOWN_MS).toISOString();
+      const record: FaucetRecord = { address: recipient, txHash: tx.hash, amount: FAUCET_AMOUNT_WEI.toString(), sentAt: nowIso(), cooldownUntil };
+      await setFaucetRecord(record);
+
+      return reply.status(200).send({ txHash: tx.hash, amount: FAUCET_AMOUNT_WEI.toString(), cooldownUntil });
+    });
+  });
+
+  // ── End faucet ──────────────────────────────────────────────────────────────
 
   app.addHook('onClose', async () => {
     if (chainRefreshTimer) clearInterval(chainRefreshTimer);

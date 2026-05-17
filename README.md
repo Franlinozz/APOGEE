@@ -280,4 +280,5 @@ MIT © 2026 Francis Okafor — [github.com/Franlinozz/APOGEE](https://github.com
 **Demo video:** [youtu.be/3XEJRv1ZkLo](https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb)  
 **X post:** [x.com/ApogeeProtocol/status/2055641847821664765](https://x.com/ApogeeProtocol/status/2055641847821664765?s=20)  
 **Technical write-up:** [Building an Autonomous Agent Runtime on 0G — Engineering Deep Dive into Apogee](https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94)  
+**User feedback form:** [Submit feedback / testing notes](https://docs.google.com/forms/d/e/1FAIpQLSfGZKS0ZliSNTXH0bOpRc7GaILtPjSusiQE_UPvuz_GlhjBMg/viewform?usp=publish-editor) · [Judge response sheet](https://docs.google.com/spreadsheets/d/1Zu_tG6afAMV92juF4A7MLaUhYwMQ0OGtUUVBakjnjcw/edit?usp=sharing)  
 **Hackathon:** [0G Hackathon on HackQuest](https://hackquest.io) · Submitted 2026-05-16

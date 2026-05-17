@@ -86,6 +86,15 @@ const CARDS = [
     badge: 'Judges',
     badgeColor: 'bg-accent/15 text-accent-light',
   },
+  {
+    href: 'https://docs.google.com/forms/d/e/1FAIpQLSfGZKS0ZliSNTXH0bOpRc7GaILtPjSusiQE_UPvuz_GlhjBMg/viewform?usp=publish-editor',
+    external: true,
+    title: 'User Feedback Form',
+    description:
+      'Deploy a demo agent, submit a dashboard screenshot and testing notes. Judges can inspect the live response sheet for raw feedback evidence.',
+    badge: 'Feedback',
+    badgeColor: 'bg-warning/15 text-warning',
+  },
 ] as const;
 
 export default function DocsPage() {

@@ -3,6 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { FaucetButton } from './FaucetButton';
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required').max(64, 'Max 64 characters'),
@@ -72,7 +73,11 @@ export function WizardStepIdentity({ value, onChange, onNext }: Props) {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-col gap-1">
+          <FaucetButton />
+          <p className="text-[10px] text-fg-faint px-1">Need 0G tokens to cover gas?</p>
+        </div>
         <button
           type="submit"
           className="inline-flex h-9 items-center gap-2 rounded-[var(--radius)] bg-accent px-5 text-sm font-semibold text-white hover:opacity-90"
