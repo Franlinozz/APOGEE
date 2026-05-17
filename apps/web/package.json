@@ -7,7 +7,7 @@
     "dev": "next dev",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "pnpm --filter @apogee/core build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run src/lib/chainscan.test.ts",
     "analyze": "ANALYZE=true next build",
     "lhci": "lhci autorun"
