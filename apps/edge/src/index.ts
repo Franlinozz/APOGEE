@@ -11,6 +11,7 @@ import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fast
 import { Contract, JsonRpcProvider, TypedDataEncoder, getAddress, keccak256, toUtf8Bytes, verifyTypedData } from 'ethers';
 import { Redis, type Redis as RedisClient } from 'ioredis';
 import { ChainClient } from '@apogee/chain-client';
+import { ComputeClient, type ChatStreamChunk, type ComputeMetadata } from '@apogee/compute-client';
 import { StorageClient } from '@apogee/storage-client';
 import { DEPLOY_AUTH_DOMAIN, DEPLOY_AUTH_TYPES, buildDeployAuthorizationMessage, type DeployPolicyInput } from '@apogee/core';
 import { createBillingStack, InMemoryQuoteStore, type BillingChainClient, type ReceiptIndex, type ReceiptIndexRow, type StorageBoundary } from '@apogee/billing';
@@ -126,9 +127,28 @@ type DeployNonceRecord = { ownerLower: string; nonce: string; deadline: number; 
 type OnboardingRecord = { key: string; chainId: number; tokenId: string; stages: Record<string, boolean>; status: 'pending' | 'running' | 'complete' | 'failed'; attempts: number; error?: string | undefined; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
+const PILOT_CHAT_ACTION_TAG = 'PILO'; // bytes4 action tag for Apogee Pilot chat receipts.
+const PILOT_SYSTEM_PROMPT = `You are Apogee Pilot, a precise technical guide to Apogee Protocol —
+the autonomous-agent runtime on 0G. You explain:
+- Apogee architecture: 9 contracts on 0G Aristotle mainnet (AgentAccount,
+AccountFactory, PolicyEngine, AgentIdentity, PaymentRouter, EscrowVault,
+RevenueSplitter, ServiceRegistry, ReceiptBook), receipt-first audit,
+encrypted memory on 0G Storage, agent-to-agent payment rails.
+- The 0G stack: Storage, Compute, Chain, Agent ID (ERC-7857 + ERC-8004),
+TEE Sealed Inference.
+- How to deploy an agent, set policies, install skills, read receipts.
+
+Style: technical, concise, no marketing language. Use specifics.
+When a question is unrelated to Apogee or 0G, redirect briefly.
+NEVER invent contract addresses, transaction hashes, feature claims,
+or roadmap items. If you don't know, say so. If the user asks for live
+data (current receipt count, specific agent state), explain that you
+cannot read live state in this version and point them to /proofs or
+/agents.`;
 type TxResponse = { hash: string; nonce?: number; gasPrice?: bigint | null; maxFeePerGas?: bigint | null; maxPriorityFeePerGas?: bigint | null; wait(): Promise<{ status?: number | null; gasUsed?: bigint } | unknown> };
 type PilotMsg = { role: 'user' | 'assistant'; content: string; createdAt: string };
 type PilotConvo = { id: string; userAddress: string; messages: PilotMsg[]; createdAt: string };
+type PilotInferenceTier = 'compute' | 'http-llm' | 'simulate';
 type AccountFactoryContract = { predict(owner: string, salt: string): Promise<string>; createAccount(owner: string, salt: string): Promise<TxResponse> };
 type AgentIdentityContract = { nextTokenId(): Promise<bigint>; mint(to: string, metadataRoot: string, publicKey: string, controller: string): Promise<TxResponse> };
 type PaymentRouterAdminContract = { setAgentAccount(agentId: bigint, account: string): Promise<TxResponse> };
@@ -467,7 +487,7 @@ const sameAddress = (a: string, b: string): boolean => a.toLowerCase() === b.toL
 
 async function requireAuth(request: FastifyRequest): Promise<AuthUser> {
   await request.jwtVerify();
-  return request.user;
+  return { address: getAddress(request.user.address) };
 }
 
 const bearerFromSubprotocol = (value: string | undefined): string | null => {
@@ -2261,6 +2281,24 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   // ── Pilot chat ────────────────────────────────────────────────────────────
 
   const pilotGuestLimiter = new FieldRateLimiter(5, 10 * 60_000);
+  let pilotComputeClient: ComputeClient | null | undefined;
+
+  const getPilotComputeClient = (): ComputeClient | null => {
+    if (pilotComputeClient !== undefined) return pilotComputeClient;
+    try {
+      const rpcUrl = process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc.0g.ai';
+      const defaultProvider = process.env.ZERO_G_COMPUTE_PROVIDER as `0x${string}` | undefined;
+      pilotComputeClient = new ComputeClient({
+        rpcUrl,
+        signerKey: options.signerKey,
+        defaultProvider,
+      });
+    } catch (error) {
+      app.log.warn({ error }, 'pilot.compute_client_init_failed');
+      pilotComputeClient = null;
+    }
+    return pilotComputeClient;
+  };
 
   const pilotChatBody = z.object({
     messages: z.array(z.object({
@@ -2461,6 +2499,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   }, async (request, reply) => {
     let user: AuthUser | null = null;
     try { user = await requireAuth(request); } catch {}
+    const address = user?.address;
 
     if (!user) {
       const guestIp = request.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() ?? request.ip;
@@ -2475,124 +2514,212 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const userMsg = lastMsg.content;
     const lower = userMsg.toLowerCase();
 
+    const computeDisabled = process.env.APOGEE_PILOT_USE_COMPUTE === 'false';
+    const initialTier: PilotInferenceTier = computeDisabled ? (process.env.PILOT_LLM_BASE_URL && process.env.PILOT_LLM_API_KEY ? 'http-llm' : 'simulate') : 'compute';
+    request.log.info({ tier: initialTier, address }, 'pilot.chat.tier');
+
     void reply.hijack();
     const res = reply.raw;
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const emit = (event: string, data: unknown): void => {
-      if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    let clientClosed = false;
+    let streamCompleted = false;
+    res.on('close', () => { if (!streamCompleted) clientClosed = true; });
+
+    const emit = (event: string, data: unknown): boolean => {
+      if (clientClosed || res.writableEnded) return false;
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      return true;
     };
 
-    try {
-      const toolsToRun: { name: string; args: Record<string, unknown> }[] = [
-        { name: 'getProtocolStats', args: {} },
-        ...(user
-          ? [
-              { name: 'getMyAgents', args: {} },
-              ...(lower.includes('receipt') || lower.includes('spent') || lower.includes('cost')
-                ? [{ name: 'listRecentReceipts', args: { limit: 5 } }]
-                : []),
-              ...(lower.includes('memory')
-                ? [{ name: 'getMemorySummary', args: { agentId: '' } }]
-                : []),
-            ]
-          : []),
-      ];
+    const toolsToRun: { name: string; args: Record<string, unknown> }[] = [
+      { name: 'getProtocolStats', args: {} },
+      ...(user
+        ? [
+            { name: 'getMyAgents', args: {} },
+            ...(lower.includes('receipt') || lower.includes('spent') || lower.includes('cost')
+              ? [{ name: 'listRecentReceipts', args: { limit: 5 } }]
+              : []),
+            ...(lower.includes('memory')
+              ? [{ name: 'getMemorySummary', args: { agentId: '' } }]
+              : []),
+          ]
+        : []),
+    ];
 
-      const toolResults: { name: string; result: unknown }[] = [];
+    const toolResults: { name: string; result: unknown }[] = [];
+    const chatId = newId('pilot');
+    const receiptNonce = randomUUID();
+    const assistantParts: string[] = [];
+    let tokenCount = 0;
+    let usedTier: PilotInferenceTier = initialTier;
+    let computeMetadata: ComputeMetadata | undefined;
+    let fallbackError: unknown;
+
+    const appendToken = (token: string): void => {
+      if (!token) return;
+      if (emit('token', token)) {
+        assistantParts.push(token);
+        tokenCount += 1;
+      }
+    };
+
+    const mintPilotReceipt = (cancelled: boolean): void => {
+      if (!address) return;
+      if (cancelled && tokenCount === 0) return;
+      const payload = {
+        user: address,
+        messageCount: body.messages.length,
+        tier: usedTier,
+        chatId: computeMetadata?.chatId ?? (usedTier === 'compute' ? undefined : chatId),
+        tokensUsed: computeMetadata?.tokenUsage ?? tokenCount,
+        model: computeMetadata?.model,
+        provider: computeMetadata?.provider,
+        providerSig: computeMetadata?.providerSig,
+        cancelled,
+      };
+      void stack.receiptMinter.mint({
+        // ReceiptBook does not validate agentId and existing EscrowVault receipts use 0,
+        // so Pilot uses 0 as a documented system/sentinel id rather than a real agent iNFT.
+        agentId: 0n,
+        actionTag: PILOT_CHAT_ACTION_TAG,
+        payload,
+        valueWei: 0n,
+        clientReceiptId: `pilot-${address}-${receiptNonce}`,
+      }).catch((error) => request.log.warn({ error, address, tier: usedTier }, 'pilot.chat.receipt_mint_failed'));
+    };
+
+    async function runComputeTier(): Promise<void> {
+      usedTier = 'compute';
+      request.log.info({ tier: 'compute', address }, 'pilot.chat.tier');
+      const compute = getPilotComputeClient();
+      if (!compute) throw new Error('0G compute client is not configured');
+      const stream = await compute.chat({
+        messages: [{ role: 'system', content: PILOT_SYSTEM_PROMPT }, ...body.messages],
+        stream: true,
+      });
+      for await (const chunk of stream as AsyncIterable<ChatStreamChunk>) {
+        if (clientClosed) break;
+        if (chunk.delta) appendToken(chunk.delta);
+        if (chunk.done && chunk.metadata) computeMetadata = chunk.metadata;
+      }
+    }
+
+    async function runHttpTier(): Promise<void> {
+      usedTier = 'http-llm';
+      request.log.info({ tier: 'http-llm', address }, 'pilot.chat.tier');
+      const llmBase = process.env.PILOT_LLM_BASE_URL;
+      const llmKey = process.env.PILOT_LLM_API_KEY;
+      if (!llmBase || !llmKey) throw new Error('PILOT_LLM_BASE_URL/PILOT_LLM_API_KEY are not configured');
+      const llmRes = await fetch(`${llmBase}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llmKey}` },
+        body: JSON.stringify({
+          model: process.env.PILOT_LLM_MODEL ?? 'gpt-4o-mini',
+          messages: [{ role: 'system', content: PILOT_SYSTEM_PROMPT }, ...body.messages],
+          stream: true,
+          max_tokens: 800,
+        }),
+      });
+      if (!llmRes.ok || !llmRes.body) throw new Error(`Pilot HTTP LLM failed: ${llmRes.status} ${llmRes.statusText}`);
+      const reader = llmRes.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      streamLoop: while (!clientClosed) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line === 'data: [DONE]') break streamLoop;
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const c = JSON.parse(line.slice(6)) as { choices?: [{ delta?: { content?: string } }]; usage?: unknown; model?: string };
+            if (c.usage !== undefined || c.model) {
+              computeMetadata = {
+                provider: '0x0000000000000000000000000000000000000000',
+                model: c.model ?? process.env.PILOT_LLM_MODEL ?? 'gpt-4o-mini',
+                tokenUsage: c.usage,
+                receiptPayload: { serviceType: 'chatbot', provider: '0x0000000000000000000000000000000000000000', usage: c.usage },
+              };
+            }
+            appendToken(c.choices?.[0]?.delta?.content ?? '');
+          } catch { /* malformed chunk */ }
+        }
+      }
+      reader.releaseLock();
+    }
+
+    async function runSimulateTier(): Promise<void> {
+      usedTier = 'simulate';
+      request.log.info({ tier: 'simulate', address }, 'pilot.chat.tier');
+      for await (const tok of simulatePilotTokens(userMsg, toolResults)) {
+        if (clientClosed) break;
+        appendToken(tok);
+      }
+    }
+
+    try {
       for (const tool of toolsToRun) {
+        if (clientClosed) break;
         emit('tool_call', { name: tool.name, args: tool.args });
-        const result = await executePilotTool(tool.name, tool.args, user?.address);
+        const result = await executePilotTool(tool.name, tool.args, address);
         emit('tool_result', { name: tool.name, result });
         toolResults.push({ name: tool.name, result });
       }
 
-      const chatId = newId('pilot');
-      const assistantParts: string[] = [];
-      let tokenCount = 0;
-
-      const llmBase = process.env.PILOT_LLM_BASE_URL;
-      const llmKey = process.env.PILOT_LLM_API_KEY;
-
-      if (llmBase && llmKey) {
-        const toolCtx = toolResults.map(t => `[${t.name}]\n${JSON.stringify(t.result, null, 2)}`).join('\n\n');
-        const sysPrompt = `You are Apogee Pilot, an AI assistant embedded in the Apogee Protocol — an autonomous-agent runtime on 0G Aristotle mainnet (chainId 16661). Be concise, technical, and helpful. You only read data, never mutate state.
-
-KEY PRODUCT FACTS:
-- Apogee gives AI agents self-custodial ERC-4337 smart wallets (AgentAccount), ERC-7857 on-chain identity NFTs (AgentIdentity), sandboxed skill execution (isolated-vm), programmable spending policies (PolicyEngine), and tamper-proof on-chain receipts (ReceiptBook.emitReceipt()).
-- 9 contracts deployed on Aristotle: AgentIdentity 0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3, ReceiptBook 0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53, PolicyEngine 0xa8933d96A27BDfFac07C0d7467f3213cb340f550, PaymentRouter 0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c, AccountFactory 0xABc44aF98e6d873C0700c9B687fbf3Be560cba90, EscrowVault 0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767, RevenueSplitter 0x1E32A89B6815a492Ad30f71a5E35280EF7399b74, ServiceRegistry 0x47438d9169FD5dCC0C5DA06511b7F61Fb6BdD5Ad, AgentAccount 0xc18eD4e075a23A66505744A353eeFE91340F924d.
-- 0G integrations: 0G Chain (EVM contracts + receipts), 0G Storage (@0gfoundation/0g-ts-sdk — payload blobs + memory artifacts), 0G Compute (@0glabs/0g-serving-broker — chat.completion + image.generate skills).
-- Demo agents running on Aristotle: Aurora (#1, every 10min), Vesper (#2, every 15min), Helix (#3, every 30min) — all minting real on-chain receipts continuously.
-- User-deployed agents get deployment + onboarding receipts immediately. Full autonomous recurring runtime for user agents is roadmap (needs session-key delegation).
-- Skills run in isolated-vm sandboxes: chat.completion, memory.write, memory.read, memory.search, chain.query, chain.send, web.search, web.fetch, storage.upload.
-- Memory is encrypted, stored in 0G Storage, with storageRoot anchored on-chain via ReceiptBook.
-- Empty memory/runs for new agents is EXPECTED — not a bug. system/init bootstrap memory is written during onboarding.
-- Verify live receipts: /proofs page, chainscan.0g.ai/address/0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53 → Events → ReceiptMinted, or Edge API /v1/receipts?scope=global.
-- App pages: /dashboard (stats), /agents (deploy/manage), /marketplace (skills), /receipts, /memory, /proofs (live evidence), /docs.
-- Faucet: In-app faucet button on /agents/new step 1 gives 0.1 0G per wallet per 24h. Official 0G faucet: faucet.0g.ai.
-- Feedback form: https://docs.google.com/forms/d/e/1FAIpQLSfGZKS0ZliSNTXH0bOpRc7GaILtPjSusiQE_UPvuz_GlhjBMg/viewform?usp=publish-editor
-- Judge response sheet: https://docs.google.com/spreadsheets/d/1Zu_tG6afAMV92juF4A7MLaUhYwMQ0OGtUUVBakjnjcw/edit?usp=sharing
-- Technical write-up: https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94
-- GitHub: https://github.com/Franlinozz/APOGEE
-- Demo video: https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb
-- Never claim transactions have been submitted or state has been mutated. Never invent addresses, tx hashes, or data not in the tool context.
-- If data is missing, say clearly: "This hasn't been indexed yet" or "This appears after the agent runs."
-
-${toolCtx ? `LIVE CONTEXT:\n${toolCtx}` : ''}`;
-        const llmRes = await fetch(`${llmBase}/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llmKey}` },
-          body: JSON.stringify({
-            model: process.env.PILOT_LLM_MODEL ?? 'gpt-4o-mini',
-            messages: [{ role: 'system', content: sysPrompt }, ...body.messages],
-            stream: true,
-            max_tokens: 800,
-          }),
-        });
-        if (llmRes.ok && llmRes.body) {
-          const reader = llmRes.body.getReader();
-          const dec = new TextDecoder();
-          let buf = '';
-          streamLoop: while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += dec.decode(value, { stream: true });
-            const lines = buf.split('\n');
-            buf = lines.pop() ?? '';
-            for (const line of lines) {
-              if (line === 'data: [DONE]') break streamLoop;
-              if (!line.startsWith('data: ')) continue;
-              try {
-                const c = JSON.parse(line.slice(6)) as { choices?: [{ delta?: { content?: string } }] };
-                const tok = c.choices?.[0]?.delta?.content ?? '';
-                if (tok) { emit('token', tok); assistantParts.push(tok); tokenCount++; }
-              } catch { /* malformed chunk */ }
-            }
-          }
+      if (!computeDisabled) {
+        try {
+          await runComputeTier();
+        } catch (error) {
+          fallbackError = error;
+          request.log.warn({ error, address, tier: 'compute' }, 'pilot.chat.tier_failed');
+          if (tokenCount > 0 || clientClosed) throw error;
         }
       } else {
-        for await (const tok of simulatePilotTokens(userMsg, toolResults)) {
-          emit('token', tok);
-          assistantParts.push(tok);
-          tokenCount++;
+        request.log.warn({ address, tier: 'compute' }, 'pilot.chat.compute_disabled');
+      }
+
+      if ((computeDisabled || fallbackError) && tokenCount === 0 && !clientClosed) {
+        try {
+          await runHttpTier();
+          fallbackError = undefined;
+        } catch (error) {
+          fallbackError = error;
+          request.log.warn({ error, address, tier: 'http-llm' }, 'pilot.chat.tier_failed');
+          if (tokenCount > 0 || clientClosed) throw error;
         }
       }
 
-      emit('done', { chatId, tokensUsed: tokenCount });
+      if (fallbackError && tokenCount === 0 && !clientClosed) await runSimulateTier();
+
+      if (!clientClosed) emit('done', { chatId: computeMetadata?.chatId ?? chatId, tokensUsed: computeMetadata?.tokenUsage ?? tokenCount });
+      streamCompleted = !clientClosed;
 
       if (user) {
-        const prev = store.pilotConversations.get(user.address) ?? { id: chatId, userAddress: user.address, messages: [] as PilotMsg[], createdAt: nowIso() };
+        const key = address!.toLowerCase();
+        const prev = store.pilotConversations.get(key) ?? { id: chatId, userAddress: address!, messages: [] as PilotMsg[], createdAt: nowIso() };
         prev.messages.push(
           { role: 'user', content: userMsg, createdAt: nowIso() },
           { role: 'assistant', content: assistantParts.join(''), createdAt: nowIso() },
         );
-        store.pilotConversations.set(user.address, prev);
+        store.pilotConversations.delete(key);
+        store.pilotConversations.set(key, prev);
+        while (store.pilotConversations.size > 100) {
+          const oldest = store.pilotConversations.keys().next().value as string | undefined;
+          if (!oldest) break;
+          store.pilotConversations.delete(oldest);
+        }
       }
+
+      mintPilotReceipt(clientClosed);
     } catch (err) {
+      if (tokenCount > 0) mintPilotReceipt(true);
       emit('error', { message: err instanceof Error ? err.message : 'Pilot error' });
     } finally {
       if (!res.writableEnded) res.end();

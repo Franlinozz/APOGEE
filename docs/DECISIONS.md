@@ -145,3 +145,10 @@
 - **TX hash guard**: already in place via `buildChainscanUrl` + `TX_RE = /^0x[a-fA-F0-9]{64}$/`; verified across `RecentActivity` and `ReceiptsTableClient`.
 - **Build**: 26 pages clean, no TS errors. Pre-existing pino-pretty warning (dev-only dep, not related to this change).
 - **Deviations**: Local index hide/delete feature scoped as future work — no backend hide endpoint in this pass. Follow-up: wire `/api/agents/[id]/hide` to a "Hide from dashboard" button in agent settings.
+
+## 2026-05-17 — Ship 1 Apogee Pilot full-page chat
+
+- Extended the existing Pilot infrastructure instead of creating a parallel system: the floating launcher and `/api/pilot/chat` proxy still use the same shared SSE chat logic as the new `/apogee-pilot` full-page experience.
+- Edge Pilot now attempts 0G Compute first, falls back to `PILOT_LLM_BASE_URL`/`PILOT_LLM_API_KEY`, then falls back to simulated responses; each attempted/used tier logs `pilot.chat.tier`.
+- Pilot chat receipts use action tag `PILO` and `agentId=0` as the documented system sentinel because `ReceiptBook.emitReceipt` does not require a minted agent id and existing system contracts already emit agent-zero receipts.
+- No Prisma migration was added; Pilot conversation state remains bounded in-memory LRU state on Edge.
