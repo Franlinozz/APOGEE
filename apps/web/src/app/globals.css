@@ -113,17 +113,17 @@
   --bg-gradient: linear-gradient(135deg, #EDE6F5 0%, #E6E0F0 30%, #EDE8F5 62%, #F8F5FB 100%);
 
   /* Orbital SVG CSS vars — brand violet for light */
-  --orbital-ring-stroke:   rgba(109 76 225 / 0.18);
-  --orbital-ring-stroke-2: rgba(109 76 225 / 0.08);
+  --orbital-ring-stroke:   rgba(109 76 225 / 0.28);
+  --orbital-ring-stroke-2: rgba(109 76 225 / 0.14);
   --orbital-planet-fill:   rgba(240 236 255 / 1);
-  --orbital-planet-stroke: rgba(109 76 225 / 0.28);
-  --orbital-core-fill:     rgba(109 76 225 / 0.14);
-  --orbital-dot-fill:      rgba(109 76 225 / 0.65);
+  --orbital-planet-stroke: rgba(109 76 225 / 0.38);
+  --orbital-core-fill:     rgba(109 76 225 / 0.20);
+  --orbital-dot-fill:      rgba(109 76 225 / 0.75);
   --orbital-node-gradient: radial-gradient(circle, #EDE0FF 0%, #8B70E8 60%, #6D4CE1 100%);
-  --orbital-glow-bg:       radial-gradient(circle, rgba(109 76 225 / 0.07) 0%, transparent 70%);
+  --orbital-glow-bg:       radial-gradient(circle, rgba(109 76 225 / 0.12) 0%, transparent 70%);
 
   /* Hero */
-  --hero-bg: radial-gradient(ellipse 80% 55% at 50% 0%, rgba(109 76 225 / 0.07) 0%, transparent 65%);
+  --hero-bg: radial-gradient(ellipse 80% 55% at 50% 0%, rgba(109 76 225 / 0.13) 0%, transparent 65%);
 
   /* Hero heading gradient — rich violet → indigo for light mode */
   --grad-start: #6D4CE1;
@@ -190,7 +190,7 @@ body > * {
 }
 
 [data-theme="light"] body::before {
-  opacity: 0.110;
+  opacity: 0.20;
   mix-blend-mode: multiply;
   filter: contrast(0.94) saturate(0.72);
 }

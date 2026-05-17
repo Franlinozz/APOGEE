@@ -34,7 +34,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="app-sidebar flex h-full w-56 flex-col border-r border-[var(--color-line)] bg-surface">
+    <aside className="app-sidebar hidden md:flex h-full w-56 flex-col border-r border-[var(--color-line)] bg-surface">
       {/* Logo */}
       <div className="flex h-20 items-center overflow-visible border-b border-[var(--color-line)] px-4">
         <Link href="/" className="flex items-center overflow-visible" aria-label="Apogee home">

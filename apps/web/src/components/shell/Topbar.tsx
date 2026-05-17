@@ -19,7 +19,7 @@ export function Topbar({ title }: { title?: string }) {
   }
 
   return (
-    <header className="app-topbar flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-line)] bg-surface px-6">
+    <header className="app-topbar flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-line)] bg-surface pl-14 pr-6 md:px-6">
       {title && (
         <h1 className="text-sm font-semibold text-fg">{title}</h1>
       )}
