@@ -9,6 +9,7 @@ function normalizeReceipt(row: Record<string, unknown>): Receipt {
   return {
     id: String(row['id'] ?? row['receiptId'] ?? ''),
     agentId: String(row['agentId'] ?? ''),
+    agentName: typeof row['agentName'] === 'string' ? row['agentName'] : undefined,
     payerAddress: String(row['payerAddress'] ?? ''),
     payeeAddress: String(row['payeeAddress'] ?? ''),
     amountWei: String(row['amountWei'] ?? row['valueWei'] ?? '0'),
