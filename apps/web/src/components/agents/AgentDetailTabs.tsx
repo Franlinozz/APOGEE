@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAccount } from 'wagmi';
@@ -221,6 +221,8 @@ type SkillRunResult = {
   receipt?: { receiptId?: string; txHash?: string; status?: 'pending' | 'minted' | 'failed'; error?: string };
 };
 
+type SkillRunFallback = 'mint-pending' | 'maybe-running';
+
 type SkillFormState = {
   text: string;
   maxWords: number;
@@ -284,6 +286,22 @@ function Field({ label, count, children }: { label: string; count?: string; chil
   return <label className="block text-sm"><span className="flex justify-between gap-3 text-fg-muted"><span>{label}</span>{count && <span className="text-xs text-fg-faint">{count}</span>}</span>{children}</label>;
 }
 
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function formatErrorBody(data: unknown, fallbackText: string): string {
+  if (data && typeof data === 'object') {
+    const record = data as Record<string, unknown>;
+    return [record['detail'], record['title'], record['message']].filter((part): part is string => typeof part === 'string' && part.trim().length > 0).join(' — ');
+  }
+  return fallbackText.trim();
+}
+
 function SkillOutput({ skillId, output }: { skillId: string; output: unknown }) {
   const record = output && typeof output === 'object' ? output as Record<string, unknown> : {};
   if (skillId === 'text.sentiment') {
@@ -302,29 +320,62 @@ function SkillRunModal({ agent, skill, onClose, onDone }: { agent: Agent; skill:
   const [form, setFormState] = useState<SkillFormState>(DEFAULT_FORM);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fallback, setFallback] = useState<SkillRunFallback | null>(null);
   const [result, setResult] = useState<SkillRunResult | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
   const setForm = (patch: Partial<SkillFormState>) => setFormState((current) => ({ ...current, ...patch }));
 
   async function submit() {
     const validation = validateSkillForm(skill.id, form);
     if (validation) { setError(validation); return; }
+    const controller = new AbortController();
+    abortRef.current = controller;
+    cancelledRef.current = false;
     setRunning(true);
     setError(null);
+    setFallback(null);
+    setResult(null);
     try {
       const res = await fetch(`/api/skills/${encodeURIComponent(skill.id)}/invoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildSkillPayload(skill.id, form, agent.id)),
+        signal: controller.signal,
       });
-      const data = await res.json().catch(() => ({})) as SkillRunResult & { title?: string; detail?: string };
-      if (!res.ok) throw new Error(data.detail ?? data.title ?? `Skill run failed (${res.status})`);
-      setResult(data);
+      const text = await res.text();
+      const data = text ? safeJsonParse(text) : {};
+      if (!res.ok) {
+        const bodyMessage = formatErrorBody(data, text);
+        if (res.status === 502 || res.status === 504) {
+          setFallback('mint-pending');
+          setError(null);
+          return;
+        }
+        if (res.status >= 400 && res.status < 500) throw new Error(`${res.status}: ${bodyMessage || res.statusText}`);
+        setFallback('maybe-running');
+        setError(null);
+        return;
+      }
+      setResult(data as SkillRunResult);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Skill run failed.');
+      if (cancelledRef.current || (err instanceof DOMException && err.name === 'AbortError')) {
+        setError('Skill run cancelled.');
+      } else {
+        setFallback('mint-pending');
+        setError(null);
+      }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setRunning(false);
     }
+  }
+
+  function cancelRun() {
+    cancelledRef.current = true;
+    abortRef.current?.abort();
+    setRunning(false);
   }
 
   return (
@@ -337,12 +388,19 @@ function SkillRunModal({ agent, skill, onClose, onDone }: { agent: Agent; skill:
         <div className="mt-5 space-y-4">
           <SkillInputFields skillId={skill.id} form={form} setForm={setForm} />
           {error && <div className="rounded-[var(--radius-lg)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div>}
+          {fallback === 'mint-pending' && <div className="rounded-[var(--radius-lg)] border border-success/20 bg-success/10 p-3 text-sm text-success">Skill is running on-chain. The receipt will appear on /proofs within a minute or two once compute completes. <Link href="/proofs" target="_blank" className="underline">View /proofs ↗</Link></div>}
+          {fallback === 'maybe-running' && <div className="rounded-[var(--radius-lg)] border border-warning/25 bg-warning/10 p-3 text-sm text-warning">Something went wrong. The skill may still be running — check /proofs to verify. If no receipt appears, try again. <Link href="/proofs" target="_blank" className="underline">View /proofs ↗</Link></div>}
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <button onClick={onClose} disabled={running} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] px-4 py-2 text-sm text-fg-muted hover:text-fg disabled:opacity-50">Cancel</button>
-            <button onClick={() => void submit()} disabled={running} className="rounded-[var(--radius-lg)] bg-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{running ? 'Running…' : 'Run skill'}</button>
+            {running ? (
+              <button onClick={cancelRun} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] px-4 py-2 text-sm text-fg-muted hover:text-fg">Cancel</button>
+            ) : (
+              <button onClick={onClose} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] px-4 py-2 text-sm text-fg-muted hover:text-fg">Close</button>
+            )}
+            <button onClick={() => void submit()} disabled={running} className="rounded-[var(--radius-lg)] bg-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{running ? 'Running…' : result || fallback ? 'Run again' : 'Run skill'}</button>
           </div>
           {result?.output !== undefined && <div className="space-y-2 pt-2"><p className="text-sm font-medium text-fg">Output</p><SkillOutput skillId={skill.id} output={result.output} /></div>}
           {result?.receipt && <div className="rounded-[var(--radius-lg)] border border-success/20 bg-success/10 p-3 text-sm text-success">{result.receipt.status === 'minted' ? 'Receipt minted ✓ ' : result.receipt.status === 'failed' ? 'Skill ran, but receipt minting failed. ' : 'Receipt minting… '}<Link href="/proofs" target="_blank" className="underline">View on /proofs ↗</Link>{result.receipt.txHash && <span className="ml-2 font-mono text-xs">{short(result.receipt.txHash)}</span>}</div>}
+          <p className="border-t border-[var(--color-line)] pt-3 text-xs text-fg-faint">Receipts mint on-chain. Output may render here a moment before or after the receipt is visible on /proofs.</p>
         </div>
       </div>
     </div>
@@ -356,7 +414,10 @@ function SkillsTab({ agent, installedSkills, skillCatalog }: { agent: Agent; ins
   const selectedSkillIds = agent.deployment?.selectedSkillIds;
   const fallbackIds = useMemo(() => installedSkills.length === 0 ? (selectedSkillIds ?? []) : [], [installedSkills.length, selectedSkillIds]);
   const isOwner = sameAddr(address, agent.ownerAddress);
-  const isActive = agent.status === 'active';
+  const selectedIds = useMemo(() => selectedSkillIds ?? [], [selectedSkillIds]);
+  const installedSkillIds = useMemo(() => new Set(installedSkills.map((skill) => skill.skillId)), [installedSkills]);
+  const bootstrapComplete = selectedIds.length > 0 ? selectedIds.every((id) => installedSkillIds.has(id)) : installedSkills.length > 0;
+  const canRunAfterBootstrap = agent.status === 'active' || ((agent.status === 'initialized' || agent.status === 'ready') && bootstrapComplete);
   const items: { skillId: string; installedAt: string; pending: boolean }[] = useMemo(() => (
     installedSkills.length > 0
       ? installedSkills.map((s) => ({ skillId: s.skillId, installedAt: s.installedAt, pending: false }))
@@ -376,7 +437,7 @@ function SkillsTab({ agent, installedSkills, skillCatalog }: { agent: Agent; ins
         {items.map((item) => {
           const manifest = skillCatalog.find((skill) => skill.id === item.skillId) ?? { id: item.skillId, name: item.skillId, version: '1.0.0', description: 'Selected skill metadata is not in the current catalog.', category: 'Skill', tier: 'free' as const, pricePerCallWei: '0', tags: [] };
           const runnable = INVOKABLE_SKILLS.has(item.skillId);
-          const disabledReason = !runnable ? 'Not runnable yet' : !isActive ? 'Activation in progress' : !isConnected ? 'Connect wallet' : !isOwner ? 'Owner only' : null;
+          const disabledReason = !runnable ? 'Not runnable yet' : !canRunAfterBootstrap ? 'Activation in progress' : !isConnected ? 'Connect wallet' : !isOwner ? 'Owner only' : null;
           return (
             <div key={item.skillId} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
               <div className="flex items-start justify-between gap-3">

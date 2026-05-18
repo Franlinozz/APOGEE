@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 const PROD_EDGE_URL = 'https://apogeeedge-production.up.railway.app';
 const EDGE = process.env['EDGE_API_URL']?.trim().replace(/\/$/, '') || process.env['NEXT_PUBLIC_API_URL']?.trim().replace(/\/$/, '') || PROD_EDGE_URL;
 
+export const runtime = 'nodejs';
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest, { params }: { params: { skillId: string } }) {
   const token = cookies().get('apogee-jwt')?.value;
   if (!token) return NextResponse.json({ title: 'Not authenticated', detail: 'Sign in with your wallet first.' }, { status: 401 });
