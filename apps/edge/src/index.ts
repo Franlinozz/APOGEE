@@ -137,7 +137,8 @@ const stripJsonFences = (value: string): string => value.trim().replace(/^```(?:
 const extractComputeText = (response: unknown): string => {
   if (response && typeof response === 'object') {
     const record = response as Record<string, unknown>;
-    if (typeof record['content'] === 'string' && record['content'].trim()) return record['content'];
+    const content = typeof record['content'] === 'string' ? record['content'].trim() : '';
+    if (content && content !== '[object Object]') return content;
     const reasoningContent = typeof record['reasoningContent'] === 'string' ? record['reasoningContent'] : record['reasoning_content'];
     if (typeof reasoningContent === 'string' && reasoningContent.trim()) {
       const reasoning = reasoningContent.trim();
@@ -146,6 +147,7 @@ const extractComputeText = (response: unknown): string => {
       if (lastJson) return lastJson;
       return reasoning.split(/\n\s*\n/).at(-1)?.trim() ?? reasoning;
     }
+    if (content) return content;
   }
   return String(response ?? '');
 };
@@ -2237,7 +2239,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const computeResult = await compute.chat({ messages, maxTokens });
     const text = extractComputeText(computeResult).trim();
     const computeReasoning = (computeResult as { reasoningContent?: string | undefined }).reasoningContent;
-    if (!computeResult.content && computeReasoning && text) request.log.warn({ skillId }, 'skill.invoke.compute.reasoning_fallback');
+    if ((!computeResult.content || computeResult.content.trim() === '[object Object]') && computeReasoning && text) request.log.warn({ skillId }, 'skill.invoke.compute.reasoning_fallback');
     const output = shapeOutput(text);
     const latencyMs = Date.now() - startedAt;
     const receiptNonce = randomUUID();
