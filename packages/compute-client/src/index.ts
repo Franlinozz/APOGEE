@@ -160,9 +160,9 @@ const chatResponseSchema = z.object({
   id: z.string().optional(),
   choices: z.array(
     z.object({
-      message: z.object({ content: z.string().nullable().optional(), reasoning_content: z.string().nullable().optional() }).optional(),
-      delta: z.object({ content: z.string().nullable().optional(), reasoning_content: z.string().nullable().optional() }).optional(),
-      text: z.string().optional(),
+      message: z.object({ content: z.unknown().optional(), reasoning_content: z.unknown().optional() }).passthrough().optional(),
+      delta: z.object({ content: z.unknown().optional(), reasoning_content: z.unknown().optional() }).passthrough().optional(),
+      text: z.unknown().optional(),
     }),
   ),
   usage: z.unknown().optional(),
@@ -180,6 +180,27 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 const bigintTo0g = (amount: bigint): number => Number(formatEther(amount));
+
+const textFromModelContent = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      if (typeof item === 'string') return item;
+      if (isRecord(item)) {
+        const text = item.text ?? item.content ?? item.output_text;
+        return textFromModelContent(text);
+      }
+      return '';
+    }).filter(Boolean).join('\n');
+  }
+  if (isRecord(value)) {
+    const nested = value.text ?? value.content ?? value.output_text ?? value.value;
+    const text = textFromModelContent(nested);
+    return text || JSON.stringify(value);
+  }
+  return String(value);
+};
 
 export class ComputeClient {
   private readonly signer: Wallet;
@@ -357,8 +378,8 @@ export class ComputeClient {
       return {
         ...this.metadata(providerAddress, opts.model ?? metadata.model, chatId, data.usage, metadata.attestationDigest, 'chatbot'),
         providerSig,
-        content: first?.message?.content ?? first?.text ?? '',
-        reasoningContent: first?.message?.reasoning_content ?? undefined,
+        content: textFromModelContent(first?.message?.content ?? first?.text ?? ''),
+        reasoningContent: textFromModelContent(first?.message?.reasoning_content),
       };
     } catch (error) {
       if (error instanceof ComputeError) throw error;
