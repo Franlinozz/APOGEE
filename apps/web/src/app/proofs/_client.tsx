@@ -10,6 +10,7 @@ const STORAGE_PAGE_SIZE = 10;
 type ReceiptIndexRow = {
   receiptId: string;
   agentId: string;
+  agentName?: string;
   actionTag: string;
   valueWei: string;
   storageRoot: string;
@@ -222,7 +223,7 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
                 {pageRows.map(r => (
                   <tr key={r.receiptId} className="hover-row">
                     <td className="px-4 py-2.5 font-mono text-accent" title={r.actionTag}>{formatTag(r.actionTag)}</td>
-                    <td className="px-4 py-2.5 text-fg-muted capitalize">{r.agentId}</td>
+                    <td className="px-4 py-2.5 text-fg-muted capitalize" title={r.agentId}>{r.agentName ?? r.agentId}</td>
                     <td className="px-4 py-2.5 text-fg-muted">{formatValue(r.valueWei)}</td>
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'minted' ? 'bg-success/15 text-success' : r.status === 'failed' ? 'bg-danger/15 text-danger' : 'bg-warning/15 text-warning'}`}>
@@ -272,6 +273,7 @@ export function ReceiptsFeed({ edgeUrl }: { edgeUrl: string }) {
 type StorageProofRow = {
   receiptId: string;
   agentId: string;
+  agentName?: string;
   actionTag: string;
   payloadHash: string;
   storageRoot: string;
@@ -332,7 +334,7 @@ export function StorageProofsClient({ proofSample, totalReceipts }: { proofSampl
           <tbody className="divide-y divide-[var(--color-line)]">
             {pageRows.map(r => (
               <tr key={r.receiptId} className="hover-row">
-                <td className="px-4 py-2.5 text-fg-muted capitalize">{r.agentId}</td>
+                <td className="px-4 py-2.5 text-fg-muted capitalize" title={r.agentId}>{r.agentName ?? r.agentId}</td>
                 <td className="px-4 py-2.5 font-mono text-accent" title={r.actionTag}>{fmtStorageTag(r.actionTag)}</td>
                 <td className="px-4 py-2.5 font-mono text-success text-[10px]" title={r.storageRoot}>
                   {r.storageRoot ? r.storageRoot.slice(0, 14) + '…' : '—'}

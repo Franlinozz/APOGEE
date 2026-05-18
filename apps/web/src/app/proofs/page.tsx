@@ -23,6 +23,7 @@ type DemoAgent = {
 type StorageProofRow = {
   receiptId: string;
   agentId: string;
+  agentName?: string;
   actionTag: string;
   payloadHash: string;
   storageRoot: string;

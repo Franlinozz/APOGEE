@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-05-18 — Deployed agents are now invokable from the UI
+
+- Skills tab gains per-skill Run buttons that open input modals; submissions execute under the deployed agent's identity and mint receipts tagged to the agent on `/proofs`.
+- Edge enforces owner-only access, selected-skill allowlists, max-per-tx, and daily-cap policy checks before agent-scoped skill invocation.
+- This closes the deploy → invoke → receipt loop for user-created agents.
+- Follow-up: investigate the Delta bootstrap retry/onboarding failure separately; it is intentionally out of scope for this PR.
+
 ## 2026-05-08 — Prompt 1 complete
 
 - Deployed and verified all 9 Prompt 1 contracts on 0G Galileo testnet; `packages/contracts/deployments/galileo.json` contains addresses, tx hashes, block numbers, and `verified: true` for each entry.

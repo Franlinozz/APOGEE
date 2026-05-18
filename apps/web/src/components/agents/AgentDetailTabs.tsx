@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAccount } from 'wagmi';
 import type { Agent, MemoryEntry, Receipt, Run, SkillManifest } from '@/lib/types';
 import { buildChainscanUrl } from '@/lib/chainscan';
 import { Badge } from '@apogee/ui';
@@ -211,14 +212,161 @@ function MemoryTab({ agentId, entries }: { agentId: string; entries: MemoryEntry
   );
 }
 
+
+type SkillRunResult = {
+  skillId: string;
+  output?: unknown;
+  latencyMs?: number;
+  runId?: string;
+  receipt?: { receiptId?: string; txHash?: string; status?: 'pending' | 'minted' | 'failed'; error?: string };
+};
+
+type SkillFormState = {
+  text: string;
+  maxWords: number;
+  targetLanguage: string;
+  code: string;
+  language: string;
+  prompt: string;
+};
+
+const INVOKABLE_SKILLS = new Set<string>(['chat.completion', 'text.summarize', 'text.translate', 'text.sentiment', 'text.entities', 'code.review']);
+const DEFAULT_FORM: SkillFormState = { text: '', maxWords: 80, targetLanguage: '', code: '', language: '', prompt: '' };
+
+function sameAddr(a?: string, b?: string): boolean {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
+function buildSkillPayload(skillId: string, form: SkillFormState, agentId: string): Record<string, unknown> {
+  if (skillId === 'chat.completion') return { agentId, messages: [{ role: 'user', content: form.prompt.trim() }] };
+  if (skillId === 'text.summarize') return { agentId, text: form.text.trim(), maxWords: form.maxWords };
+  if (skillId === 'text.translate') return { agentId, text: form.text.trim(), targetLanguage: form.targetLanguage.trim() };
+  if (skillId === 'text.sentiment' || skillId === 'text.entities') return { agentId, text: form.text.trim() };
+  if (skillId === 'code.review') return { agentId, code: form.code.trim(), language: form.language.trim() || undefined };
+  return { agentId };
+}
+
+function validateSkillForm(skillId: string, form: SkillFormState): string | null {
+  if (skillId === 'chat.completion') return form.prompt.trim() ? null : 'Prompt is required.';
+  if (skillId === 'text.translate') {
+    if (!form.text.trim()) return 'Text is required.';
+    if (!form.targetLanguage.trim()) return 'Target language is required.';
+    return null;
+  }
+  if (skillId === 'code.review') return form.code.trim() ? null : 'Code is required.';
+  if (skillId === 'text.summarize' || skillId === 'text.sentiment' || skillId === 'text.entities') return form.text.trim() ? null : 'Text is required.';
+  return 'This skill is not runnable from the UI yet.';
+}
+
+function SkillInputFields({ skillId, form, setForm }: { skillId: string; form: SkillFormState; setForm: (patch: Partial<SkillFormState>) => void }) {
+  const textAreaClass = 'mt-1 min-h-36 w-full rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated px-3 py-2 text-sm text-fg outline-none focus:border-[var(--color-line-accent)]';
+  if (skillId === 'chat.completion') {
+    return <Field label="Prompt" count={`${form.prompt.length}/5000`}><textarea className={textAreaClass} maxLength={5000} value={form.prompt} onChange={(e) => setForm({ prompt: e.target.value })} placeholder="Ask this agent to run its chat skill…" /></Field>;
+  }
+  if (skillId === 'code.review') {
+    return (
+      <>
+        <Field label="Code" count={`${form.code.length}/15000`}><textarea className={`${textAreaClass} font-mono`} maxLength={15000} value={form.code} onChange={(e) => setForm({ code: e.target.value })} placeholder="Paste code to review…" /></Field>
+        <Field label="Language (optional)"><input className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated px-3 py-2 text-sm text-fg outline-none focus:border-[var(--color-line-accent)]" value={form.language} onChange={(e) => setForm({ language: e.target.value })} placeholder="javascript, python, rust…" /></Field>
+      </>
+    );
+  }
+  return (
+    <>
+      <Field label="Text" count={`${form.text.length}/10000`}><textarea className={textAreaClass} maxLength={10000} value={form.text} onChange={(e) => setForm({ text: e.target.value })} placeholder="Paste text here…" /></Field>
+      {skillId === 'text.summarize' && <Field label="Max words"><input type="number" min={10} max={500} className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated px-3 py-2 text-sm text-fg outline-none focus:border-[var(--color-line-accent)]" value={form.maxWords} onChange={(e) => setForm({ maxWords: Number(e.target.value) })} /></Field>}
+      {skillId === 'text.translate' && <Field label="Target language"><input className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated px-3 py-2 text-sm text-fg outline-none focus:border-[var(--color-line-accent)]" value={form.targetLanguage} onChange={(e) => setForm({ targetLanguage: e.target.value })} placeholder="Spanish, French, Japanese…" /></Field>}
+    </>
+  );
+}
+
+function Field({ label, count, children }: { label: string; count?: string; children: ReactNode }) {
+  return <label className="block text-sm"><span className="flex justify-between gap-3 text-fg-muted"><span>{label}</span>{count && <span className="text-xs text-fg-faint">{count}</span>}</span>{children}</label>;
+}
+
+function SkillOutput({ skillId, output }: { skillId: string; output: unknown }) {
+  const record = output && typeof output === 'object' ? output as Record<string, unknown> : {};
+  if (skillId === 'text.sentiment') {
+    return <div className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3"><Badge variant="accent" className="capitalize">{String(record.sentiment ?? 'neutral')}</Badge><span className="text-sm text-fg-muted">Score {Number(record.score ?? 0).toFixed(2)}</span></div>;
+  }
+  if (skillId === 'text.entities') {
+    const entities = Array.isArray(record.entities) ? record.entities as Array<{ type?: string; value?: string }> : [];
+    if (entities.length === 0) return <p className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3 text-sm text-fg-muted">No entities found.</p>;
+    return <div className="flex flex-wrap gap-2 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3">{entities.map((entity, index) => <span key={`${entity.type}-${entity.value}-${index}`} className="inline-flex items-center gap-1 rounded-full border border-[var(--color-line)] px-2 py-1 text-xs text-fg"><span className="font-mono text-accent">{entity.type ?? 'OTHER'}</span>{entity.value}</span>)}</div>;
+  }
+  const text = skillId === 'chat.completion' ? String(record.content ?? '') : skillId === 'text.summarize' ? String(record.summary ?? '') : skillId === 'text.translate' ? String(record.translation ?? '') : skillId === 'code.review' ? String(record.review ?? '') : JSON.stringify(output, null, 2);
+  return <div className={`whitespace-pre-wrap rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3 text-sm text-fg ${skillId === 'code.review' ? 'font-mono' : ''}`}>{text}</div>;
+}
+
+function SkillRunModal({ agent, skill, onClose, onDone }: { agent: Agent; skill: SkillManifest; onClose: () => void; onDone: () => void }) {
+  const [form, setFormState] = useState<SkillFormState>(DEFAULT_FORM);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<SkillRunResult | null>(null);
+  const setForm = (patch: Partial<SkillFormState>) => setFormState((current) => ({ ...current, ...patch }));
+
+  async function submit() {
+    const validation = validateSkillForm(skill.id, form);
+    if (validation) { setError(validation); return; }
+    setRunning(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(skill.id)}/invoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildSkillPayload(skill.id, form, agent.id)),
+      });
+      const data = await res.json().catch(() => ({})) as SkillRunResult & { title?: string; detail?: string };
+      if (!res.ok) throw new Error(data.detail ?? data.title ?? `Skill run failed (${res.status})`);
+      setResult(data);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Skill run failed.');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-3 py-4 sm:items-center">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[var(--color-line)] bg-surface p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div><p className="text-lg font-semibold text-fg">Run {skill.name}</p><p className="mt-1 font-mono text-xs text-fg-faint">{skill.id}</p></div>
+          <button onClick={onClose} className="rounded-full border border-[var(--color-line)] px-3 py-1 text-sm text-fg-muted hover:text-fg">Close</button>
+        </div>
+        <div className="mt-5 space-y-4">
+          <SkillInputFields skillId={skill.id} form={form} setForm={setForm} />
+          {error && <div className="rounded-[var(--radius-lg)] border border-danger/25 bg-danger/10 p-3 text-sm text-danger">{error}</div>}
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button onClick={onClose} disabled={running} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] px-4 py-2 text-sm text-fg-muted hover:text-fg disabled:opacity-50">Cancel</button>
+            <button onClick={() => void submit()} disabled={running} className="rounded-[var(--radius-lg)] bg-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{running ? 'Running…' : 'Run skill'}</button>
+          </div>
+          {result?.output !== undefined && <div className="space-y-2 pt-2"><p className="text-sm font-medium text-fg">Output</p><SkillOutput skillId={skill.id} output={result.output} /></div>}
+          {result?.receipt && <div className="rounded-[var(--radius-lg)] border border-success/20 bg-success/10 p-3 text-sm text-success">{result.receipt.status === 'minted' ? 'Receipt minted ✓ ' : result.receipt.status === 'failed' ? 'Skill ran, but receipt minting failed. ' : 'Receipt minting… '}<Link href="/proofs" target="_blank" className="underline">View on /proofs ↗</Link>{result.receipt.txHash && <span className="ml-2 font-mono text-xs">{short(result.receipt.txHash)}</span>}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SkillsTab({ agent, installedSkills, skillCatalog }: { agent: Agent; installedSkills: InstalledSkill[]; skillCatalog: SkillManifest[] }) {
-  const fallbackIds = installedSkills.length === 0 ? (agent.deployment?.selectedSkillIds ?? []) : [];
+  const router = useRouter();
+  const { address, isConnected } = useAccount();
+  const [activeSkill, setActiveSkill] = useState<SkillManifest | null>(null);
+  const selectedSkillIds = agent.deployment?.selectedSkillIds;
+  const fallbackIds = useMemo(() => installedSkills.length === 0 ? (selectedSkillIds ?? []) : [], [installedSkills.length, selectedSkillIds]);
+  const isOwner = sameAddr(address, agent.ownerAddress);
+  const isActive = agent.status === 'active';
+  const items: { skillId: string; installedAt: string; pending: boolean }[] = useMemo(() => (
+    installedSkills.length > 0
+      ? installedSkills.map((s) => ({ skillId: s.skillId, installedAt: s.installedAt, pending: false }))
+      : fallbackIds.map((id) => ({ skillId: id, installedAt: agent.deployment?.createdAt ?? agent.createdAt, pending: true }))
+  ), [agent.createdAt, agent.deployment?.createdAt, fallbackIds, installedSkills]);
+
   if (installedSkills.length === 0 && fallbackIds.length === 0) {
     return <Empty title="No selected skills indexed" body="Skill selections are stored during deployment. Existing older agents may show empty until reconfigured or indexed from a new deployment." />;
   }
-  const items: { skillId: string; installedAt: string; pending: boolean }[] = installedSkills.length > 0
-    ? installedSkills.map((s) => ({ skillId: s.skillId, installedAt: s.installedAt, pending: false }))
-    : fallbackIds.map((id) => ({ skillId: id, installedAt: agent.deployment?.createdAt ?? agent.createdAt, pending: true }));
+
   return (
     <div className="space-y-3">
       {fallbackIds.length > 0 && (
@@ -226,20 +374,38 @@ function SkillsTab({ agent, installedSkills, skillCatalog }: { agent: Agent; ins
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         {items.map((item) => {
-          const manifest = skillCatalog.find((skill) => skill.id === item.skillId);
+          const manifest = skillCatalog.find((skill) => skill.id === item.skillId) ?? { id: item.skillId, name: item.skillId, version: '1.0.0', description: 'Selected skill metadata is not in the current catalog.', category: 'Skill', tier: 'free' as const, pricePerCallWei: '0', tags: [] };
+          const runnable = INVOKABLE_SKILLS.has(item.skillId);
+          const disabledReason = !runnable ? 'Not runnable yet' : !isActive ? 'Activation in progress' : !isConnected ? 'Connect wallet' : !isOwner ? 'Owner only' : null;
           return (
             <div key={item.skillId} className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-surface p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium text-sm text-fg">{manifest?.name ?? item.skillId}</p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-sm text-fg">{manifest.name}</p>
+                  <p className="mt-1 font-mono text-xs text-fg-faint">{item.skillId}</p>
+                </div>
                 <Badge variant={item.pending ? 'warning' : 'success'}>{item.pending ? 'selected' : 'selected'}</Badge>
               </div>
-              <p className="mt-1 font-mono text-xs text-fg-faint">{item.skillId}</p>
-              <p className="mt-2 text-xs text-fg-muted">{manifest?.description ?? 'Selected skill metadata is not in the current catalog.'}</p>
-              <p className="mt-3 text-xs text-fg-faint">Selected {fmtDate(item.installedAt)}</p>
+              <p className="mt-2 text-xs text-fg-muted">{manifest.description}</p>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-fg-faint">Selected {fmtDate(item.installedAt)}</p>
+                <div className="flex items-center gap-2">
+                  {disabledReason && <span className="text-xs text-fg-faint">{disabledReason}</span>}
+                  <button
+                    type="button"
+                    disabled={Boolean(disabledReason)}
+                    onClick={() => setActiveSkill(manifest)}
+                    className="rounded-[var(--radius)] border border-accent/40 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/10 disabled:border-[var(--color-line)] disabled:text-fg-faint disabled:hover:bg-transparent"
+                  >
+                    Run
+                  </button>
+                </div>
+              </div>
             </div>
           );
         })}
       </div>
+      {activeSkill && <SkillRunModal agent={agent} skill={activeSkill} onClose={() => setActiveSkill(null)} onDone={() => router.refresh()} />}
     </div>
   );
 }

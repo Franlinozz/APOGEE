@@ -61,6 +61,7 @@ export interface Policy {
 export interface Receipt {
   id: string;
   agentId: string;
+  agentName?: string;
   payerAddress: string;
   payeeAddress: string;
   amountWei: string;

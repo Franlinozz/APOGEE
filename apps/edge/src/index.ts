@@ -132,6 +132,7 @@ const PILOT_CHAT_ACTION_TAG = 'pilot.chat'; // indexed action label; on-chain by
 const LIVE_SKILL_IDS = new Set(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']);
 const skillInvokeParamsSchema = z.object({ skillId: z.enum(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']) });
 const skillInvokeBodySchema = z.record(z.string(), jsonValueSchema);
+type SkillInvokeBody = z.infer<typeof skillInvokeBodySchema>;
 const stripWrappingQuotes = (value: string): string => value.trim().replace(/^(["'“”])(.+)\1$/s, '$2').trim();
 const stripJsonFences = (value: string): string => value.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
 const extractComputeText = (response: unknown): string => {
@@ -567,6 +568,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   const quoteByPayee = new FieldRateLimiter(30, 60_000);
   const settleByPayer = new FieldRateLimiter(30, 60_000);
   const streamClients = new Map<string, Set<{ send(payload: string): void; close(): void }>>();
+  const dailySkillUsage = new Map<string, { spentWei: bigint; resetAt: number }>();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -1117,6 +1119,14 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       ...decorated,
       hidden: await hiddenAgentStore.isHidden(options.chainId, agent.owner, agentTokenId(agent)),
     };
+  };
+
+  const receiptAgentLabel = (agentId: string): string => {
+    const lower = agentId.toLowerCase();
+    if (lower === 'aurora') return 'Aurora';
+    if (lower === 'vesper') return 'Vesper';
+    if (lower === 'helix') return 'Helix';
+    return store.agents.get(agentId)?.name ?? agentId;
   };
 
   const receiptRows = (agentId?: string): ReceiptIndexRow[] => {
@@ -1677,11 +1687,13 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
   // ── Public proofs data (no auth, ISR-friendly) ────────────────────────────
   app.get('/v1/proofs', { schema: { tags: ['system'] } }, async (request) => {
     await syncOnChainReceipts();
+    await syncOnChainAgents();
     const chainParam = (request.query as Record<string, string>)['chain'] ?? 'aristotle';
     const chainId = chainParam === 'galileo' ? 16602 : 16661;
     const allReceipts = [...store.receipts.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     const mintedReceipts = allReceipts.filter((receipt) => receipt.status === 'minted');
-    const last50 = allReceipts.slice(0, 50);
+    const withAgentLabel = (receipt: ReceiptIndexRow): ReceiptIndexRow & { agentName: string } => ({ ...receipt, agentName: receiptAgentLabel(receipt.agentId) });
+    const last50 = allReceipts.slice(0, 50).map(withAgentLabel);
 
     // 14d × 24h heatmap
     const now = Date.now();
@@ -1735,6 +1747,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       .map(r => ({
       receiptId: r.receiptId,
       agentId: r.agentId,
+      agentName: receiptAgentLabel(r.agentId),
       actionTag: r.actionTag,
       payloadHash: r.payloadHash,
       storageRoot: r.storageRoot,
@@ -2147,6 +2160,45 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const body = skillInvokeBodySchema.parse(request.body);
     if (!LIVE_SKILL_IDS.has(skillId)) return problem(reply, 404, 'Skill not invokable', `${skillId} does not expose a live invoke endpoint.`);
 
+    const requestedAgentId = typeof body['agentId'] === 'string' && body['agentId'].trim() ? body['agentId'].trim() : undefined;
+    const manifest = DEFAULT_SKILLS.find((skill) => skill.id === skillId);
+    const valueWei = BigInt(manifest?.pricePerCallWei ?? '0');
+    let agent: AgentRecord | undefined;
+    let deployment: DeploymentRecord | null = null;
+    let run: RunRecord | undefined;
+    let receiptAgentId: string | bigint = 0n;
+    let clientReceiptPrefix = `skill:${skillId}`;
+    if (requestedAgentId) {
+      const user = await requireAuth(request);
+      const owned = await ownedAgent(reply, user, requestedAgentId);
+      if (reply.sent || 'statusCode' in owned) return owned;
+      agent = owned;
+      const tokenId = agentTokenId(agent);
+      deployment = await deploymentStore.get(tokenId);
+      const selectedIds = new Set([
+        ...(deployment?.selectedSkillIds ?? []),
+        ...[...store.skills.values()].filter((install) => install.agentId === agent!.id).map((install) => install.skillId),
+      ]);
+      if (!selectedIds.has(skillId)) return problem(reply, 403, 'Skill not selected', `${skillId} is not selected for ${agent.name}.`);
+      if (agent.status !== 'active') return problem(reply, 409, 'Activation in progress', 'This agent is not active yet. Wait for activation to finish before running skills.');
+      const policy = deployment?.policy;
+      const allowed = new Set([...(policy?.allowedSkills ?? []), ...(policy?.allowedActions ?? [])]);
+      if (allowed.size > 0 && !allowed.has(skillId)) return problem(reply, 403, 'Skill not allowed by policy', `${skillId} is not allowed by this agent policy.`);
+      if (policy?.maxPerTxWei !== undefined && valueWei > BigInt(policy.maxPerTxWei)) return problem(reply, 429, 'Max per-transaction cap exceeded', `${skillId} costs ${valueWei.toString()} wei, above this agent's max-per-tx cap.`);
+      if (policy?.dailyCapWei !== undefined) {
+        const usageKey = `${options.chainId}:${tokenId}:${new Date().toISOString().slice(0, 10)}`;
+        const resetAt = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1);
+        const current = dailySkillUsage.get(usageKey);
+        const spentWei = current && current.resetAt > Date.now() ? current.spentWei : 0n;
+        if (spentWei + valueWei > BigInt(policy.dailyCapWei)) return problem(reply, 429, 'Daily cap reached', 'Daily cap reached, try again tomorrow.');
+      }
+      receiptAgentId = tokenId;
+      clientReceiptPrefix = `agent:${tokenId}:skill:${skillId}`;
+      run = { id: newId('run'), agentId: agent.id, status: 'running', createdAt: nowIso(), updatedAt: nowIso(), receipts: [], steps: [{ id: newId('step'), name: skillId, status: 'running', createdAt: nowIso() }] };
+      store.runs.set(run.id, run);
+      broadcast(agent.id, { event: 'run.step', payload: json(run.steps[0]) });
+    }
+
     const requireString = (key: string, max: number): string | undefined => {
       const value = body[key];
       if (typeof value !== 'string' || value.trim().length === 0) return undefined;
@@ -2243,34 +2295,92 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     const output = shapeOutput(text);
     const latencyMs = Date.now() - startedAt;
     const receiptNonce = randomUUID();
-    const payload = { skillId, input: body, output, chatId: computeResult.chatId, tokensUsed: computeResult.tokenUsage, model: computeResult.model, provider: computeResult.provider };
+    const inputForReceipt: SkillInvokeBody = { ...body };
+    delete inputForReceipt['agentId'];
+    const payload = {
+      skillId,
+      agentId: agent ? agentTokenId(agent) : undefined,
+      agentName: agent?.name,
+      input: inputForReceipt,
+      output,
+      chatId: computeResult.chatId,
+      tokensUsed: computeResult.tokenUsage,
+      model: computeResult.model,
+      provider: computeResult.provider,
+    };
 
-    request.log.info({ skillId, latencyMs, chatId: computeResult.chatId }, 'skill.invoke.compute.success');
-    void (async () => {
+    request.log.info({ skillId, agentId: agent?.id, latencyMs, chatId: computeResult.chatId }, 'skill.invoke.compute.success');
+    const mintSkillReceipt = async () => {
       let storageRoot: string | undefined;
-      let storageTxHash: string | undefined;
       try {
         const payloadBytes = new TextEncoder().encode(bigintSafeJson(payload));
         const storageClient = options.storageClient as StorageClientWithBytes;
         if (typeof storageClient.uploadBytes !== 'function') throw new Error('storage client does not expose uploadBytes');
         const upload = await storageClient.uploadBytes(payloadBytes);
         storageRoot = upload.rootHash;
-        storageTxHash = upload.txHash || undefined;
-        request.log.info({ skillId, rootHash: storageRoot, txHash: storageTxHash, bytes: payloadBytes.byteLength }, 'skill.invoke.storage.uploaded');
+        request.log.info({ skillId, agentId: agent?.id, rootHash: storageRoot, txHash: upload.txHash, bytes: payloadBytes.byteLength }, 'skill.invoke.storage.uploaded');
       } catch (error) {
-        request.log.warn({ skillId, err: logErrorFields(error) }, 'skill.invoke.storage.upload_failed');
+        request.log.warn({ skillId, agentId: agent?.id, err: logErrorFields(error) }, 'skill.invoke.storage.upload_failed');
       }
-      request.log.info({ skillId }, 'skill.invoke.mint.attempted');
+      request.log.info({ skillId, agentId: agent?.id }, 'skill.invoke.mint.attempted');
       const minted = await stack.receiptMinter.mint({
-        agentId: 0n,
+        agentId: receiptAgentId,
         actionTag: skillId,
         payload,
         storageRoot,
-        valueWei: 0n,
-        clientReceiptId: `skill:${skillId}:${receiptNonce}`,
+        valueWei,
+        clientReceiptId: `${clientReceiptPrefix}:${receiptNonce}`,
       });
-      request.log.info({ skillId, receiptId: minted.receiptId, txHash: minted.txHash }, 'skill.invoke.mint.confirmed');
-    })().catch((error) => request.log.error({ skillId, err: logErrorFields(error) }, 'skill.invoke.receipt_mint_failed'));
+      request.log.info({ skillId, agentId: agent?.id, receiptId: minted.receiptId, txHash: minted.txHash }, 'skill.invoke.mint.confirmed');
+      if (agent && run) {
+        const row: ReceiptIndexRow = {
+          receiptId: minted.receiptId,
+          clientReceiptId: `${clientReceiptPrefix}:${receiptNonce}`,
+          agentId: agentTokenId(agent),
+          actionTag: skillId,
+          payloadHash: minted.payloadHash,
+          storageRoot: minted.storageRoot,
+          storageTxHash: minted.storageTxHash,
+          valueWei: valueWei.toString(),
+          txHash: minted.txHash,
+          status: minted.status,
+          createdAt: nowIso(),
+        };
+        run.receipts.push(row);
+        run.status = minted.status === 'failed' ? 'failed' : 'succeeded';
+        run.updatedAt = nowIso();
+        run.steps = run.steps.map((step) => step.name === skillId ? { ...step, status: run!.status, createdAt: step.createdAt } : step);
+        store.runs.set(run.id, run);
+        broadcast(agent.id, { event: 'run.step', payload: json(run.steps[0]) });
+        if (deployment?.policy?.dailyCapWei !== undefined && valueWei > 0n) {
+          const tokenId = agentTokenId(agent);
+          const usageKey = `${options.chainId}:${tokenId}:${new Date().toISOString().slice(0, 10)}`;
+          const resetAt = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1);
+          const current = dailySkillUsage.get(usageKey);
+          dailySkillUsage.set(usageKey, { spentWei: (current && current.resetAt > Date.now() ? current.spentWei : 0n) + valueWei, resetAt });
+        }
+      }
+      return minted;
+    };
+
+    if (agent) {
+      try {
+        const receipt = await mintSkillReceipt();
+        return { skillId, output, compute: { chatId: computeResult.chatId, model: computeResult.model, provider: computeResult.provider }, latencyMs, receipt, runId: run?.id };
+      } catch (error) {
+        request.log.error({ skillId, agentId: agent.id, err: logErrorFields(error) }, 'skill.invoke.receipt_mint_failed');
+        if (run) {
+          run.status = 'failed';
+          run.updatedAt = nowIso();
+          run.steps = run.steps.map((step) => step.name === skillId ? { ...step, status: 'failed', createdAt: step.createdAt } : step);
+          store.runs.set(run.id, run);
+          broadcast(agent.id, { event: 'run.step', payload: json(run.steps[0]) });
+        }
+        return { skillId, output, compute: { chatId: computeResult.chatId, model: computeResult.model, provider: computeResult.provider }, latencyMs, receipt: { status: 'failed', error: error instanceof Error ? error.message : String(error) }, runId: run?.id };
+      }
+    }
+
+    void mintSkillReceipt().catch((error) => request.log.error({ skillId, err: logErrorFields(error) }, 'skill.invoke.receipt_mint_failed'));
 
     return { skillId, output, compute: { chatId: computeResult.chatId, model: computeResult.model, provider: computeResult.provider }, latencyMs };
   });
@@ -2407,7 +2517,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     }
     const rows = receiptRows(query.agentId)
       .filter((receipt) => !ownedAgentIds || ownedAgentIds.has(receipt.agentId));
-    return { items: rows.slice(0, query.limit), total: rows.length, scope: query.scope, nextCursor: null };
+    return { items: rows.slice(0, query.limit).map((receipt) => ({ ...receipt, agentName: receiptAgentLabel(receipt.agentId) })), total: rows.length, scope: query.scope, nextCursor: null };
   });
 
   app.get('/v1/receipts/:id', { schema: { tags: ['receipts'], params: z.object({ id: idSchema }) } }, async (request, reply) => {
