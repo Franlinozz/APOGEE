@@ -58,6 +58,7 @@ export interface ChatOptions {
 
 export interface ChatResult extends ComputeMetadata {
   content: string;
+  reasoningContent?: string | undefined;
 }
 
 export interface ChatStreamChunk {
@@ -159,8 +160,8 @@ const chatResponseSchema = z.object({
   id: z.string().optional(),
   choices: z.array(
     z.object({
-      message: z.object({ content: z.string().nullable().optional() }).optional(),
-      delta: z.object({ content: z.string().nullable().optional() }).optional(),
+      message: z.object({ content: z.string().nullable().optional(), reasoning_content: z.string().nullable().optional() }).optional(),
+      delta: z.object({ content: z.string().nullable().optional(), reasoning_content: z.string().nullable().optional() }).optional(),
       text: z.string().optional(),
     }),
   ),
@@ -357,6 +358,7 @@ export class ComputeClient {
         ...this.metadata(providerAddress, opts.model ?? metadata.model, chatId, data.usage, metadata.attestationDigest, 'chatbot'),
         providerSig,
         content: first?.message?.content ?? first?.text ?? '',
+        reasoningContent: first?.message?.reasoning_content ?? undefined,
       };
     } catch (error) {
       if (error instanceof ComputeError) throw error;

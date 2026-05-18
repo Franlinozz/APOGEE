@@ -24,8 +24,19 @@ import webFetchManifest from '../web.fetch/manifest.js';
 import webFetchHandler from '../web.fetch/handler.js';
 import webSearchManifest from '../web.search/manifest.js';
 import webSearchHandler from '../web.search/handler.js';
+import codeReviewManifest from '../code.review/manifest.js';
+import codeReviewHandler from '../code.review/handler.js';
+import textEntitiesManifest from '../text.entities/manifest.js';
+import textEntitiesHandler from '../text.entities/handler.js';
+import textSentimentManifest from '../text.sentiment/manifest.js';
+import textSentimentHandler from '../text.sentiment/handler.js';
+import textSummarizeManifest from '../text.summarize/manifest.js';
+import textSummarizeHandler from '../text.summarize/handler.js';
+import textTranslateManifest from '../text.translate/manifest.js';
+import textTranslateHandler from '../text.translate/handler.js';
 
 export const coreSkills = [
+  [codeReviewManifest, codeReviewHandler],
   [audioTranscribeManifest, audioTranscribeHandler],
   [chainQueryManifest, chainQueryHandler],
   [chainSendManifest, chainSendHandler],
@@ -36,6 +47,10 @@ export const coreSkills = [
   [memorySearchManifest, memorySearchHandler],
   [memoryWriteManifest, memoryWriteHandler],
   [storageUploadManifest, storageUploadHandler],
+  [textEntitiesManifest, textEntitiesHandler],
+  [textSentimentManifest, textSentimentHandler],
+  [textSummarizeManifest, textSummarizeHandler],
+  [textTranslateManifest, textTranslateHandler],
   [webFetchManifest, webFetchHandler],
   [webSearchManifest, webSearchHandler],
 ] as const;

@@ -328,47 +328,47 @@ Delete a memory entry.
 
 #### GET /v1/skills
 
-List available skills with pricing.
+List available marketplace skills with pricing and verified-live metadata. Results are ordered by `live` first, then skill id.
+
+**Response 200**
+```json
+[
+  {
+    "id": "chat.completion",
+    "name": "Chat Completion",
+    "version": "1.0.0",
+    "description": "LLM chat via 0G Compute",
+    "category": "AI",
+    "tier": "free",
+    "pricePerCallWei": "0",
+    "tags": ["ai", "compute"],
+    "live": false
+  }
+]
+```
+
+#### POST /v1/skills/:skillId/invoke
+
+Invoke a live 0G Compute-backed skill. The compute response is returned immediately; receipt minting happens asynchronously and failures are logged without poisoning the user response.
+
+Supported live skill ids: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `code.review`.
+
+**Request body examples**
+```json
+{ "text": "Apogee makes AI work verifiable.", "maxWords": 20 }
+```
+
+```json
+{ "code": "function add(a,b){return a-b}", "language": "JavaScript" }
+```
 
 **Response 200**
 ```json
 {
-  "skills": [
-    {
-      "skillId": "chat.completion",
-      "tier": "core",
-      "priceWei": "0",
-      "description": "OpenAI-compatible chat completion"
-    },
-    {
-      "skillId": "image.generate",
-      "tier": "premium",
-      "priceWei": "50000000000000",
-      "description": "Image generation via 0G Compute"
-    }
-  ]
-}
-```
-
-#### POST /v1/skills/:skillId/run
-
-Execute a skill (debits payment if premium, returns output + receipt).
-
-**Request body**
-```json
-{
-  "agentId": "42",
-  "quoteId": "uuid-...",
-  "input": { ... }
-}
-```
-
-**Response 200**
-```json
-{
-  "output": { ... },
-  "receiptId": "0x...",
-  "txHash": "0x..."
+  "skillId": "text.summarize",
+  "output": { "summary": "Apogee makes AI work verifiable." },
+  "compute": { "chatId": "...", "model": "...", "provider": "0g" },
+  "latencyMs": 1234
 }
 ```
 

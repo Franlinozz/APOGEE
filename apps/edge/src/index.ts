@@ -59,7 +59,7 @@ const agentSchema = z.object({
   deployment: z.unknown().optional(),
   authorizationProof: z.unknown().optional(),
 });
-const skillManifestSchema = z.object({ id: z.string(), name: z.string(), version: z.string(), description: z.string(), category: z.string(), tier: z.enum(['free', 'premium']), pricePerCallWei: z.string(), authorAddress: addressSchema.optional(), tags: z.array(z.string()) });
+const skillManifestSchema = z.object({ id: z.string(), name: z.string(), version: z.string(), description: z.string(), category: z.string(), tier: z.enum(['free', 'premium']), pricePerCallWei: z.string(), authorAddress: addressSchema.optional(), tags: z.array(z.string()), live: z.boolean().optional() });
 const policyPatchSchema = z.object({ maxPerTxWei: z.string().optional(), maxPerDayWei: z.string().optional(), active: z.boolean().optional(), summary: z.string().optional() });
 const skillBodySchema = z.object({ skillId: z.string().min(1), version: z.string().optional(), config: jsonValueSchema.optional() });
 const runBodySchema = z.object({ skillId: z.string().min(1), input: jsonValueSchema.optional(), idempotencyKey: z.string().optional() });
@@ -128,6 +128,27 @@ type OnboardingRecord = { key: string; chainId: number; tokenId: string; stages:
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
 const PILOT_CHAT_ACTION_TAG = 'pilot.chat'; // indexed action label; on-chain bytes4 encodes the first four bytes ('pilo').
+
+const LIVE_SKILL_IDS = new Set(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']);
+const skillInvokeParamsSchema = z.object({ skillId: z.enum(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']) });
+const skillInvokeBodySchema = z.record(z.string(), jsonValueSchema);
+const stripWrappingQuotes = (value: string): string => value.trim().replace(/^(["'“”])(.+)\1$/s, '$2').trim();
+const stripJsonFences = (value: string): string => value.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
+const extractComputeText = (response: unknown): string => {
+  if (response && typeof response === 'object') {
+    const record = response as Record<string, unknown>;
+    if (typeof record['content'] === 'string' && record['content'].trim()) return record['content'];
+    const reasoningContent = typeof record['reasoningContent'] === 'string' ? record['reasoningContent'] : record['reasoning_content'];
+    if (typeof reasoningContent === 'string' && reasoningContent.trim()) {
+      const reasoning = reasoningContent.trim();
+      const jsonBlocks = [...reasoning.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
+      const lastJson = jsonBlocks.at(-1)?.[1]?.trim();
+      if (lastJson) return lastJson;
+      return reasoning.split(/\n\s*\n/).at(-1)?.trim() ?? reasoning;
+    }
+  }
+  return String(response ?? '');
+};
 const logErrorFields = (error: unknown): Record<string, unknown> => {
   const err = error as { message?: unknown; code?: unknown; name?: unknown; stack?: unknown; data?: unknown; reason?: unknown; transaction?: unknown; info?: unknown } | null | undefined;
   return { message: err?.message ?? String(error), code: err?.code, name: err?.name, stack: err?.stack, data: err?.data, reason: err?.reason, transaction: err?.transaction, info: err?.info };
@@ -189,7 +210,12 @@ export interface EdgeServerOptions {
 
 
 const DEFAULT_SKILLS = [
-  { id: 'chat.completion', name: 'Chat Completion', version: '1.0.0', description: 'LLM chat via 0G Compute', category: 'AI', tier: 'free' as const, pricePerCallWei: '0', tags: ['ai', 'compute'] },
+  { id: 'chat.completion', name: 'Chat Completion', version: '1.0.0', description: 'LLM chat via 0G Compute', category: 'AI', tier: 'free' as const, pricePerCallWei: '0', tags: ['ai', 'compute'], live: false },
+  { id: 'code.review', name: 'Code Review', version: '1.0.0', description: 'Review code for bugs, style, and clarity with 0G Compute', category: 'Code', tier: 'free' as const, pricePerCallWei: '0', tags: ['code', 'compute'], live: false },
+  { id: 'text.entities', name: 'Text Entities', version: '1.0.0', description: 'Extract named entities with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
+  { id: 'text.sentiment', name: 'Text Sentiment', version: '1.0.0', description: 'Classify sentiment with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
+  { id: 'text.summarize', name: 'Text Summarize', version: '1.0.0', description: 'Summarize text with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
+  { id: 'text.translate', name: 'Text Translate', version: '1.0.0', description: 'Translate text with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
   { id: 'memory.write', name: 'Memory Write', version: '1.0.0', description: 'Persist encrypted memory state to 0G Storage', category: 'Memory', tier: 'free' as const, pricePerCallWei: '0', tags: ['memory', 'storage'] },
   { id: 'memory.read', name: 'Memory Read', version: '1.0.0', description: 'Read agent memory entries', category: 'Memory', tier: 'free' as const, pricePerCallWei: '0', tags: ['memory'] },
   { id: 'memory.search', name: 'Memory Search', version: '1.0.0', description: 'Search prior agent memory entries', category: 'Memory', tier: 'free' as const, pricePerCallWei: '0', tags: ['memory', 'search'] },
@@ -199,6 +225,11 @@ const DEFAULT_SKILLS = [
   { id: 'web.fetch', name: 'Web Fetch', version: '1.0.0', description: 'Fetch and parse a URL', category: 'Web', tier: 'free' as const, pricePerCallWei: '0', tags: ['web'] },
   { id: 'storage.upload', name: 'Storage Upload', version: '1.0.0', description: 'Upload artifacts to 0G Storage', category: 'Storage', tier: 'free' as const, pricePerCallWei: '0', tags: ['storage'] },
 ];
+
+const sortedSkills = (skills: typeof DEFAULT_SKILLS): typeof DEFAULT_SKILLS => [...skills].sort((a, b) => {
+  if (Boolean(a.live) !== Boolean(b.live)) return a.live ? -1 : 1;
+  return a.id.localeCompare(b.id);
+});
 
 const DEFAULT_SERVICES: ServiceRecord[] = [
   { id: '0g-storage', providerAddress: '0x0000000000000000000000000000000000000000', name: '0G Storage', description: 'Decentralized storage roots used for receipt payloads and memory artifacts.', pricePerTokenWei: '0', latencyMs: 900, uptime: 0.995, tags: ['storage', 'aristotle'] },
@@ -2100,10 +2131,146 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
 
   app.get('/v1/skills', { schema: { tags: ['skills'], querystring: z.object({ tier: z.string().optional(), category: z.string().optional() }), response: { 200: z.array(skillManifestSchema) } } }, async (request) => {
     const { tier, category } = z.object({ tier: z.string().optional(), category: z.string().optional() }).parse(request.query);
-    return DEFAULT_SKILLS.filter((skill) =>
+    return sortedSkills(DEFAULT_SKILLS).filter((skill) =>
       (!tier || skill.tier === tier) &&
       (!category || skill.category.toLowerCase() === category.toLowerCase()),
     );
+  });
+
+  app.post('/v1/skills/:skillId/invoke', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: { tags: ['skills'], params: skillInvokeParamsSchema, body: skillInvokeBodySchema },
+  }, async (request, reply) => {
+    const { skillId } = skillInvokeParamsSchema.parse(request.params);
+    const body = skillInvokeBodySchema.parse(request.body);
+    if (!LIVE_SKILL_IDS.has(skillId)) return problem(reply, 404, 'Skill not invokable', `${skillId} does not expose a live invoke endpoint.`);
+
+    const requireString = (key: string, max: number): string | undefined => {
+      const value = body[key];
+      if (typeof value !== 'string' || value.trim().length === 0) return undefined;
+      if (value.length > max) return undefined;
+      return value;
+    };
+
+    let messages: Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }>;
+    let maxTokens: number | undefined;
+    const outputFromText = (text: string): JsonValue => ({ text });
+    let shapeOutput: (text: string) => JsonValue = outputFromText;
+
+    if (skillId === 'chat.completion') {
+      const rawMessages = body['messages'];
+      if (!Array.isArray(rawMessages) || rawMessages.length === 0) return problem(reply, 400, 'Bad Request', 'messages must be a non-empty array');
+      messages = rawMessages.flatMap((raw) => {
+        if (!raw || typeof raw !== 'object') return [];
+        const item = raw as Record<string, unknown>;
+        const role = item['role'];
+        const content = item['content'];
+        if ((role !== 'system' && role !== 'user' && role !== 'assistant' && role !== 'tool') || typeof content !== 'string') return [];
+        return [{ role, content }];
+      });
+      if (messages.length !== rawMessages.length) return problem(reply, 400, 'Bad Request', 'messages contain invalid role/content entries');
+      shapeOutput = (text) => ({ content: text });
+    } else if (skillId === 'text.summarize') {
+      const text = requireString('text', 10_000);
+      if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
+      const rawMaxWords = typeof body['maxWords'] === 'number' ? body['maxWords'] : 80;
+      const maxWords = Math.max(1, Math.min(500, Math.floor(rawMaxWords)));
+      messages = [{ role: 'user', content: `Summarize the following in ${maxWords} words or fewer.\nReturn only the summary text, no preamble or commentary.\n\nTEXT:\n${text}` }];
+      maxTokens = Math.max(64, Math.min(512, maxWords * 3));
+      shapeOutput = (text) => ({ summary: stripWrappingQuotes(text) });
+    } else if (skillId === 'text.translate') {
+      const text = requireString('text', 10_000);
+      const targetLanguage = requireString('targetLanguage', 80);
+      if (!text || !targetLanguage) return problem(reply, 400, 'Bad Request', 'text and targetLanguage are required');
+      messages = [{ role: 'user', content: `Translate the following text to ${targetLanguage}.\nReturn only the translation, no preamble or commentary, no parenthetical notes.\n\nTEXT:\n${text}` }];
+      shapeOutput = (text) => ({ translation: stripWrappingQuotes(text) });
+    } else if (skillId === 'text.sentiment') {
+      const text = requireString('text', 10_000);
+      if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
+      messages = [{ role: 'user', content: `Classify the sentiment of the following text. Respond with ONLY valid JSON in this exact shape — no preamble, no markdown fences, no extra fields:\n{"sentiment":"positive"|"negative"|"neutral","score":<number between 0 and 1>}\n\nTEXT:\n${text}` }];
+      maxTokens = 160;
+      shapeOutput = (text) => {
+        try {
+          const parsed = JSON.parse(stripJsonFences(text)) as { sentiment?: unknown; score?: unknown };
+          const sentiment = parsed.sentiment === 'positive' || parsed.sentiment === 'negative' || parsed.sentiment === 'neutral' ? parsed.sentiment : 'neutral';
+          const scoreNumber = typeof parsed.score === 'number' ? parsed.score : Number(parsed.score);
+          const score = Number.isFinite(scoreNumber) ? Math.min(1, Math.max(0, scoreNumber)) : 0.5;
+          return { sentiment, score };
+        } catch {
+          request.log.warn({ raw: text.slice(0, 500) }, 'text.sentiment.parse_fallback');
+          return { sentiment: 'neutral', score: 0.5 };
+        }
+      };
+    } else if (skillId === 'text.entities') {
+      const text = requireString('text', 10_000);
+      if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
+      messages = [{ role: 'user', content: `Extract named entities from the following text. Respond with ONLY valid JSON in this exact shape — no preamble, no markdown fences, no extra fields:\n{"entities":[{"type":"PERSON"|"PLACE"|"ORG"|"OTHER","value":"<string>"}]}\n\nIf no entities are found, return {"entities":[]}.\n\nTEXT:\n${text}` }];
+      maxTokens = 400;
+      shapeOutput = (text) => {
+        try {
+          const parsed = JSON.parse(stripJsonFences(text)) as { entities?: unknown };
+          const allowed = new Set(['PERSON', 'PLACE', 'ORG', 'OTHER']);
+          const entities = Array.isArray(parsed.entities) ? parsed.entities.flatMap((entry) => {
+            const item = entry as { type?: unknown; value?: unknown };
+            if (!allowed.has(String(item.type)) || typeof item.value !== 'string' || item.value.trim().length === 0) return [];
+            return [{ type: String(item.type), value: item.value.trim() }];
+          }) : [];
+          return { entities };
+        } catch {
+          request.log.warn({ raw: text.slice(0, 500) }, 'text.entities.parse_fallback');
+          return { entities: [] };
+        }
+      };
+    } else {
+      const code = requireString('code', 15_000);
+      if (!code) return problem(reply, 400, 'Bad Request', 'code is required and must be 1-15000 characters');
+      const language = typeof body['language'] === 'string' && body['language'].trim() ? body['language'].trim().slice(0, 80) : 'code';
+      messages = [{ role: 'user', content: `Review the following ${language} for bugs, style issues, and clarity. Return a concise review as 3 to 6 bullet points, each one sentence. No preamble.\n\nCODE:\n${code}` }];
+      maxTokens = 700;
+      shapeOutput = (text) => ({ review: text.trim() });
+    }
+
+    const compute = getPilotComputeClient();
+    if (!compute) return problem(reply, 503, '0G Compute unavailable', '0G Compute client is not configured.');
+    request.log.info({ skillId }, 'skill.invoke.compute.start');
+    const startedAt = Date.now();
+    const computeResult = await compute.chat({ messages, maxTokens });
+    const text = extractComputeText(computeResult).trim();
+    const computeReasoning = (computeResult as { reasoningContent?: string | undefined }).reasoningContent;
+    if (!computeResult.content && computeReasoning && text) request.log.warn({ skillId }, 'skill.invoke.compute.reasoning_fallback');
+    const output = shapeOutput(text);
+    const latencyMs = Date.now() - startedAt;
+    const receiptNonce = randomUUID();
+    const payload = { skillId, input: body, output, chatId: computeResult.chatId, tokensUsed: computeResult.tokenUsage, model: computeResult.model, provider: computeResult.provider };
+
+    request.log.info({ skillId, latencyMs, chatId: computeResult.chatId }, 'skill.invoke.compute.success');
+    void (async () => {
+      let storageRoot: string | undefined;
+      let storageTxHash: string | undefined;
+      try {
+        const payloadBytes = new TextEncoder().encode(bigintSafeJson(payload));
+        const storageClient = options.storageClient as StorageClientWithBytes;
+        if (typeof storageClient.uploadBytes !== 'function') throw new Error('storage client does not expose uploadBytes');
+        const upload = await storageClient.uploadBytes(payloadBytes);
+        storageRoot = upload.rootHash;
+        storageTxHash = upload.txHash || undefined;
+        request.log.info({ skillId, rootHash: storageRoot, txHash: storageTxHash, bytes: payloadBytes.byteLength }, 'skill.invoke.storage.uploaded');
+      } catch (error) {
+        request.log.warn({ skillId, err: logErrorFields(error) }, 'skill.invoke.storage.upload_failed');
+      }
+      request.log.info({ skillId }, 'skill.invoke.mint.attempted');
+      const minted = await stack.receiptMinter.mint({
+        agentId: 0n,
+        actionTag: skillId,
+        payload,
+        storageRoot,
+        valueWei: 0n,
+        clientReceiptId: `skill:${skillId}:${receiptNonce}`,
+      });
+      request.log.info({ skillId, receiptId: minted.receiptId, txHash: minted.txHash }, 'skill.invoke.mint.confirmed');
+    })().catch((error) => request.log.error({ skillId, err: logErrorFields(error) }, 'skill.invoke.receipt_mint_failed'));
+
+    return { skillId, output, compute: { chatId: computeResult.chatId, model: computeResult.model, provider: computeResult.provider }, latencyMs };
   });
 
   app.post('/v1/services', { schema: { tags: ['services'], body: serviceBodySchema, response: { 200: serviceSchema } } }, async (request, reply) => {
