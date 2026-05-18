@@ -2575,8 +2575,14 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     };
 
     const mintPilotReceipt = (cancelled: boolean): void => {
-      if (!address) return;
-      if (cancelled && tokenCount === 0) return;
+      if (!address) {
+        request.log.warn({ decision: 'mint-skipped', reason: 'no-authenticated-address', tokenCount, cancelled, address, tier: usedTier }, 'pilot.chat.mint.skipped');
+        return;
+      }
+      if (cancelled && tokenCount === 0) {
+        request.log.warn({ decision: 'mint-skipped', reason: 'cancelled-without-tokens', tokenCount, cancelled, address, tier: usedTier }, 'pilot.chat.mint.skipped');
+        return;
+      }
       const payload = {
         user: address,
         messageCount: body.messages.length,
@@ -2602,6 +2608,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         } catch (error) {
           request.log.warn({ err: logErrorFields(error), phase: 'pilot-storage.failed' }, 'pilot.chat.storage.upload_failed');
         }
+        request.log.info({ decision: 'about-to-mint', tokenCount, cancelled, address, tier: usedTier, hasComputeMetadata: !!computeMetadata }, 'pilot.chat.mint.decision');
         await stack.receiptMinter.mint({
           // ReceiptBook does not validate agentId and existing EscrowVault receipts use 0,
           // so Pilot uses 0 as a documented system/sentinel id rather than a real agent iNFT.
