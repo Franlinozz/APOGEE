@@ -478,6 +478,20 @@ const newId = (prefix: string): string => `${prefix}_${Date.now().toString(36)}_
 const bigintFrom = (value: string | number | bigint | undefined): bigint | undefined => value === undefined ? undefined : typeof value === 'bigint' ? value : BigInt(value);
 const json = (value: unknown): JsonValue => JSON.parse(JSON.stringify(value)) as JsonValue;
 const bytes32From = (value: string): string => /^0x[a-fA-F0-9]{64}$/.test(value) ? value : `0x${createHash('sha256').update(value).digest('hex')}`;
+const errorDetails = (error: unknown): Record<string, unknown> => {
+  if (error instanceof Error) {
+    const details: Record<string, unknown> = {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+    if ('code' in error) details.code = (error as { code?: unknown }).code;
+    if ('cause' in error) details.cause = errorDetails((error as { cause?: unknown }).cause);
+    for (const key of Object.keys(error)) details[key] = (error as unknown as Record<string, unknown>)[key];
+    return details;
+  }
+  return { value: error };
+};
 
 const problem = (reply: FastifyReply, status: number, title: string, detail: string): FastifyReply => {
   reply.status(status).type('application/problem+json').send({ type: 'about:blank', title, status, detail });
@@ -2678,7 +2692,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
           await runComputeTier();
         } catch (error) {
           fallbackError = error;
-          request.log.warn({ error, address, tier: 'compute' }, 'pilot.chat.tier_failed');
+          request.log.warn({ error, errorMessage: error instanceof Error ? error.message : String(error), errorDetails: errorDetails(error), address, tier: 'compute' }, 'pilot.chat.tier_failed');
           if (tokenCount > 0 || clientClosed) throw error;
         }
       } else {
