@@ -162,3 +162,9 @@ Pilot now follows the same lower-level storage upload path before minting. The P
 Also fixed: `ReceiptMinter`'s local fallback `stableJson` serializer now handles bigint values, preventing the previous `Do not know how to serialize a BigInt` crash from masking storage failures.
 
 Future ship: root-cause whether ReceiptMinter should own storage upload for all callers or whether every caller should pre-upload through one tested path; then remove the divergent/brittle internal upload path or make its configuration impossible to drift.
+
+## 2026-05-18 — Apogee Pilot chat receipts via service wallet identity
+
+Apogee Pilot chat receipts now use `PILOT_AGENT_PRIVATE_KEY` as the dedicated server-side Pilot service wallet identity for unauthenticated widget requests. This mirrors the production heartbeat pattern used by Aurora/Vesper/Helix: the route supplies a server-side agent identity for receipt payloads while the existing authorised Edge receipt relayer submits `ReceiptBook.emitReceipt` on-chain.
+
+The indexed receipt action label is `pilot.chat`; on-chain ReceiptBook still receives a bytes4 action tag derived from the label's first four bytes (`pilo`) because the deployed contract stores `bytes4`. User-wallet-bound Pilot receipts remain a v2 enhancement.

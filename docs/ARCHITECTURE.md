@@ -64,7 +64,7 @@ Edge serves Pilot with a three-tier inference strategy:
 2. **HTTP LLM fallback** — existing `PILOT_LLM_BASE_URL` / `PILOT_LLM_API_KEY` OpenAI-compatible stream, also used when `APOGEE_PILOT_USE_COMPUTE=false`.
 3. **Simulated fallback** — deterministic `simulatePilotTokens()` responses when both live inference paths are unavailable.
 
-Every completed authenticated Pilot chat mints a non-blocking ReceiptBook receipt with action tag `PILO` (explicit bytes4 convention for Pilot chat). Pilot is not an agent iNFT, so receipts use `agentId=0` as a system sentinel; `ReceiptBook.emitReceipt` permits this and existing system contracts already emit `agentId=0` receipts. If a client cancels after tokens have streamed, Edge mints the same receipt payload with `cancelled: true`; zero-token aborts do not mint. Conversation history remains bounded in-memory LRU state on Edge and no Prisma migration is used for Ship 1.
+Every completed Pilot chat can mint a non-blocking ReceiptBook receipt with indexed action label `pilot.chat` (encoded as bytes4 `pilo` on-chain). Authenticated requests use the user wallet address in the receipt payload; unauthenticated widget requests use the configured `PILOT_AGENT_PRIVATE_KEY` service wallet identity. Pilot is not an agent iNFT, so receipts use `agentId=0` as a system sentinel; `ReceiptBook.emitReceipt` permits this and existing system contracts already emit `agentId=0` receipts. If a client cancels after tokens have streamed, Edge mints the same receipt payload with `cancelled: true`; zero-token aborts do not mint. Conversation history remains bounded in-memory LRU state on Edge and no Prisma migration is used for Ship 1.
 
 ### 2.2 Heartbeat Loop (Aurora — every 10 min)
 

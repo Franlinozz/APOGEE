@@ -29,6 +29,7 @@
 
 ## Recently shipped
 
+- **May 18, 2026** — Apogee Pilot chat now mints receipts on-chain.
 - **May 17, 2026** — Apogee Pilot full-page experience live at `/apogee-pilot`, streaming via 0G Compute, with on-chain receipts.
 
 ---

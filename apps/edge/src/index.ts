@@ -8,7 +8,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod';
-import { Contract, JsonRpcProvider, TypedDataEncoder, getAddress, keccak256, toUtf8Bytes, verifyTypedData } from 'ethers';
+import { Contract, JsonRpcProvider, TypedDataEncoder, Wallet, getAddress, keccak256, toUtf8Bytes, verifyTypedData } from 'ethers';
 import { Redis, type Redis as RedisClient } from 'ioredis';
 import { ChainClient } from '@apogee/chain-client';
 import { ComputeClient, type ChatStreamChunk, type ComputeMetadata } from '@apogee/compute-client';
@@ -127,7 +127,7 @@ type DeployNonceRecord = { ownerLower: string; nonce: string; deadline: number; 
 type OnboardingRecord = { key: string; chainId: number; tokenId: string; stages: Record<string, boolean>; status: 'pending' | 'running' | 'complete' | 'failed'; attempts: number; error?: string | undefined; updatedAt: string };
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
-const PILOT_CHAT_ACTION_TAG = 'PILO'; // bytes4 action tag for Apogee Pilot chat receipts.
+const PILOT_CHAT_ACTION_TAG = 'pilot.chat'; // indexed action label; on-chain bytes4 encodes the first four bytes ('pilo').
 const logErrorFields = (error: unknown): Record<string, unknown> => {
   const err = error as { message?: unknown; code?: unknown; name?: unknown; stack?: unknown; data?: unknown; reason?: unknown; transaction?: unknown; info?: unknown } | null | undefined;
   return { message: err?.message ?? String(error), code: err?.code, name: err?.name, stack: err?.stack, data: err?.data, reason: err?.reason, transaction: err?.transaction, info: err?.info };
@@ -181,6 +181,7 @@ export interface EdgeServerOptions {
   // Key used exclusively for onlyOwner calls (identity.mint, router.setAgentAccount).
   // If absent, provisionAgentOnChain will abort with a clear authorization error.
   agentDeployerKey?: string | undefined;
+  pilotReceiptAddress?: string | undefined;
   jwtSecret?: string | undefined;
   corsOrigin?: boolean | string | RegExp | Array<string | RegExp> | undefined;
   logger?: FastifyBaseLogger | undefined;
@@ -2575,10 +2576,19 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
     };
 
     const mintPilotReceipt = (cancelled: boolean): void => {
-      if (!address) return;
-      if (cancelled && tokenCount === 0) return;
+      const receiptAddress = address ?? options.pilotReceiptAddress;
+      if (!receiptAddress) {
+        request.log.warn({ decision: 'mint-skipped', reason: 'no-authenticated-address', tokenCount, cancelled, address, tier: usedTier }, 'pilot.chat.mint.skipped');
+        return;
+      }
+      if (cancelled && tokenCount === 0) {
+        request.log.warn({ decision: 'mint-skipped', reason: 'cancelled-without-tokens', tokenCount, cancelled, address: receiptAddress, tier: usedTier }, 'pilot.chat.mint.skipped');
+        return;
+      }
+      const signerSuffix = options.pilotReceiptAddress ? options.pilotReceiptAddress.slice(-4) : undefined;
+      if (signerSuffix) request.log.info({ signerSuffix, tokenCount }, 'pilot.chat.mint.attempted');
       const payload = {
-        user: address,
+        user: receiptAddress,
         messageCount: body.messages.length,
         tier: usedTier,
         chatId: computeMetadata?.chatId ?? (usedTier === 'compute' ? undefined : chatId),
@@ -2947,6 +2957,16 @@ export async function startFromEnv(): Promise<FastifyInstance> {
   // (AgentIdentity.mint, PaymentRouter.setAgentAccount). If absent, agent provisioning
   // will fail with a clear auth error instead of a raw estimateGas revert.
   const agentDeployerKey = process.env.AGENT_DEPLOYER_PRIVATE_KEY || undefined;
+  const pilotAgentPrivateKey = process.env.PILOT_AGENT_PRIVATE_KEY?.trim() || undefined;
+  let pilotReceiptAddress: string | undefined;
+  if (pilotAgentPrivateKey) {
+    try {
+      pilotReceiptAddress = new Wallet(pilotAgentPrivateKey).address;
+      console.info('[edge] startFromEnv pilotReceiptAddress=*%s (PILOT_AGENT_PRIVATE_KEY set)', pilotReceiptAddress.slice(-4));
+    } catch {
+      console.warn('[edge] startFromEnv PILOT_AGENT_PRIVATE_KEY is invalid — pilot guest receipt minting will remain disabled');
+    }
+  }
 
   // Log deployer address (never the key itself) so ops can verify authorization.
   if (agentDeployerKey) {
@@ -2962,7 +2982,7 @@ export async function startFromEnv(): Promise<FastifyInstance> {
 
   const chainClient = new ChainClient({ rpcUrl, chainId: 16661, signerKey }) as unknown as BillingChainClient & { verifyMessage(message: string, signature: string): string };
   const storageClient = new StorageClient({ rpcUrl, indexerUrl: storageIndexerUrl, signerKey }) as StorageClientWithBytes;
-  const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16661, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, agentDeployerKey, jwtSecret: process.env.EDGE_JWT_SECRET });
+  const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16661, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, agentDeployerKey, pilotReceiptAddress, jwtSecret: process.env.EDGE_JWT_SECRET });
   await app.listen({ port: Number(process.env.PORT ?? 8080), host: '0.0.0.0' });
   return app;
 }
