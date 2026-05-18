@@ -21,6 +21,7 @@
     "deploy:aristotle": "pnpm -F @apogee/contracts deploy:aristotle",
     "seed:demo-agents:mainnet": "pnpm -F @apogee/contracts seed:demo-agents",
     "seed:demo-agents:testnet": "pnpm -F @apogee/contracts seed:demo-agents:testnet",
+    "init:compute-ledger": "pnpm --dir packages/contracts exec sh -c 'cd ../.. && ts-node --esm scripts/init-compute-ledger.ts'",
     "runtime:start": "pnpm -F @apogee/runtime build && pm2 start apps/runtime/dist/index.js --name apogee-runtime",
     "smoke:production": "node scripts/smoke-production.mjs"
   },
