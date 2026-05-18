@@ -126,6 +126,7 @@ export class LocalReceiptEventBus implements ReceiptEventBus {
 
 const stableJson = (value: unknown): string => {
   if (value === undefined) return 'null';
+  if (typeof value === 'bigint') return JSON.stringify(value.toString());
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   const record = value as Record<string, unknown>;

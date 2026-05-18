@@ -132,6 +132,7 @@ const logErrorFields = (error: unknown): Record<string, unknown> => {
   const err = error as { message?: unknown; code?: unknown; name?: unknown; stack?: unknown; data?: unknown; reason?: unknown; transaction?: unknown; info?: unknown } | null | undefined;
   return { message: err?.message ?? String(error), code: err?.code, name: err?.name, stack: err?.stack, data: err?.data, reason: err?.reason, transaction: err?.transaction, info: err?.info };
 };
+const bigintSafeJson = (value: unknown): string => JSON.stringify(value, (_key, v: unknown) => typeof v === 'bigint' ? v.toString() : v);
 const PILOT_SYSTEM_PROMPT = `You are Apogee Pilot, a precise technical guide to Apogee Protocol —
 the autonomous-agent runtime on 0G. You explain:
 - Apogee architecture: 9 contracts on 0G Aristotle mainnet (AgentAccount,
@@ -159,6 +160,7 @@ type PaymentRouterAdminContract = { setAgentAccount(agentId: bigint, account: st
 type AgentIdentityReadContract = { nextTokenId(): Promise<bigint>; ownerOf(tokenId: bigint): Promise<string> };
 type PaymentRouterReadContract = { agentAccounts(tokenId: bigint): Promise<string> };
 type ReceiptBookReadContract = { nextReceiptId(): Promise<bigint>; receipts(receiptId: bigint): Promise<{ receiptId: bigint; agentId: bigint; actionTag: string; payloadHash: string; storageRoot: string; valueWei: bigint; timestamp: bigint } | [bigint, bigint, string, string, string, bigint, bigint]> };
+type StorageClientWithBytes = StorageBoundary & { uploadBytes(data: Uint8Array): Promise<{ rootHash: string; txHash: string; size: number }> };
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -2586,15 +2588,31 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         providerSig: computeMetadata?.providerSig,
         cancelled,
       };
-      void stack.receiptMinter.mint({
-        // ReceiptBook does not validate agentId and existing EscrowVault receipts use 0,
-        // so Pilot uses 0 as a documented system/sentinel id rather than a real agent iNFT.
-        agentId: 0n,
-        actionTag: PILOT_CHAT_ACTION_TAG,
-        payload,
-        valueWei: 0n,
-        clientReceiptId: `pilot-${address}-${receiptNonce}`,
-      }).catch((error) => request.log.error({ err: logErrorFields(error), address, tier: usedTier }, 'pilot.chat.receipt_mint_failed'));
+      void (async () => {
+        let pilotStorageRoot: string | undefined;
+        let pilotStorageTxHash: string | undefined;
+        try {
+          const payloadBytes = new TextEncoder().encode(bigintSafeJson(payload));
+          const storageClient = options.storageClient as StorageClientWithBytes;
+          if (typeof storageClient.uploadBytes !== 'function') throw new Error('storage client does not expose uploadBytes');
+          const upload = await storageClient.uploadBytes(payloadBytes);
+          pilotStorageRoot = upload.rootHash;
+          pilotStorageTxHash = upload.txHash || undefined;
+          request.log.info({ phase: 'pilot-storage.success', rootHash: pilotStorageRoot, txHash: pilotStorageTxHash, bytes: payloadBytes.byteLength }, 'pilot.chat.storage.uploaded');
+        } catch (error) {
+          request.log.warn({ err: logErrorFields(error), phase: 'pilot-storage.failed' }, 'pilot.chat.storage.upload_failed');
+        }
+        await stack.receiptMinter.mint({
+          // ReceiptBook does not validate agentId and existing EscrowVault receipts use 0,
+          // so Pilot uses 0 as a documented system/sentinel id rather than a real agent iNFT.
+          agentId: 0n,
+          actionTag: PILOT_CHAT_ACTION_TAG,
+          payload,
+          storageRoot: pilotStorageRoot,
+          valueWei: 0n,
+          clientReceiptId: `pilot-${address}-${receiptNonce}`,
+        });
+      })().catch((error) => request.log.error({ err: logErrorFields(error), address, tier: usedTier }, 'pilot.chat.receipt_mint_failed'));
     };
 
     async function runComputeTier(): Promise<void> {
@@ -2901,7 +2919,7 @@ export async function startFromEnv(): Promise<FastifyInstance> {
   // Always use Aristotle mainnet (16661) — contracts are deployed there, not Galileo (16602).
   const rpcUrl = process.env.ZERO_G_ARISTOTLE_RPC_URL ?? 'https://evmrpc.0g.ai';
   const signerKey = process.env.EDGE_SERVICE_PRIVATE_KEY;
-  const storageIndexerUrl = process.env.ZERO_G_STORAGE_INDEXER_URL ?? 'https://indexer-storage-testnet-turbo.0g.ai';
+  const storageIndexerUrl = process.env.ZERO_G_STORAGE_INDEXER_URL ?? 'https://indexer-storage-turbo.0g.ai';
 
   const rawPaymentRouter   = process.env.PAYMENT_ROUTER_ADDRESS;
   const rawReceiptBook     = process.env.RECEIPT_BOOK_ADDRESS;
@@ -2943,7 +2961,7 @@ export async function startFromEnv(): Promise<FastifyInstance> {
     rpcUrl, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress);
 
   const chainClient = new ChainClient({ rpcUrl, chainId: 16661, signerKey }) as unknown as BillingChainClient & { verifyMessage(message: string, signature: string): string };
-  const storageClient = new StorageClient({ rpcUrl, indexerUrl: storageIndexerUrl, signerKey }) as StorageBoundary;
+  const storageClient = new StorageClient({ rpcUrl, indexerUrl: storageIndexerUrl, signerKey }) as StorageClientWithBytes;
   const app = buildEdgeServer({ chainClient, storageClient, signerKey, chainId: 16661, paymentRouterAddress, receiptBookAddress, accountFactoryAddress, agentIdentityAddress, agentDeployerKey, jwtSecret: process.env.EDGE_JWT_SECRET });
   await app.listen({ port: Number(process.env.PORT ?? 8080), host: '0.0.0.0' });
   return app;
