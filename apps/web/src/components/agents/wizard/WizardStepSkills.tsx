@@ -14,12 +14,12 @@ interface Props {
 }
 
 const FREE_SKILLS: SkillManifest[] = [
-  { id: 'chat.completion', name: 'Chat Completion', version: '1.0.0', description: 'LLM chat via 0G Compute', category: 'AI', tier: 'free', pricePerCallWei: '0', tags: ['ai', 'compute'], live: false },
-  { id: 'code.review', name: 'Code Review', version: '1.0.0', description: 'Review code for bugs, style, and clarity with 0G Compute', category: 'Code', tier: 'free', pricePerCallWei: '0', tags: ['code', 'compute'], live: false },
-  { id: 'text.entities', name: 'Text Entities', version: '1.0.0', description: 'Extract named entities with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
-  { id: 'text.sentiment', name: 'Text Sentiment', version: '1.0.0', description: 'Classify sentiment with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
-  { id: 'text.summarize', name: 'Text Summarize', version: '1.0.0', description: 'Summarize text with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
-  { id: 'text.translate', name: 'Text Translate', version: '1.0.0', description: 'Translate text with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
+  { id: 'chat.completion', name: 'Chat Completion', version: '1.0.0', description: 'LLM chat via 0G Compute', category: 'AI', tier: 'free', pricePerCallWei: '0', tags: ['ai', 'compute'], live: true },
+  { id: 'code.review', name: 'Code Review', version: '1.0.0', description: 'Review code for bugs, style, and clarity with 0G Compute', category: 'Code', tier: 'free', pricePerCallWei: '0', tags: ['code', 'compute'], live: true },
+  { id: 'text.entities', name: 'Text Entities', version: '1.0.0', description: 'Extract named entities with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
+  { id: 'text.sentiment', name: 'Text Sentiment', version: '1.0.0', description: 'Classify sentiment with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
+  { id: 'text.summarize', name: 'Text Summarize', version: '1.0.0', description: 'Summarize text with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
+  { id: 'text.translate', name: 'Text Translate', version: '1.0.0', description: 'Translate text with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
   { id: 'memory.write', name: 'Memory Write', version: '1.0.0', description: 'Persist encrypted memory', category: 'Memory', tier: 'free', pricePerCallWei: '0', tags: [] },
   { id: 'memory.read', name: 'Memory Read', version: '1.0.0', description: 'Read encrypted memory', category: 'Memory', tier: 'free', pricePerCallWei: '0', tags: [] },
   { id: 'memory.search', name: 'Memory Search', version: '1.0.0', description: 'Semantic memory search', category: 'Memory', tier: 'free', pricePerCallWei: '0', tags: [] },
