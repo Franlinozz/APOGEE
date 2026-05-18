@@ -152,3 +152,13 @@
 - Edge Pilot now attempts 0G Compute first, falls back to `PILOT_LLM_BASE_URL`/`PILOT_LLM_API_KEY`, then falls back to simulated responses; each attempted/used tier logs `pilot.chat.tier`.
 - Pilot chat receipts use action tag `PILO` and `agentId=0` as the documented system sentinel because `ReceiptBook.emitReceipt` does not require a minted agent id and existing system contracts already emit agent-zero receipts.
 - No Prisma migration was added; Pilot conversation state remains bounded in-memory LRU state on Edge.
+
+## 2026-05-18 — PILO receipts: mirror Aurora's storage upload path
+
+Phase 1 diagnostic showed ReceiptMinter's internal storage upload on the Edge service failed on Aristotle mainnet with `market() BAD_DATA` because Edge's default storage indexer differed from the Runtime heartbeat path. Aurora heartbeats mint non-zero storage roots through `apps/runtime/src/heartbeats.ts`, which calls `ReceiptMinter.mint()` backed by `StorageClient.uploadJson()` / `uploadBytes()` from `packages/storage-client/src/index.ts` and the Runtime default indexer `https://indexer-storage-turbo.0g.ai`.
+
+Pilot now follows the same lower-level storage upload path before minting. The Pilot route serializes the final audit payload with bigint-safe JSON, uploads it through `StorageClient.uploadBytes()`, logs the returned `rootHash` and storage `txHash`, and passes that root as `storageRoot` to `ReceiptMinter.mint()`. PILO receipts therefore have real 0G Storage roots, identical in shape to heartbeat receipts.
+
+Also fixed: `ReceiptMinter`'s local fallback `stableJson` serializer now handles bigint values, preventing the previous `Do not know how to serialize a BigInt` crash from masking storage failures.
+
+Future ship: root-cause whether ReceiptMinter should own storage upload for all callers or whether every caller should pre-upload through one tested path; then remove the divergent/brittle internal upload path or make its configuration impossible to drift.

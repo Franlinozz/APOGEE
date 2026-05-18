@@ -72,6 +72,12 @@ describe('billing prompt 4', () => {
     await expect(minter.mint({ agentId: '1', actionTag: 'TEST', payload: { ok: true } })).resolves.toMatchObject({ status: 'minted' });
   });
 
+  it('serializes bigint payloads in the local fallback path', async () => {
+    const storage = { uploadJson: async () => { throw new Error('offline'); } } satisfies StorageBoundary;
+    const minter = new ReceiptMinter({ storageClient: storage, chainClient: new FakeChain(), receiptBookAddress: address, fallbackDir: '.tmp-test-receipts' });
+    await expect(minter.mint({ agentId: '1', actionTag: 'TEST', payload: { amount: 1n, nested: { value: 2n } } })).resolves.toMatchObject({ status: 'minted' });
+  });
+
   it('publishes receipt events', async () => {
     const bus = new LocalReceiptEventBus();
     let seen = false;

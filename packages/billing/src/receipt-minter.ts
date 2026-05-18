@@ -126,6 +126,7 @@ export class LocalReceiptEventBus implements ReceiptEventBus {
 
 const stableJson = (value: unknown): string => {
   if (value === undefined) return 'null';
+  if (typeof value === 'bigint') return JSON.stringify(value.toString());
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   const record = value as Record<string, unknown>;
@@ -146,6 +147,25 @@ const tagToBytes4 = (tag: string): string => {
   const bytes = toUtf8Bytes(tag.slice(0, 4));
   return zeroPadValue(`0x${Buffer.from(bytes).toString('hex')}`, 4);
 };
+
+const receiptErrorDetails = (error: unknown): Record<string, unknown> => {
+  const err = error as { message?: unknown; code?: unknown; name?: unknown; stack?: unknown; data?: unknown; reason?: unknown; transaction?: unknown; info?: unknown; shortMessage?: unknown; action?: unknown; receipt?: unknown } | null | undefined;
+  return {
+    message: err?.message ?? String(error),
+    code: err?.code,
+    name: err?.name,
+    stack: err?.stack,
+    data: err?.data,
+    reason: err?.reason,
+    transaction: err?.transaction,
+    info: err?.info,
+    shortMessage: err?.shortMessage,
+    action: err?.action,
+    receipt: err?.receipt,
+  };
+};
+
+const receiptLogBase = (agentId: bigint | number | string, actionTag: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({ agentId: String(agentId), actionTag, ...extra });
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const lockToken = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -212,6 +232,9 @@ export class ReceiptMinter {
     await prev;
     try {
       return await this.withDistributedTxLock('ReceiptBook.emitReceipt', (lockWaitMs) => this.mintLocked(parsed, lockWaitMs));
+    } catch (error) {
+      this.logger.error({ err: receiptErrorDetails(error), phase: 'mint', agentId: String(parsed.agentId), actionTag: parsed.actionTag }, 'receipt_mint.error.mint');
+      throw error;
     } finally {
       release();
     }
@@ -275,18 +298,21 @@ export class ReceiptMinter {
     const effectiveStorageRoot = storageRoot.startsWith('local://') ? payloadHash : storageRoot;
 
     this.logger.info({ event: 'receipt.mint.submit', receiptId, agentId: String(parsed.agentId), actionTag: parsed.actionTag, storageRoot: effectiveStorageRoot, isLocalFallback: storageRoot.startsWith('local://') }, 'Submitting receipt on-chain');
+    this.logger.info(receiptLogBase(parsed.agentId, parsed.actionTag, { phase: 'final-emit.start', receiptId, payloadHash, storageRoot: effectiveStorageRoot, valueWei: valueWei.toString() }), 'receipt_mint.progress');
 
     let receipt: TransactionReceipt;
     try {
       receipt = await this.submitReceiptWithRetry(BigInt(parsed.agentId), tagToBytes4(parsed.actionTag), payloadHash, asBytes32(effectiveStorageRoot), valueWei, lockWaitMs);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      this.logger.error({ err: receiptErrorDetails(error), phase: 'final-emit', receiptId, agentId: String(parsed.agentId), actionTag: parsed.actionTag }, 'receipt_mint.error.final-emit');
       this.logger.error({ event: 'receipt.mint.failed', receiptId, agentId: String(parsed.agentId), actionTag: parsed.actionTag, error: message }, 'Receipt chain submission failed');
       await this.index.update(receiptId, { status: 'failed', storageRoot: effectiveStorageRoot, storageTxHash, error: message });
       this.eventBus.publish('receipt', { ...row, storageRoot: effectiveStorageRoot, storageTxHash, status: 'failed', error: message });
       throw error;
     }
     const txHash = receipt.hash;
+    this.logger.info(receiptLogBase(parsed.agentId, parsed.actionTag, { phase: 'final-emit.success', receiptId, txHash }), 'receipt_mint.progress');
     this.logger.info({ event: 'receipt.mint.confirmed', receiptId, agentId: String(parsed.agentId), actionTag: parsed.actionTag, txHash, gasUsed: receipt.gasUsed?.toString() }, 'Receipt minted on-chain');
     await this.index.update(receiptId, { txHash, storageRoot: effectiveStorageRoot, storageTxHash, status: 'minted' });
 
@@ -324,28 +350,19 @@ export class ReceiptMinter {
     receiptId: string,
     action: ReturnType<typeof mintSchema.parse>,
   ): Promise<StorageUploadResult> {
+    this.logger.info(receiptLogBase(action.agentId, action.actionTag, { phase: 'storage-upload.start', receiptId }), 'receipt_mint.progress');
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const upload = await this.options.storageClient.uploadJson(action.payload);
+        this.logger.info(receiptLogBase(action.agentId, action.actionTag, { phase: 'storage-upload.success', receiptId, root: upload.rootHash, txHash: upload.txHash, attempt }), 'receipt_mint.progress');
         this.logger.debug({ receiptId, agentId: String(action.agentId), actionTag: action.actionTag, rootHash: upload.rootHash, txHash: upload.txHash }, '0G storage upload succeeded');
         return { rootHash: upload.rootHash, txHash: upload.txHash, isLocalFallback: false };
       } catch (error) {
-        const err = error as Error & { code?: unknown; reason?: unknown; info?: unknown };
-        this.logger.warn({
-          attempt,
-          receiptId,
-          agentId: String(action.agentId),
-          actionTag: action.actionTag,
-          errorName: err?.name,
-          errorMessage: err?.message ?? String(error),
-          errorCode: err?.code,
-          errorReason: err?.reason,
-          errorInfo: err?.info,
-          errorStack: err?.stack?.split('\n').slice(0, 4).join(' | '),
-        }, '0G storage upload failed');
+        this.logger.error({ err: receiptErrorDetails(error), phase: 'storage-upload', receiptId, agentId: String(action.agentId), actionTag: action.actionTag, attempt }, 'receipt_mint.error.storage-upload');
         await sleep(250 * (attempt + 1));
       }
     }
+    this.logger.info(receiptLogBase(action.agentId, action.actionTag, { phase: 'fallback.start', receiptId }), 'receipt_mint.progress');
     this.logger.error({
       receiptId,
       agentId: String(action.agentId),
@@ -353,7 +370,12 @@ export class ReceiptMinter {
     }, '0G storage upload exhausted all 3 retries — writing local fallback and anchoring payloadHash on-chain');
     await mkdir(this.fallbackDir, { recursive: true });
     const localPath = join(this.fallbackDir, `${receiptId}.json`);
-    await writeFile(localPath, stableJson({ receiptId, createdAt: new Date().toISOString(), action: { ...action, valueWei: action.valueWei?.toString() } }));
+    try {
+      await writeFile(localPath, stableJson({ receiptId, createdAt: new Date().toISOString(), action: { ...action, valueWei: action.valueWei?.toString() } }));
+    } catch (error) {
+      this.logger.error({ err: receiptErrorDetails(error), phase: 'fallback-write', receiptId, agentId: String(action.agentId), actionTag: action.actionTag }, 'receipt_mint.error.fallback-write');
+      throw error;
+    }
     return { rootHash: `local://${localPath}`, txHash: '', isLocalFallback: true };
   }
 
@@ -379,7 +401,7 @@ export class ReceiptMinter {
         return receipt;
       } catch (error) {
         lastError = error;
-        this.logger.warn({ attempt, lockWaitMs, error }, 'receipt chain submission failed');
+        this.logger.error({ err: receiptErrorDetails(error), phase: 'final-emit-attempt', agentId: agentId.toString(), actionTag, attempt, lockWaitMs }, 'receipt_mint.error.final-emit-attempt');
         await sleep(500 * (attempt + 1));
       }
     }
