@@ -35,6 +35,12 @@ export const premiumSkills = [
 ] as const;
 
 export function registerPremiumSkills(registry = new SkillRegistry()): SkillRegistry {
-  for (const [manifest, handler] of premiumSkills) registry.register(manifest, handler);
+  for (const [manifest, handler] of premiumSkills) {
+    try {
+      registry.register(manifest, handler);
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('already registered')) throw error;
+    }
+  }
   return registry;
 }

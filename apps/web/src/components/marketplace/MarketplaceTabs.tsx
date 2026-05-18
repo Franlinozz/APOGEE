@@ -132,9 +132,16 @@ function SkillCard({ skill }: { skill: SkillManifest }) {
           <p className="font-medium text-sm text-fg">{skill.name}</p>
           <p className="mt-0.5 font-mono text-xs text-fg-faint">{skill.id}</p>
         </div>
-        <Badge variant={skill.tier === 'premium' ? 'warning' : 'success'} className="capitalize shrink-0">
-          {skill.tier}
-        </Badge>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {skill.live && (
+            <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-success">
+              Live
+            </span>
+          )}
+          <Badge variant={skill.tier === 'premium' ? 'warning' : 'success'} className="capitalize">
+            {skill.tier}
+          </Badge>
+        </div>
       </div>
       <p className="flex-1 text-xs text-fg-muted leading-relaxed">{skill.description}</p>
       <div className="mt-4 flex items-center justify-between">

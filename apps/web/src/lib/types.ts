@@ -97,6 +97,7 @@ export interface SkillManifest {
   pricePerCallWei: string;
   authorAddress?: string;
   tags: string[];
+  live?: boolean;
 }
 
 export interface ServiceListing {

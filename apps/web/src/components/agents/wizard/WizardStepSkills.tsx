@@ -14,7 +14,12 @@ interface Props {
 }
 
 const FREE_SKILLS: SkillManifest[] = [
-  { id: 'chat.completion', name: 'Chat Completion', version: '1.0.0', description: 'LLM chat via 0G Compute', category: 'AI', tier: 'free', pricePerCallWei: '0', tags: [] },
+  { id: 'chat.completion', name: 'Chat Completion', version: '1.0.0', description: 'LLM chat via 0G Compute', category: 'AI', tier: 'free', pricePerCallWei: '0', tags: ['ai', 'compute'], live: false },
+  { id: 'code.review', name: 'Code Review', version: '1.0.0', description: 'Review code for bugs, style, and clarity with 0G Compute', category: 'Code', tier: 'free', pricePerCallWei: '0', tags: ['code', 'compute'], live: false },
+  { id: 'text.entities', name: 'Text Entities', version: '1.0.0', description: 'Extract named entities with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
+  { id: 'text.sentiment', name: 'Text Sentiment', version: '1.0.0', description: 'Classify sentiment with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
+  { id: 'text.summarize', name: 'Text Summarize', version: '1.0.0', description: 'Summarize text with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
+  { id: 'text.translate', name: 'Text Translate', version: '1.0.0', description: 'Translate text with 0G Compute', category: 'Text', tier: 'free', pricePerCallWei: '0', tags: ['text', 'compute'], live: false },
   { id: 'memory.write', name: 'Memory Write', version: '1.0.0', description: 'Persist encrypted memory', category: 'Memory', tier: 'free', pricePerCallWei: '0', tags: [] },
   { id: 'memory.read', name: 'Memory Read', version: '1.0.0', description: 'Read encrypted memory', category: 'Memory', tier: 'free', pricePerCallWei: '0', tags: [] },
   { id: 'memory.search', name: 'Memory Search', version: '1.0.0', description: 'Semantic memory search', category: 'Memory', tier: 'free', pricePerCallWei: '0', tags: [] },
@@ -85,7 +90,14 @@ export function WizardStepSkills({ value, policy, onChange, onBack, onNext }: Pr
                 ].join(' ')}
               >
                 <div>
-                  <p className={`text-sm font-medium ${selected ? 'text-accent' : 'text-fg'}`}>{skill.name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className={`text-sm font-medium ${selected ? 'text-accent' : 'text-fg'}`}>{skill.name}</p>
+                    {skill.live && (
+                      <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-success">
+                        Live
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-0.5 text-xs text-fg-muted">{skill.description}</p>
                 </div>
                 <div className="ml-4 shrink-0 text-right">
