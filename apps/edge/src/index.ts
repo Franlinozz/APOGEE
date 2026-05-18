@@ -128,6 +128,10 @@ type OnboardingRecord = { key: string; chainId: number; tokenId: string; stages:
 type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy.changed'; payload: JsonValue };
 const PUBLIC_STREAM_KEY = '__public__';
 const PILOT_CHAT_ACTION_TAG = 'PILO'; // bytes4 action tag for Apogee Pilot chat receipts.
+const logErrorFields = (error: unknown): Record<string, unknown> => {
+  const err = error as { message?: unknown; code?: unknown; name?: unknown; stack?: unknown; data?: unknown; reason?: unknown; transaction?: unknown; info?: unknown } | null | undefined;
+  return { message: err?.message ?? String(error), code: err?.code, name: err?.name, stack: err?.stack, data: err?.data, reason: err?.reason, transaction: err?.transaction, info: err?.info };
+};
 const PILOT_SYSTEM_PROMPT = `You are Apogee Pilot, a precise technical guide to Apogee Protocol —
 the autonomous-agent runtime on 0G. You explain:
 - Apogee architecture: 9 contracts on 0G Aristotle mainnet (AgentAccount,
@@ -2590,7 +2594,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         payload,
         valueWei: 0n,
         clientReceiptId: `pilot-${address}-${receiptNonce}`,
-      }).catch((error) => request.log.warn({ error, address, tier: usedTier }, 'pilot.chat.receipt_mint_failed'));
+      }).catch((error) => request.log.error({ err: logErrorFields(error), address, tier: usedTier }, 'pilot.chat.receipt_mint_failed'));
     };
 
     async function runComputeTier(): Promise<void> {
