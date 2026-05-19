@@ -53,6 +53,10 @@ describe('edge API', () => {
     expect(skillInvokeCanRunAfterBootstrap('initialized', bootstrapComplete)).toBe(true);
   });
 
+  it('allows agents whose persistent deployment is already active after Edge restart', () => {
+    expect(skillInvokeCanRunAfterBootstrap('activating', false, 'active')).toBe(true);
+  });
+
   it('serves health, docs, quote, settle, auth-gated agent, memory, receipt, and refund routes', async () => {
     const app = buildEdgeServer({ chainClient: new FakeChain(), storageClient: new FakeStorage(), signerKey, chainId: 16602, paymentRouterAddress: address, receiptBookAddress: address, jwtSecret: 'test-secret' });
     await app.ready();
