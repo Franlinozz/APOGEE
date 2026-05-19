@@ -4,7 +4,7 @@
 
 - Production `POST /v1/skills/text.summarize/invoke` returned `{ output: { summary: "[object Object]" } }`, so the PR #13 frontend renderer was reading the right path (`result.output.summary`) but Edge had already shaped an invalid summary string.
 - Raw 0G Compute responses from the Aristotle provider (`zai-org/GLM-5-FP8`) showed `message.content: null` and useful data only under reasoning fields when thinking was left on; short skill calls exhausted `max_tokens` in reasoning and produced no final content.
-- The fix belongs in `@apogee/compute-client`, not the modal: all non-streaming chat requests now send `chat_template_kwargs: { enable_thinking: false }` so GLM returns final `message.content` for skill handlers to shape.
+- The fix belongs in the backend compute path, not the modal: all non-streaming chat requests now send `chat_template_kwargs: { enable_thinking: false }`, and skill invokes reserve a larger completion-token budget because this provider can still spend hundreds of reasoning tokens before emitting final `message.content`.
 - The frontend per-skill renderer remains unchanged and continues to display the canonical Edge response shape (`output.summary`, `output.translation`, etc.).
 
 ## 2026-05-18 — Deployed agents are now invokable from the UI
