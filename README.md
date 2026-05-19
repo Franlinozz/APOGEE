@@ -90,7 +90,7 @@ The result: teams spend weeks on plumbing instead of building products. Apogee e
 - Apogee Pilot chat at `/apogee-pilot`, backed by 0G Compute with `pilot.chat` receipts.
 - Six live dashboard-callable skills: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, and `code.review`.
 - Agent-scoped skill invocation with owner checks, policy enforcement, 0G Compute execution, per-skill modal output, and receipts tagged to the invoking agent.
-- `ReceiptBook` ledger visible at `/proofs`, currently indexing 1,656 Aristotle receipts with safe Chainscan links for real transaction hashes.
+- `ReceiptBook` ledger visible at `/proofs`, currently indexing 1,656+ Aristotle receipts with safe Chainscan links for real transaction hashes.
 - Global dashboard metrics for Aristotle network agents, active runtime/demo agents, receipts, and indexed volume.
 - Marketplace skill and service catalog backed by seeded Edge metadata.
 
