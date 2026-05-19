@@ -29,9 +29,11 @@
 
 ## Recently shipped
 
-- **May 18, 2026** — Deployed agents can now run selected live skills from their Skills tab and mint agent-tagged receipts.
-- **May 18, 2026** — Apogee Pilot chat now mints receipts on-chain.
-- **May 17, 2026** — Apogee Pilot full-page experience live at `/apogee-pilot`, streaming via 0G Compute, with on-chain receipts.
+- May 17, 2026 — Apogee Pilot full-page chat shipped at `/apogee-pilot`.
+- May 18, 2026 — Apogee Pilot chat receipts now mint on-chain.
+- May 18, 2026 — Live skills batch 1 shipped: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `code.review`.
+- May 18, 2026 — User-deployed agents can invoke selected skills from the dashboard, with receipts tagged to the invoking agent.
+- May 19, 2026 — Per-skill output rendering shipped and agent status gates hardened for recovered deployments.
 
 ---
 
@@ -75,32 +77,22 @@ The result: teams spend weeks on plumbing instead of building products. Apogee e
 | 1 | **Self-custodial smart wallets** | Every agent gets an `AgentAccount` on 0G Chain with a programmable `PolicyEngine` — spending limits, allowlists, per-action caps, pause flags. No centralized custodian ever touches agent funds. |
 | 2 | **On-chain receipts** | Every billable action calls `ReceiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei)` on Aristotle mainnet. The payload is uploaded to 0G Storage first; its Merkle root is the permanent anchor. |
 | 3 | **Encrypted persistent memory** | Agent memories are AES-256-GCM encrypted, stored as Merkle blobs on 0G Storage, and indexed on-chain. The decryption key is derived from the agent's signer — no third party can read it. |
-| 4 | **Paid skills marketplace** | 22 skills (12 free core + 10 premium) run in `isolated-vm` sandboxes. Premium skills charge $0G per call through `PaymentRouter`. `RevenueSplitter` enables creator royalties. |
+| 4 | **Paid skills marketplace** | The catalog models 22 skills (12 free core + 10 premium); the production dashboard currently exposes six live invokable skills with receipt-backed execution. Premium skill billing uses `PaymentRouter`; `RevenueSplitter` enables creator royalties. |
 | 5 | **0G Compute backbone** | `chat.completion`, `chat.embed`, `image.generate`, and `audio.transcribe` route through `@0glabs/0g-serving-broker`. Provider acknowledgement, ChatID extraction from response headers, and `processResponse()` settlement happen automatically. |
 
 ---
 
 ## What works today
 
-- Wallet connect and wallet ownership/signature flow for sign-in and deployment authorization where enabled.
-- Agent deployment through the web app.
-- On-chain `AgentIdentity` indexing for agents visible to Apogee.
-- `ReceiptBook` receipts and a receipts explorer with safe Chainscan links only for real transaction hashes.
+- Wallet connect and wallet ownership/signature flow for sign-in and deployment authorization.
+- User-deployable agents with NFT identity, policy, bootstrap memory, selected skill registration, and on-chain lifecycle receipts on Aristotle mainnet.
+- Three production heartbeat agents — Aurora analyze, Vesper media, and Helix report — running scheduled jobs and minting receipts.
+- Apogee Pilot chat at `/apogee-pilot`, backed by 0G Compute with `pilot.chat` receipts.
+- Six live dashboard-callable skills: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, and `code.review`.
+- Agent-scoped skill invocation with owner checks, policy enforcement, 0G Compute execution, per-skill modal output, and receipts tagged to the invoking agent.
+- `ReceiptBook` ledger visible at `/proofs`, currently indexing 1,656 Aristotle receipts with safe Chainscan links for real transaction hashes.
 - Global dashboard metrics for Aristotle network agents, active runtime/demo agents, receipts, and indexed volume.
-- Marketplace skill catalog and services catalog.
-- System/bootstrap memory for newly deployed agents.
-- Selected skills attached to new deployments.
-- Demo runtime receipts from scheduled heartbeat agents.
-- `/proofs` page for live receipt/proof visibility, payload hashes, and optional 0G Storage roots.
-
-## Roadmap / not yet fully automated
-
-- Full autonomous recurring runtime scheduling for arbitrary user-created agents.
-- Session-key/delegation flow for user agents.
-- True paid marketplace install/purchase flow.
-- On-chain policy editing UI.
-- Revenue split UI actions.
-- Richer memory writes beyond bootstrap for arbitrary newly-created agents.
+- Marketplace skill and service catalog backed by seeded Edge metadata.
 
 ---
 
@@ -137,7 +129,7 @@ Full sequence diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 | **EscrowVault** | Deferred payment escrow | `0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767` | [chainscan.0g.ai](https://chainscan.0g.ai/address/0x3c0879852e8956cfFCD8C9a2fa8b078b06DB2767) |
 | **AgentAccount** | Smart wallet implementation | `0xc18eD4e075a23A66505744A353eeFE91340F924d` | [chainscan.0g.ai](https://chainscan.0g.ai/address/0xc18eD4e075a23A66505744A353eeFE91340F924d) |
 | **0G Storage** | Payload + memory blobs | `indexer-storage-turbo.0g.ai` | Aristotle chainId 16661 |
-| **0G Compute** | Inference backbone | `@0glabs/0g-serving-broker 0.6.5` | TEE-attested providers |
+| **0G Compute** | Inference backbone | `@0glabs/0g-serving-broker` | TEE-attested providers |
 
 ---
 
@@ -146,8 +138,10 @@ Full sequence diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 ### Prerequisites
 
 - Node.js 20.18.x LTS, pnpm 9.12.x
-- 0G-compatible wallet + testnet tokens from [faucet.0g.ai](https://faucet.0g.ai)
+- 0G-compatible wallet with Aristotle network tokens
 - PostgreSQL 16 and Redis 7
+- Production app: [apogeeprotocol.vercel.app](https://apogeeprotocol.vercel.app)
+- Production Edge API: [apogeeedge-production.up.railway.app](https://apogeeedge-production.up.railway.app/v1/health)
 
 ### Clone and install
 
@@ -165,14 +159,15 @@ cp .env.example .env
 ```
 
 ```env
-DEPLOYER_PRIVATE_KEY=0x...           # Wallet funded with testnet 0G
-EDGE_SERVICE_PRIVATE_KEY=0x...       # Service-account signing key
+DEPLOYER_PRIVATE_KEY=0x...           # Wallet funded with Aristotle 0G
+EDGE_SERVICE_PRIVATE_KEY=0x...       # Edge relayer + 0G Compute payment wallet
+PILOT_AGENT_PRIVATE_KEY=0x...        # Dedicated Pilot service wallet identity
 DATABASE_URL=postgresql://user:pass@localhost:5432/apogee
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=<32-char-random-string>
 EDGE_JWT_SECRET=<32-char-random-string>
-ZERO_G_GALILEO_RPC_URL=https://evmrpc-testnet.0g.ai
-ZERO_G_STORAGE_INDEXER_URL=https://indexer-storage-testnet-turbo.0g.ai
+ZERO_G_ARISTOTLE_RPC_URL=https://evmrpc.0g.ai
+ZERO_G_STORAGE_INDEXER_URL=https://indexer-storage-turbo.0g.ai
 ```
 
 ### Database
@@ -194,11 +189,11 @@ pnpm -F @apogee/runtime dev
 pnpm -F @apogee/web dev
 ```
 
-### Deploy to Galileo testnet
+### Deploy contracts to Aristotle mainnet
 
 ```bash
-pnpm -F @apogee/contracts deploy:galileo
-pnpm -F @apogee/contracts seed:agents --testnet
+pnpm -F @apogee/contracts deploy:aristotle
+pnpm -F @apogee/contracts seed:demo-agents
 ```
 
 ### Smoke tests
@@ -210,7 +205,7 @@ pnpm -F @apogee/runtime heartbeat:once vesper
 pnpm -F @apogee/runtime heartbeat:once helix
 ```
 
-Full deployment guide: [docs/REVIEWER.md](docs/REVIEWER.md)
+Full deployment guide: [docs/REVIEWER.md](docs/REVIEWER.md). Production surfaces are the Vercel web app and Railway Edge API linked above.
 
 ---
 
@@ -228,7 +223,18 @@ Three agents are live on Aristotle mainnet. Receipts are visible at [apogeeproto
 
 ## Skills Catalog
 
-### Free Core Skills (12)
+### Live dashboard skills (6)
+
+| Skill | Description |
+|-------|-------------|
+| `chat.completion` | Chat inference via 0G Compute with agent-tagged receipts. |
+| `text.summarize` | Concise summaries via 0G Compute. |
+| `text.translate` | Translation to a requested target language. |
+| `text.sentiment` | Sentiment classification with normalized score. |
+| `text.entities` | Named entity extraction. |
+| `code.review` | Concise code review via 0G Compute. |
+
+### Cataloged Free Core Skills (12)
 
 | Skill | Description |
 |-------|-------------|

@@ -1,5 +1,37 @@
 # Decisions
 
+## 2026-05-19 — Compute ledger seeded with 3 OG
+
+- The Edge compute wallet funded the 0G Compute broker ledger via `broker.ledger.depositFund` with 3 OG so production skill invocation can settle provider usage without per-call manual funding.
+- `EDGE_SERVICE_PRIVATE_KEY` handles 0G Compute payments and Edge service-account operations.
+- `PILOT_AGENT_PRIVATE_KEY` remains the dedicated Pilot service wallet identity used in receipt payloads; on-chain receipt mints are still relayed by the authorized Edge receipt minter.
+- The two-wallet split is intentional operator guidance: compute payments and Pilot identity should not be conflated.
+
+## 2026-05-19 — Edge skill-invoke gate reads bootstrap state from persistent onboarding
+
+- Skill invocation now reads `bootstrapComplete` from the persistent onboarding record in Redis instead of relying on in-memory `store.skills`.
+- This closes the activation-status circular dependency where recovered agents could have complete onboarding persisted but an empty in-memory skills index after Edge restart.
+- The legacy installed-skills fallback remains for older rows, but persistent onboarding is the production source of truth.
+
+## 2026-05-19 — Increased Edge skill token budget for GLM final content
+
+- GLM can still spend hundreds of completion tokens on reasoning before emitting final `message.content`, even when non-streaming skill requests send `chat_template_kwargs: { enable_thinking: false }`.
+- Edge skill invokes now reserve a larger completion-token budget so the provider can emit final content instead of returning reasoning-only payloads.
+- This eliminated `[object Object]` and reasoning leakage in the skills modal while preserving the canonical output shapes (`output.summary`, `output.translation`, etc.).
+
+## 2026-05-19 — Skill-invoke gate trusts active persistent deployments
+
+- Skill invocation now trusts `deployment.status === 'active'` when recovered agent rows lag behind and still say `activating`.
+- Owner authentication, selected-skill allowlists, policy enforcement, and receipt minting remain unchanged.
+- This removed the residual `409 Activation in progress` edge case for already-active deployments.
+
+## 2026-05-19 — Skill invocation verified end-to-end across the production paths
+
+- Francc Alpha #29 verified the five selected dashboard skills end-to-end: `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, and `code.review`.
+- `chat.completion` is covered by the Apogee Pilot path, which uses the same 0G Compute pipeline and mints indexed `pilot.chat` receipts.
+- Each verified production path returns real UI-ready output, mints an on-chain ReceiptBook receipt, and appears on `/proofs` with the invoking agent or Pilot identity.
+- Apogee v0.1 is marked production-ready as a real protocol demo: user-deployed agents, policy-scoped skills, 0G Compute execution, and on-chain receipts all work together.
+
 ## 2026-05-19 — Skill output shape is normalized at the compute boundary
 
 - Production `POST /v1/skills/text.summarize/invoke` returned `{ output: { summary: "[object Object]" } }`, so the PR #13 frontend renderer was reading the right path (`result.output.summary`) but Edge had already shaped an invalid summary string.

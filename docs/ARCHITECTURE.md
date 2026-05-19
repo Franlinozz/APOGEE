@@ -28,35 +28,41 @@ Apogee is a four-layer autonomous-agent runtime:
 
 ## 2. Component Interaction Diagrams
 
-### 2.1 Agent Skill Execution (paid skill call)
+### 2.1 Agent Skill Execution (dashboard skill call)
 
 ```mermaid
 sequenceDiagram
     participant U as User (browser)
     participant W as Web (Next.js)
     participant E as Edge API
-    participant SK as SkillRunner
     participant C as 0G Compute
+    participant S as 0G Storage
     participant CB as ReceiptBook (chain)
+    participant P as /proofs page
 
-    U->>W: POST /api/pilot/chat
-    W->>E: POST /v1/pilot/chat (server-side proxy)
-    E->>E: verify JWT, get agentId
-    E->>SK: runner.execute("chat.completion", input, ctx)
-    SK->>SK: spawn isolated-vm sandbox (128 MB, 30s TTL)
-    SK->>C: compute.chatCompletion(messages)
-    C-->>SK: stream tokens
-    SK-->>E: output + provenance (chatId, storageRoot)
-    E->>CB: receiptMinter.mint({ agentId, actionTag, payload })
-    CB-->>E: { receiptId, txHash, storageRoot }
-    E-->>W: SSE stream (token events → done event with receiptId)
-    W-->>U: rendered response + receipt link
+    U->>W: Run skill from agent Skills tab
+    W->>E: POST /v1/skills/:skillId/invoke { agentId, input }
+    E->>E: verify JWT owner, selected skill, policy caps
+    E->>E: read onboarding/deployment status from durable store
+    E->>C: compute.chat({ messages, maxTokens })
+    C-->>E: normalized output + chatId + usage
+    E->>S: upload canonical receipt payload
+    S-->>E: { storageRoot, storageTxHash }
+    E->>CB: ReceiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot)
+    CB-->>E: { receiptId, txHash }
+    E->>E: index receipt and auto-promote agent active on first receipt
+    E-->>W: { output, compute, receipt }
+    W-->>U: per-skill modal output + receipt link
+    P->>E: GET /v1/proofs
+    E-->>P: agent name, action label, tx hash, storage root
 ```
 
+Production live skills are `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, and `code.review`. The modal renderer consumes canonical Edge output shapes (`output.content`, `output.summary`, `output.translation`, `output.sentiment`, `output.entities`, `output.review`) and falls back to raw JSON only for malformed outputs.
 
-### 2.3 Apogee Pilot inference and receipts
 
-Apogee Pilot is exposed both as the floating in-app launcher and as the full-page `/apogee-pilot` chat surface. The browser posts to `apps/web` at `/api/pilot/chat`; the Next.js route runs on the Node.js runtime and forwards the stream plus the `apogee-jwt` cookie as a Bearer token to Edge `/v1/pilot/chat` without buffering.
+### 2.2 Apogee Pilot inference and receipts
+
+Apogee Pilot is exposed both as the floating in-app launcher and as the full-page `/apogee-pilot` chat surface. The browser posts to `apps/web` at `/api/pilot/chat`; the Next.js route runs on the Node.js runtime and forwards the stream plus the `apogee-jwt` cookie as a Bearer token to Edge `/v1/pilot/chat` without buffering. The route uses the configured `PILOT_AGENT_PRIVATE_KEY` service wallet identity for unauthenticated widget receipt payloads and mints indexed `pilot.chat` receipts through the authorized Edge relayer.
 
 Edge serves Pilot with a three-tier inference strategy:
 
@@ -64,9 +70,9 @@ Edge serves Pilot with a three-tier inference strategy:
 2. **HTTP LLM fallback** — existing `PILOT_LLM_BASE_URL` / `PILOT_LLM_API_KEY` OpenAI-compatible stream, also used when `APOGEE_PILOT_USE_COMPUTE=false`.
 3. **Simulated fallback** — deterministic `simulatePilotTokens()` responses when both live inference paths are unavailable.
 
-Every completed Pilot chat can mint a non-blocking ReceiptBook receipt with indexed action label `pilot.chat` (encoded as bytes4 `pilo` on-chain). Authenticated requests use the user wallet address in the receipt payload; unauthenticated widget requests use the configured `PILOT_AGENT_PRIVATE_KEY` service wallet identity. Pilot is not an agent iNFT, so receipts use `agentId=0` as a system sentinel; `ReceiptBook.emitReceipt` permits this and existing system contracts already emit `agentId=0` receipts. If a client cancels after tokens have streamed, Edge mints the same receipt payload with `cancelled: true`; zero-token aborts do not mint. Conversation history remains bounded in-memory LRU state on Edge and no Prisma migration is used for Ship 1.
+Every completed Pilot chat can mint a non-blocking ReceiptBook receipt with indexed action label `pilot.chat` (encoded as bytes4 `pilo` on-chain). Authenticated requests use the user wallet address in the receipt payload; unauthenticated widget requests use the configured `PILOT_AGENT_PRIVATE_KEY` service wallet identity. Pilot is not an agent iNFT, so receipts use `agentId=0` as a system sentinel; `ReceiptBook.emitReceipt` permits this and existing system contracts already emit `agentId=0` receipts. If a client cancels after tokens have streamed, Edge mints the same receipt payload with `cancelled: true`; zero-token aborts do not mint. Conversation history remains bounded in-memory LRU state on Edge.
 
-### 2.2 Heartbeat Loop (Aurora — every 10 min)
+### 2.3 Heartbeat Loop (Aurora — every 10 min)
 
 ```mermaid
 sequenceDiagram
@@ -94,7 +100,7 @@ sequenceDiagram
     EE-->>W: 200 OK
 ```
 
-### 2.3 Storage Proof Path
+### 2.4 Storage Proof Path
 
 ```mermaid
 sequenceDiagram
@@ -115,7 +121,7 @@ sequenceDiagram
     P-->>P: render Storage Proofs table
 ```
 
-### 2.4 SIWE Authentication Flow
+### 2.5 SIWE Authentication Flow
 
 ```mermaid
 sequenceDiagram
@@ -141,6 +147,8 @@ sequenceDiagram
 ```
 
 ## 3. Data Flow — Receipt Lifecycle
+
+The on-chain `ReceiptBook` stores compact receipt fields, including a bytes4 action tag. Edge keeps the richer indexed metadata used by the product UI: full action labels such as `text.summarize`, agent display names such as `Francc Alpha`, storage transaction hashes, and normalized skill outputs. `/proofs` reads this Edge metadata and links only real 32-byte transaction hashes to Chainscan, which is why the UI can display full skill names even though on-chain encoding is intentionally compact.
 
 ```
 Agent action occurs
@@ -239,7 +247,13 @@ ServiceRegistry
   └── lookup by serviceId or owner
 ```
 
-## 6. Infrastructure
+## 6. Compute and signer roles
+
+- `EDGE_SERVICE_PRIVATE_KEY` is the Edge service wallet. It pays for 0G Compute through the broker ledger, signs provider requests, and performs service-account Edge operations.
+- `PILOT_AGENT_PRIVATE_KEY` is the dedicated Apogee Pilot service wallet identity used in Pilot receipt payloads. It is separate from the Edge compute/payment wallet so operators can rotate or fund the roles independently.
+- Receipt minting is still submitted by the authorized server-side receipt relayer to `ReceiptBook` on Aristotle mainnet.
+
+## 7. Infrastructure
 
 | Component | Host | Notes |
 |---|---|---|
@@ -248,10 +262,10 @@ ServiceRegistry
 | Runtime (BullMQ workers) | Railway | Same process as Edge; `HEARTBEATS_PAUSED=false` to activate |
 | PostgreSQL | Railway | Managed; Prisma migrations |
 | Redis | Railway | BullMQ queues; `heartbeats` queue |
-| 0G Chain | Aristotle mainnet | RPC: https://evmrpc-testnet.0g.ai |
-| 0G Storage Indexer | 0G managed | SDK: `@0gfoundation/0g-ts-sdk@1.2.8` |
+| 0G Chain | Aristotle mainnet | RPC: https://evmrpc.0g.ai |
+| 0G Storage Indexer | 0G managed | `https://indexer-storage-turbo.0g.ai`, SDK `@0gfoundation/0g-ts-sdk@1.2.8` |
 
-## 7. ADR Index
+## 8. ADR Index
 
 | ADR | Title | Status |
 |---|---|---|
