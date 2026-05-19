@@ -160,8 +160,8 @@ const chatResponseSchema = z.object({
   id: z.string().optional(),
   choices: z.array(
     z.object({
-      message: z.object({ content: z.unknown().optional(), reasoning_content: z.unknown().optional() }).passthrough().optional(),
-      delta: z.object({ content: z.unknown().optional(), reasoning_content: z.unknown().optional() }).passthrough().optional(),
+      message: z.object({ content: z.unknown().optional(), reasoning: z.unknown().optional(), reasoning_content: z.unknown().optional(), reasoning_details: z.unknown().optional() }).passthrough().optional(),
+      delta: z.object({ content: z.unknown().optional(), reasoning: z.unknown().optional(), reasoning_content: z.unknown().optional() }).passthrough().optional(),
       text: z.unknown().optional(),
     }),
   ),
@@ -201,6 +201,21 @@ const textFromModelContent = (value: unknown): string => {
   }
   return String(value);
 };
+
+export function buildChatCompletionBody(opts: z.infer<typeof chatOptionsSchema>, model: string | undefined): Record<string, unknown> {
+  // GLM-5/GLM-5.1 reasoning is enabled by default behind the OpenAI-compatible
+  // endpoint. If we do not disable it, short skill calls can return only
+  // `message.reasoning` with `message.content: null`, which previously flowed
+  // through Edge as `[object Object]` instead of user-visible output.
+  return {
+    messages: opts.messages,
+    model,
+    stream: false,
+    temperature: opts.temperature,
+    max_tokens: opts.maxTokens,
+    chat_template_kwargs: { enable_thinking: false },
+  };
+}
 
 export class ComputeClient {
   private readonly signer: Wallet;
@@ -363,13 +378,7 @@ export class ComputeClient {
     try {
       const providerAddress = await this.resolveProvider(opts.provider, opts.sealed, 'chatbot');
       const metadata = await this.prepareRequest(providerAddress, opts.sealed, 'chatbot');
-      const body = {
-        messages: opts.messages,
-        model: opts.model ?? metadata.model,
-        stream: false,
-        temperature: opts.temperature,
-        max_tokens: opts.maxTokens,
-      };
+      const body = buildChatCompletionBody(opts, opts.model ?? metadata.model);
       const response = await this.postJson(`${metadata.endpoint}/chat/completions`, providerAddress, body);
       const data = chatResponseSchema.parse(await response.json());
       const chatId = response.headers.get('ZG-Res-Key') ?? response.headers.get('zg-res-key') ?? data.id;
@@ -379,7 +388,7 @@ export class ComputeClient {
         ...this.metadata(providerAddress, opts.model ?? metadata.model, chatId, data.usage, metadata.attestationDigest, 'chatbot'),
         providerSig,
         content: textFromModelContent(first?.message?.content ?? first?.text ?? ''),
-        reasoningContent: textFromModelContent(first?.message?.reasoning_content),
+        reasoningContent: textFromModelContent(first?.message?.reasoning_content ?? first?.message?.reasoning ?? first?.message?.reasoning_details),
       };
     } catch (error) {
       if (error instanceof ComputeError) throw error;
