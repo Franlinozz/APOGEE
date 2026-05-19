@@ -2175,12 +2175,18 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       agent = owned;
       const tokenId = agentTokenId(agent);
       deployment = await deploymentStore.get(tokenId);
+      const installedSkillIds = new Set([...store.skills.values()].filter((install) => install.agentId === agent!.id).map((install) => install.skillId));
       const selectedIds = new Set([
         ...(deployment?.selectedSkillIds ?? []),
-        ...[...store.skills.values()].filter((install) => install.agentId === agent!.id).map((install) => install.skillId),
+        ...installedSkillIds,
       ]);
       if (!selectedIds.has(skillId)) return problem(reply, 403, 'Skill not selected', `${skillId} is not selected for ${agent.name}.`);
-      if (agent.status !== 'active') return problem(reply, 409, 'Activation in progress', 'This agent is not active yet. Wait for activation to finish before running skills.');
+      const deploymentSelectedIds = deployment?.selectedSkillIds ?? [];
+      const bootstrapComplete = deploymentSelectedIds.length > 0
+        ? deploymentSelectedIds.every((id) => installedSkillIds.has(id))
+        : installedSkillIds.size > 0;
+      const canRunAfterBootstrap = agent.status === 'active' || ((agent.status === 'initialized' || agent.status === 'ready') && bootstrapComplete);
+      if (!canRunAfterBootstrap) return problem(reply, 409, 'Activation in progress', 'This agent is not bootstrapped yet. Wait for activation to finish before running skills.');
       const policy = deployment?.policy;
       const allowed = new Set([...(policy?.allowedSkills ?? []), ...(policy?.allowedActions ?? [])]);
       if (allowed.size > 0 && !allowed.has(skillId)) return problem(reply, 403, 'Skill not allowed by policy', `${skillId} is not allowed by this agent policy.`);
@@ -2351,9 +2357,11 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
         run.updatedAt = nowIso();
         run.steps = run.steps.map((step) => step.name === skillId ? { ...step, status: run!.status, createdAt: step.createdAt } : step);
         store.runs.set(run.id, run);
+        const tokenId = agentTokenId(agent);
+        store.agents.set(agent.id, { ...agent, status: 'active', updatedAt: nowIso() });
+        await deploymentStore.update(tokenId, { status: 'active' });
         broadcast(agent.id, { event: 'run.step', payload: json(run.steps[0]) });
         if (deployment?.policy?.dailyCapWei !== undefined && valueWei > 0n) {
-          const tokenId = agentTokenId(agent);
           const usageKey = `${options.chainId}:${tokenId}:${new Date().toISOString().slice(0, 10)}`;
           const resetAt = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1);
           const current = dailySkillUsage.get(usageKey);
