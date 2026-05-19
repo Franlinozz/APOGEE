@@ -144,6 +144,10 @@ const skillInvokeBodySchema = z.record(z.string(), jsonValueSchema);
 type SkillInvokeBody = z.infer<typeof skillInvokeBodySchema>;
 const stripWrappingQuotes = (value: string): string => value.trim().replace(/^(["'“”])(.+)\1$/s, '$2').trim();
 const stripJsonFences = (value: string): string => value.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
+// GLM-5 still spends reasoning tokens even when thinking is disabled. Keep enough
+// completion budget for the final user-visible content so skill outputs do not
+// fall back to reasoning text or `[object Object]`.
+const SKILL_COMPLETION_TOKEN_BUDGET = 1536;
 const extractComputeText = (response: unknown): string => {
   if (response && typeof response === 'object') {
     const record = response as Record<string, unknown>;
@@ -2248,19 +2252,20 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       const rawMaxWords = typeof body['maxWords'] === 'number' ? body['maxWords'] : 80;
       const maxWords = Math.max(1, Math.min(500, Math.floor(rawMaxWords)));
       messages = [{ role: 'user', content: `Summarize the following in ${maxWords} words or fewer.\nReturn only the summary text, no preamble or commentary.\n\nTEXT:\n${text}` }];
-      maxTokens = Math.max(64, Math.min(512, maxWords * 3));
+      maxTokens = Math.max(SKILL_COMPLETION_TOKEN_BUDGET, Math.min(2048, maxWords * 8));
       shapeOutput = (text) => ({ summary: stripWrappingQuotes(text) });
     } else if (skillId === 'text.translate') {
       const text = requireString('text', 10_000);
       const targetLanguage = requireString('targetLanguage', 80);
       if (!text || !targetLanguage) return problem(reply, 400, 'Bad Request', 'text and targetLanguage are required');
       messages = [{ role: 'user', content: `Translate the following text to ${targetLanguage}.\nReturn only the translation, no preamble or commentary, no parenthetical notes.\n\nTEXT:\n${text}` }];
+      maxTokens = SKILL_COMPLETION_TOKEN_BUDGET;
       shapeOutput = (text) => ({ translation: stripWrappingQuotes(text) });
     } else if (skillId === 'text.sentiment') {
       const text = requireString('text', 10_000);
       if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
       messages = [{ role: 'user', content: `Classify the sentiment of the following text. Respond with ONLY valid JSON in this exact shape — no preamble, no markdown fences, no extra fields:\n{"sentiment":"positive"|"negative"|"neutral","score":<number between 0 and 1>}\n\nTEXT:\n${text}` }];
-      maxTokens = 160;
+      maxTokens = SKILL_COMPLETION_TOKEN_BUDGET;
       shapeOutput = (text) => {
         try {
           const parsed = JSON.parse(stripJsonFences(text)) as { sentiment?: unknown; score?: unknown };
@@ -2277,7 +2282,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       const text = requireString('text', 10_000);
       if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
       messages = [{ role: 'user', content: `Extract named entities from the following text. Respond with ONLY valid JSON in this exact shape — no preamble, no markdown fences, no extra fields:\n{"entities":[{"type":"PERSON"|"PLACE"|"ORG"|"OTHER","value":"<string>"}]}\n\nIf no entities are found, return {"entities":[]}.\n\nTEXT:\n${text}` }];
-      maxTokens = 400;
+      maxTokens = SKILL_COMPLETION_TOKEN_BUDGET;
       shapeOutput = (text) => {
         try {
           const parsed = JSON.parse(stripJsonFences(text)) as { entities?: unknown };
@@ -2298,7 +2303,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       if (!code) return problem(reply, 400, 'Bad Request', 'code is required and must be 1-15000 characters');
       const language = typeof body['language'] === 'string' && body['language'].trim() ? body['language'].trim().slice(0, 80) : 'code';
       messages = [{ role: 'user', content: `Review the following ${language} for bugs, style issues, and clarity. Return a concise review as 3 to 6 bullet points, each one sentence. No preamble.\n\nCODE:\n${code}` }];
-      maxTokens = 700;
+      maxTokens = SKILL_COMPLETION_TOKEN_BUDGET;
       shapeOutput = (text) => ({ review: text.trim() });
     }
 
