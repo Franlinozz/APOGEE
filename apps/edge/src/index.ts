@@ -129,6 +129,15 @@ type StreamEvent = { event: 'receipt' | 'run.step' | 'balance.changed' | 'policy
 const PUBLIC_STREAM_KEY = '__public__';
 const PILOT_CHAT_ACTION_TAG = 'pilot.chat'; // indexed action label; on-chain bytes4 encodes the first four bytes ('pilo').
 
+export const skillInvokeBootstrapComplete = (
+  onboarding: Pick<OnboardingRecord, 'status'> | null | undefined,
+  deploymentSelectedIds: string[],
+  installedSkillIds: Set<string>,
+): boolean => onboarding?.status === 'complete' || (deploymentSelectedIds.length > 0 && deploymentSelectedIds.every((id) => installedSkillIds.has(id)));
+
+export const skillInvokeCanRunAfterBootstrap = (status: AgentRecord['status'], bootstrapComplete: boolean): boolean =>
+  status === 'active' || ((status === 'initialized' || status === 'ready') && bootstrapComplete);
+
 const LIVE_SKILL_IDS = new Set(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']);
 const skillInvokeParamsSchema = z.object({ skillId: z.enum(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']) });
 const skillInvokeBodySchema = z.record(z.string(), jsonValueSchema);
@@ -2182,10 +2191,13 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       ]);
       if (!selectedIds.has(skillId)) return problem(reply, 403, 'Skill not selected', `${skillId} is not selected for ${agent.name}.`);
       const deploymentSelectedIds = deployment?.selectedSkillIds ?? [];
-      const bootstrapComplete = deploymentSelectedIds.length > 0
-        ? deploymentSelectedIds.every((id) => installedSkillIds.has(id))
-        : installedSkillIds.size > 0;
-      const canRunAfterBootstrap = agent.status === 'active' || ((agent.status === 'initialized' || agent.status === 'ready') && bootstrapComplete);
+      const onboarding = await deploymentStore.getOnboarding(tokenId);
+      // Bootstrap completeness reads from the persistent onboarding record
+      // (Redis) instead of the in-memory store.skills set, which is not
+      // hydrated on Edge restart. The legacy in-memory check is kept as
+      // an OR fallback for agents that may pre-date onboarding tracking.
+      const bootstrapComplete = skillInvokeBootstrapComplete(onboarding, deploymentSelectedIds, installedSkillIds);
+      const canRunAfterBootstrap = skillInvokeCanRunAfterBootstrap(agent.status, bootstrapComplete);
       if (!canRunAfterBootstrap) return problem(reply, 409, 'Activation in progress', 'This agent is not bootstrapped yet. Wait for activation to finish before running skills.');
       const policy = deployment?.policy;
       const allowed = new Set([...(policy?.allowedSkills ?? []), ...(policy?.allowedActions ?? [])]);
