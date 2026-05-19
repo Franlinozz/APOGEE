@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Wallet, TypedDataEncoder } from 'ethers';
 import { buildDeployAuthorizationTypedData } from '@apogee/core';
-import { buildEdgeServer } from './index.js';
+import { buildEdgeServer, skillInvokeBootstrapComplete, skillInvokeCanRunAfterBootstrap } from './index.js';
 import type { BillingChainClient, StorageBoundary } from '@apogee/billing';
 
 const address = '0x0000000000000000000000000000000000000001';
@@ -31,6 +31,28 @@ class FakeStorage implements StorageBoundary {
 }
 
 describe('edge API', () => {
+  it('allows initialized agents when persistent onboarding is complete even if in-memory skills are empty', () => {
+    const bootstrapComplete = skillInvokeBootstrapComplete(
+      { status: 'complete' },
+      ['text.summarize'],
+      new Set<string>(),
+    );
+
+    expect(bootstrapComplete).toBe(true);
+    expect(skillInvokeCanRunAfterBootstrap('initialized', bootstrapComplete)).toBe(true);
+  });
+
+  it('keeps the legacy installed-skills fallback when onboarding is missing', () => {
+    const bootstrapComplete = skillInvokeBootstrapComplete(
+      undefined,
+      ['text.summarize'],
+      new Set(['text.summarize']),
+    );
+
+    expect(bootstrapComplete).toBe(true);
+    expect(skillInvokeCanRunAfterBootstrap('initialized', bootstrapComplete)).toBe(true);
+  });
+
   it('serves health, docs, quote, settle, auth-gated agent, memory, receipt, and refund routes', async () => {
     const app = buildEdgeServer({ chainClient: new FakeChain(), storageClient: new FakeStorage(), signerKey, chainId: 16602, paymentRouterAddress: address, receiptBookAddress: address, jwtSecret: 'test-secret' });
     await app.ready();
