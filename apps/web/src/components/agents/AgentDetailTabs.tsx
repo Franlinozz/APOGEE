@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import type { Agent, MemoryEntry, Receipt, Run, SkillManifest } from '@/lib/types';
 import { buildChainscanUrl } from '@/lib/chainscan';
+import { normalizeSkillOutput } from '@/lib/skill-output';
 import { Badge } from '@apogee/ui';
 
 type InstalledSkill = { agentId: string; skillId: string; version?: string; installedAt: string };
@@ -303,17 +304,45 @@ function formatErrorBody(data: unknown, fallbackText: string): string {
 }
 
 function SkillOutput({ skillId, output }: { skillId: string; output: unknown }) {
-  const record = output && typeof output === 'object' ? output as Record<string, unknown> : {};
-  if (skillId === 'text.sentiment') {
-    return <div className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3"><Badge variant="accent" className="capitalize">{String(record.sentiment ?? 'neutral')}</Badge><span className="text-sm text-fg-muted">Score {Number(record.score ?? 0).toFixed(2)}</span></div>;
+  const [showRaw, setShowRaw] = useState(false);
+  const normalized = normalizeSkillOutput(skillId, output);
+
+  if (normalized.kind === 'text') {
+    return <div className={`whitespace-pre-wrap rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3 text-sm text-fg ${normalized.mono ? 'font-mono' : ''}`}>{normalized.text}</div>;
   }
-  if (skillId === 'text.entities') {
-    const entities = Array.isArray(record.entities) ? record.entities as Array<{ type?: string; value?: string }> : [];
-    if (entities.length === 0) return <p className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3 text-sm text-fg-muted">No entities found.</p>;
-    return <div className="flex flex-wrap gap-2 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3">{entities.map((entity, index) => <span key={`${entity.type}-${entity.value}-${index}`} className="inline-flex items-center gap-1 rounded-full border border-[var(--color-line)] px-2 py-1 text-xs text-fg"><span className="font-mono text-accent">{entity.type ?? 'OTHER'}</span>{entity.value}</span>)}</div>;
+
+  if (normalized.kind === 'sentiment') {
+    const variant = normalized.sentiment === 'positive' ? 'success' : normalized.sentiment === 'negative' ? 'danger' : 'neutral';
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3 text-sm">
+        <span className="text-fg-muted">Sentiment</span>
+        <Badge variant={variant}>{normalized.sentiment.toUpperCase()}</Badge>
+        <span className="text-fg-muted">Score <span className="font-mono text-fg">{normalized.score.toFixed(2)}</span></span>
+      </div>
+    );
   }
-  const text = skillId === 'chat.completion' ? String(record.content ?? '') : skillId === 'text.summarize' ? String(record.summary ?? '') : skillId === 'text.translate' ? String(record.translation ?? '') : skillId === 'code.review' ? String(record.review ?? '') : JSON.stringify(output, null, 2);
-  return <div className={`whitespace-pre-wrap rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3 text-sm text-fg ${skillId === 'code.review' ? 'font-mono' : ''}`}>{text}</div>;
+
+  if (normalized.kind === 'entities') {
+    if (normalized.entities.length === 0) return <p className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3 text-sm text-fg-muted">No entities found.</p>;
+    return (
+      <div className="space-y-2 rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-elevated p-3">
+        {normalized.entities.map((entity, index) => (
+          <div key={`${entity.type}-${entity.value}-${index}`} className="flex items-center gap-2 text-sm text-fg">
+            <Badge variant="neutral" className="font-mono text-[10px]">{entity.type}</Badge>
+            <span>{entity.value}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-warning/25 bg-warning/10 p-3 text-sm text-warning">
+      <p>Unexpected response format</p>
+      <button type="button" onClick={() => setShowRaw((current) => !current)} className="mt-2 text-xs underline">{showRaw ? 'Hide raw' : 'Show raw'}</button>
+      {showRaw && <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-[var(--radius)] border border-warning/20 bg-black/10 p-2 font-mono text-xs text-fg">{normalized.raw}</pre>}
+    </div>
+  );
 }
 
 function SkillRunModal({ agent, skill, onClose, onDone }: { agent: Agent; skill: SkillManifest; onClose: () => void; onDone: () => void }) {
