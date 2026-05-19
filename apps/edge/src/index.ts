@@ -135,8 +135,8 @@ export const skillInvokeBootstrapComplete = (
   installedSkillIds: Set<string>,
 ): boolean => onboarding?.status === 'complete' || (deploymentSelectedIds.length > 0 && deploymentSelectedIds.every((id) => installedSkillIds.has(id)));
 
-export const skillInvokeCanRunAfterBootstrap = (status: AgentRecord['status'], bootstrapComplete: boolean): boolean =>
-  status === 'active' || ((status === 'initialized' || status === 'ready') && bootstrapComplete);
+export const skillInvokeCanRunAfterBootstrap = (status: AgentRecord['status'], bootstrapComplete: boolean, deploymentStatus?: DeploymentRecord['status']): boolean =>
+  status === 'active' || deploymentStatus === 'active' || ((status === 'initialized' || status === 'ready') && bootstrapComplete);
 
 const LIVE_SKILL_IDS = new Set(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']);
 const skillInvokeParamsSchema = z.object({ skillId: z.enum(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']) });
@@ -2201,7 +2201,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       // hydrated on Edge restart. The legacy in-memory check is kept as
       // an OR fallback for agents that may pre-date onboarding tracking.
       const bootstrapComplete = skillInvokeBootstrapComplete(onboarding, deploymentSelectedIds, installedSkillIds);
-      const canRunAfterBootstrap = skillInvokeCanRunAfterBootstrap(agent.status, bootstrapComplete);
+      const canRunAfterBootstrap = skillInvokeCanRunAfterBootstrap(agent.status, bootstrapComplete, deployment?.status);
       if (!canRunAfterBootstrap) return problem(reply, 409, 'Activation in progress', 'This agent is not bootstrapped yet. Wait for activation to finish before running skills.');
       const policy = deployment?.policy;
       const allowed = new Set([...(policy?.allowedSkills ?? []), ...(policy?.allowedActions ?? [])]);
