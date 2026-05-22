@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Wallet, TypedDataEncoder } from 'ethers';
 import { buildDeployAuthorizationTypedData } from '@apogee/core';
-import { buildEdgeServer, skillInvokeBootstrapComplete, skillInvokeCanRunAfterBootstrap } from './index.js';
-import type { BillingChainClient, StorageBoundary } from '@apogee/billing';
+import { buildEdgeServer, buildReceiptHeatmapCells, skillInvokeBootstrapComplete, skillInvokeCanRunAfterBootstrap } from './index.js';
+import type { BillingChainClient, ReceiptIndexRow, StorageBoundary } from '@apogee/billing';
 
 const address = '0x0000000000000000000000000000000000000001';
 const txHash = '0x'.padEnd(66, '1');
@@ -55,6 +55,20 @@ describe('edge API', () => {
 
   it('allows agents whose persistent deployment is already active after Edge restart', () => {
     expect(skillInvokeCanRunAfterBootstrap('activating', false, 'active')).toBe(true);
+  });
+
+  it('buckets receipt heatmap by UTC calendar day and hour', () => {
+    const now = Date.parse('2026-05-22T10:30:00.000Z');
+    const rows: ReceiptIndexRow[] = [
+      { receiptId: 'r1', agentId: '1', actionTag: 'text.summarize', payloadHash: '0x1', storageRoot: '0x2', valueWei: '0', txHash, status: 'minted', createdAt: '2026-05-21T23:15:00.000Z' },
+      { receiptId: 'r2', agentId: '1', actionTag: 'text.summarize', payloadHash: '0x3', storageRoot: '0x4', valueWei: '0', txHash, status: 'minted', createdAt: '2026-05-22T09:00:00.000Z' },
+      { receiptId: 'r3', agentId: '1', actionTag: 'text.summarize', payloadHash: '0x5', storageRoot: '0x6', valueWei: '0', txHash, status: 'minted', createdAt: '2026-05-15T23:59:00.000Z' },
+    ];
+
+    expect(buildReceiptHeatmapCells(rows, 7, now)).toEqual([
+      { day: 5, hour: 23, count: 1 },
+      { day: 6, hour: 9, count: 1 },
+    ]);
   });
 
   it('serves health, docs, quote, settle, auth-gated agent, memory, receipt, and refund routes', async () => {

@@ -1,17 +1,19 @@
+import React from 'react';
 import type { HeatmapCell } from '@/lib/types';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-// Edge returns day 0 = oldest, day 6 = today. Map each index to an actual date.
+// Edge returns UTC calendar day 0 = oldest, day 6 = today. Keep labels in
+// the same UTC frame as /v1/receipts/heatmap and /v1/proofs bucketing.
 function buildDayLabels(): { short: string; full: string }[] {
   const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - (6 - i));
+    const d = new Date(todayUtc - (6 - i) * 86_400_000);
     return {
-      short: `${WEEKDAYS[d.getDay()]} ${d.getDate()}`,
-      full: d.toDateString(),
+      short: `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}`,
+      full: d.toISOString().slice(0, 10),
     };
   });
 }

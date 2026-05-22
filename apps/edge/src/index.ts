@@ -539,6 +539,31 @@ const problem = (reply: FastifyReply, status: number, title: string, detail: str
 };
 const sameAddress = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
+export function buildReceiptHeatmapCells(rows: ReceiptIndexRow[], days: number, nowMs = Date.now()): Array<{ day: number; hour: number; count: number }> {
+  const now = new Date(nowMs);
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const dayIndexByDate = new Map<string, number>();
+  for (let dayIndex = 0; dayIndex < days; dayIndex += 1) {
+    const date = new Date(todayUtc - (days - 1 - dayIndex) * 86_400_000).toISOString().slice(0, 10);
+    dayIndexByDate.set(date, dayIndex);
+  }
+
+  const cells = new Map<string, { day: number; hour: number; count: number }>();
+  for (const receipt of rows) {
+    const created = new Date(receipt.createdAt);
+    if (!Number.isFinite(created.getTime())) continue;
+    const day = dayIndexByDate.get(created.toISOString().slice(0, 10));
+    if (day === undefined) continue;
+    const hour = created.getUTCHours();
+    const key = `${day}:${hour}`;
+    const cell = cells.get(key) ?? { day, hour, count: 0 };
+    cell.count += 1;
+    cells.set(key, cell);
+  }
+
+  return [...cells.values()].sort((a, b) => a.day - b.day || a.hour - b.hour);
+}
+
 async function requireAuth(request: FastifyRequest): Promise<AuthUser> {
   await request.jwtVerify();
   return { address: getAddress(request.user.address) };
@@ -1680,21 +1705,7 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       const ownedAgentIds = new Set([...store.agents.values()].filter((agent) => sameAddress(agent.owner, user.address)).map((agent) => agent.id));
       rows = rows.filter((receipt) => ownedAgentIds.has(receipt.agentId));
     }
-    const cells = new Map<string, { day: number; hour: number; count: number }>();
-    const now = Date.now();
-    for (const receipt of rows) {
-      const created = new Date(receipt.createdAt).getTime();
-      if (!Number.isFinite(created)) continue;
-      const ageDays = Math.floor((now - created) / 86_400_000);
-      if (ageDays < 0 || ageDays >= query.days) continue;
-      const day = query.days - 1 - ageDays;
-      const hour = new Date(receipt.createdAt).getHours();
-      const key = `${day}:${hour}`;
-      const cell = cells.get(key) ?? { day, hour, count: 0 };
-      cell.count += 1;
-      cells.set(key, cell);
-    }
-    return [...cells.values()].sort((a, b) => a.day - b.day || a.hour - b.hour);
+    return buildReceiptHeatmapCells(rows, query.days);
   });
 
   // ── Public proofs data (no auth, ISR-friendly) ────────────────────────────
