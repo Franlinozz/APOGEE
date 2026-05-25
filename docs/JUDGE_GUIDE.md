@@ -20,7 +20,7 @@ browser — no wallet or tokens needed. The full walkthrough takes ≤ 30 minute
 | Block explorer | https://chainscan.0g.ai |
 | X / Twitter | https://x.com/ApogeeProtocol/status/2055641847821664765?s=20 |
 | Demo video | https://youtu.be/3XEJRv1ZkLo?si=8z7QqYZWbrInOmqb |
-| Technical write-up | https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94 |
+| Technical write-ups | Engineering deep dive: https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94<br>Protocol overview: https://medium.com/@chatwithnonso01/apogee-protocol-building-an-autonomous-agent-runtime-on-0g-c5851164f2bd |
 
 ---
 

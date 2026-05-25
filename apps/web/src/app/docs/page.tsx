@@ -24,13 +24,21 @@ const CARDS = [
     badgeColor: 'bg-accent/15 text-accent-light',
   },
   {
-    href: 'https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94',
-    external: true,
-    title: 'Engineering Deep Dive',
+    title: 'Technical Write-ups',
     description:
-      'How Apogee integrates 0G Chain, 0G Storage, 0G Compute, agent identities, on-chain receipts, programmable spending policies, and runtime services.',
+      'Two builder-focused Medium articles covering Apogee’s engineering deep dive and the post-submission protocol/runtime overview.',
     badge: 'Technical Write-up',
     badgeColor: 'bg-accent/10 text-accent-light',
+    links: [
+      {
+        href: 'https://medium.com/@chatwithnonso01/building-an-autonomous-agent-runtime-on-0g-an-engineering-deep-dive-into-apogee-6af3dfedac94',
+        label: 'Engineering deep dive',
+      },
+      {
+        href: 'https://medium.com/@chatwithnonso01/apogee-protocol-building-an-autonomous-agent-runtime-on-0g-c5851164f2bd',
+        label: 'Protocol overview',
+      },
+    ],
   },
   {
     href: 'https://github.com/Franlinozz/APOGEE/blob/main/docs/ARCHITECTURE.md',
@@ -120,8 +128,8 @@ export default function DocsPage() {
             Everything you need to understand and build on Apogee Protocol
           </h1>
           <p className="mt-4 text-fg-muted text-base max-w-xl mx-auto leading-relaxed">
-            Start with the Judge Guide for a guided walkthrough, or explore the
-            architecture, API reference, and tutorial at your own pace.
+            Start with the Judge Guide for a guided walkthrough, or explore the architecture, API
+            reference, and tutorial at your own pace.
           </p>
         </section>
 
@@ -133,16 +141,46 @@ export default function DocsPage() {
                 <div className="group relative rounded-2xl border border-[var(--color-line)] bg-surface p-6 h-full flex flex-col gap-3 hover:border-[var(--color-line-accent)] hover:bg-elevated hover:-translate-y-0.5 transition-[border-color,box-shadow,transform] duration-[220ms]">
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-sm font-semibold text-fg leading-tight">{card.title}</h2>
-                    <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${card.badgeColor}`}>
+                    <span
+                      className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${card.badgeColor}`}
+                    >
                       {card.badge}
                     </span>
                   </div>
                   <p className="text-xs text-fg-muted leading-relaxed flex-1">{card.description}</p>
-                  <span className="text-xs text-accent-light group-hover:text-accent transition-colors">
-                    {card.external ? 'Open ↗' : 'View →'}
-                  </span>
+                  {'links' in card ? (
+                    <div className="grid gap-2 pt-1">
+                      {card.links.map((link) => (
+                        <a
+                          key={link.href}
+                          href={link.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg border border-[var(--color-line)] bg-elevated px-3 py-2 text-xs text-accent-light hover:border-[var(--color-line-accent)] hover:text-accent transition-colors"
+                        >
+                          {link.label} ↗
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-accent-light group-hover:text-accent transition-colors">
+                      {card.external ? 'Open ↗' : 'View →'}
+                    </span>
+                  )}
                 </div>
               );
+
+              if ('links' in card) {
+                return (
+                  <div
+                    key={card.title}
+                    className="animate-fade-up block"
+                    style={{ animationDelay: `${idx * 55}ms` }}
+                  >
+                    {inner}
+                  </div>
+                );
+              }
 
               return card.external ? (
                 <a
@@ -156,7 +194,12 @@ export default function DocsPage() {
                   {inner}
                 </a>
               ) : (
-                <Link key={card.title} href={card.href} className="animate-fade-up block" style={{ animationDelay: `${idx * 55}ms` }}>
+                <Link
+                  key={card.title}
+                  href={card.href}
+                  className="animate-fade-up block"
+                  style={{ animationDelay: `${idx * 55}ms` }}
+                >
                   {inner}
                 </Link>
               );
@@ -164,7 +207,10 @@ export default function DocsPage() {
           </div>
 
           {/* Quick contract reference */}
-          <div className="animate-fade-up mt-14 rounded-2xl border border-[var(--color-line)] bg-surface p-6 space-y-4" style={{ animationDelay: '440ms' }}>
+          <div
+            className="animate-fade-up mt-14 rounded-2xl border border-[var(--color-line)] bg-surface p-6 space-y-4"
+            style={{ animationDelay: '440ms' }}
+          >
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-accent-light mb-1">
                 Aristotle Mainnet — chainId 16661
@@ -173,10 +219,10 @@ export default function DocsPage() {
             </div>
             <div className="grid gap-2 sm:grid-cols-2 text-xs font-mono">
               {[
-                ['ReceiptBook',    '0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53'],
-                ['AgentIdentity',  '0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3'],
-                ['PolicyEngine',   '0xa8933d96A27BDfFac07C0d7467f3213cb340f550'],
-                ['PaymentRouter',  '0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c'],
+                ['ReceiptBook', '0xD0B08e262D27aFE3C01ED849Cf155D33b95bff53'],
+                ['AgentIdentity', '0xC6060a0f261cc50B903E37fA7d1E923bfAf08ff3'],
+                ['PolicyEngine', '0xa8933d96A27BDfFac07C0d7467f3213cb340f550'],
+                ['PaymentRouter', '0xDafcdb130596cd0cD555F722c8a8547ccE2B4D0c'],
                 ['AccountFactory', '0xABc44aF98e6d873C0700c9B687fbf3Be560cba90'],
               ].map(([name, addr]) => (
                 <a
@@ -187,13 +233,18 @@ export default function DocsPage() {
                   className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-line)] bg-elevated px-4 py-2.5 hover:border-[var(--color-line-accent)] transition-colors"
                 >
                   <span className="text-fg-muted">{name}</span>
-                  <span className="text-accent-light text-[10px]">{(addr ?? '').slice(0, 10)}…</span>
+                  <span className="text-accent-light text-[10px]">
+                    {(addr ?? '').slice(0, 10)}…
+                  </span>
                 </a>
               ))}
             </div>
             <p className="text-[11px] text-fg-faint">
               All 9 contracts listed in{' '}
-              <Link href="/proofs?tab=contracts" className="text-accent-light hover:text-accent underline">
+              <Link
+                href="/proofs?tab=contracts"
+                className="text-accent-light hover:text-accent underline"
+              >
                 /proofs → Contracts tab
               </Link>
             </p>
