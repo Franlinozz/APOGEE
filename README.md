@@ -27,12 +27,12 @@
 
 </div>
 
-## Post-submission updates
-
+## Changelog (continued development)
+_Core submission was completed on 16th May, 2026. We've continued hardening the project since. listed below for transparency._
 - May 17, 2026 — Apogee Pilot full-page chat shipped at `/apogee-pilot`.
-- May 18, 2026 — Apogee Pilot chat receipts now mint on-chain.
+- May 18, 2026 — Apogee Pilot chat receipts mints on-chain.
 - May 18, 2026 — Live skills batch 1 shipped: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `code.review`.
-- May 18, 2026 — User-deployed agents can invoke selected skills from the dashboard, with receipts tagged to the invoking agent.
+- May 18, 2026 — Skills run end-to-end on newly deployed agents (verified: text.summarize, text.translate, code.review) with receipts minted on-chain.
 - May 19, 2026 — Per-skill output rendering shipped and agent status gates hardened for recovered deployments.
 
 ---
