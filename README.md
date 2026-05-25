@@ -27,7 +27,7 @@
 
 </div>
 
-## Recently shipped
+## Post-submission updates
 
 - May 17, 2026 — Apogee Pilot full-page chat shipped at `/apogee-pilot`.
 - May 18, 2026 — Apogee Pilot chat receipts now mint on-chain.
