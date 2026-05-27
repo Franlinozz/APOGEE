@@ -34,6 +34,7 @@ _Core submission was completed on 16th May, 2026. We've continued hardening the 
 - May 18, 2026 — Live skills batch 1 shipped: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `code.review`.
 - May 18, 2026 — Skills run end-to-end on newly deployed agents (verified: text.summarize, text.translate, code.review) with receipts minted on-chain.
 - May 19, 2026 — Per-skill output rendering shipped and agent status gates hardened for recovered deployments.
+- May 25, 2026 — Published second technical long-form article on "Building an Autonomous-Agent Runtime on 0G: An Engineering Deep Dive into Apogee" 
 
 ---
 
