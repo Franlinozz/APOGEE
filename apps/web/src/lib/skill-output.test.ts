@@ -10,6 +10,14 @@ describe('normalizeSkillOutput', () => {
     expect(normalizeSkillOutput('text.translate', { translation: 'Bonjour.' })).toEqual({ kind: 'text', text: 'Bonjour.' });
   });
 
+  it('renders text.title title text', () => {
+    expect(normalizeSkillOutput('text.title', { title: 'A crisp headline' })).toEqual({ kind: 'text', text: 'A crisp headline' });
+  });
+
+  it('renders text.rewrite rewritten text', () => {
+    expect(normalizeSkillOutput('text.rewrite', { rewrite: 'This is clearer.' })).toEqual({ kind: 'text', text: 'This is clearer.' });
+  });
+
   it('renders text.sentiment label and score', () => {
     expect(normalizeSkillOutput('text.sentiment', { sentiment: 'positive', score: 0.873 })).toEqual({ kind: 'sentiment', sentiment: 'positive', score: 0.873 });
   });
@@ -22,6 +30,13 @@ describe('normalizeSkillOutput', () => {
     expect(normalizeSkillOutput('text.entities', { entities: [{ type: 'PERSON', value: 'Ada' }, { type: 'unknown', value: 'Thing' }] })).toEqual({
       kind: 'entities',
       entities: [{ type: 'PERSON', value: 'Ada' }, { type: 'OTHER', value: 'Thing' }],
+    });
+  });
+
+  it('renders text.keywords entries with normalized badges', () => {
+    expect(normalizeSkillOutput('text.keywords', { keywords: [{ type: 'KEYWORD', value: 'agent runtime' }, { type: 'unknown', value: '0G' }] })).toEqual({
+      kind: 'entities',
+      entities: [{ type: 'KEYWORD', value: 'agent runtime' }, { type: 'KEYWORD', value: '0G' }],
     });
   });
 

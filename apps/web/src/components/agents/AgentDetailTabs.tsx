@@ -233,7 +233,7 @@ type SkillFormState = {
   prompt: string;
 };
 
-const INVOKABLE_SKILLS = new Set<string>(['chat.completion', 'text.summarize', 'text.translate', 'text.sentiment', 'text.entities', 'code.review']);
+const INVOKABLE_SKILLS = new Set<string>(['chat.completion', 'text.summarize', 'text.title', 'text.translate', 'text.rewrite', 'text.sentiment', 'text.entities', 'text.keywords', 'code.review']);
 const DEFAULT_FORM: SkillFormState = { text: '', maxWords: 80, targetLanguage: '', code: '', language: '', prompt: '' };
 
 function sameAddr(a?: string, b?: string): boolean {
@@ -243,8 +243,10 @@ function sameAddr(a?: string, b?: string): boolean {
 function buildSkillPayload(skillId: string, form: SkillFormState, agentId: string): Record<string, unknown> {
   if (skillId === 'chat.completion') return { agentId, messages: [{ role: 'user', content: form.prompt.trim() }] };
   if (skillId === 'text.summarize') return { agentId, text: form.text.trim(), maxWords: form.maxWords };
+  if (skillId === 'text.title') return { agentId, text: form.text.trim() };
   if (skillId === 'text.translate') return { agentId, text: form.text.trim(), targetLanguage: form.targetLanguage.trim() };
-  if (skillId === 'text.sentiment' || skillId === 'text.entities') return { agentId, text: form.text.trim() };
+  if (skillId === 'text.rewrite') return { agentId, text: form.text.trim() };
+  if (skillId === 'text.sentiment' || skillId === 'text.entities' || skillId === 'text.keywords') return { agentId, text: form.text.trim() };
   if (skillId === 'code.review') return { agentId, code: form.code.trim(), language: form.language.trim() || undefined };
   return { agentId };
 }
@@ -257,7 +259,7 @@ function validateSkillForm(skillId: string, form: SkillFormState): string | null
     return null;
   }
   if (skillId === 'code.review') return form.code.trim() ? null : 'Code is required.';
-  if (skillId === 'text.summarize' || skillId === 'text.sentiment' || skillId === 'text.entities') return form.text.trim() ? null : 'Text is required.';
+  if (skillId === 'text.summarize' || skillId === 'text.title' || skillId === 'text.rewrite' || skillId === 'text.sentiment' || skillId === 'text.entities' || skillId === 'text.keywords') return form.text.trim() ? null : 'Text is required.';
   return 'This skill is not runnable from the UI yet.';
 }
 
