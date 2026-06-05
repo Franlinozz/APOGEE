@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Nav } from '@/components/landing/Nav';
 import { CONTRACTS, CHAIN_NAMES, CONTRACT_NAMES } from '@/lib/contracts';
 import { buildChainscanUrl, chainscanBase } from '@/lib/chainscan';
+import { AgentProofOverview } from './AgentProofOverview';
 import { ReceiptsFeed, StorageProofsClient } from './_client';
 
 export const metadata: Metadata = { title: 'On-chain Proofs — Apogee Protocol' };
@@ -17,7 +18,6 @@ type DemoAgent = {
   agentId: string | null;
   receiptCount: number;
   lastHeartbeat: string | null;
-  runningForHours: number | null;
 };
 
 type StorageProofRow = {
@@ -33,10 +33,13 @@ type StorageProofRow = {
   createdAt: string;
 };
 
+type ReceiptRow = StorageProofRow & { valueWei: string };
+
 type ProofsApiResponse = {
   generatedAt: string;
   totalReceipts: number;
   demoAgents: DemoAgent[];
+  receipts: ReceiptRow[];
   heatmap: Record<string, Record<string, number>>;
   storageProofSample: StorageProofRow[];
 };
@@ -64,10 +67,11 @@ function emptyProofs(): ProofsApiResponse {
     generatedAt: new Date().toISOString(),
     totalReceipts: 0,
     demoAgents: [
-      { slug: 'aurora', agentId: SEEDED_AGENTS['aurora'] ?? null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
-      { slug: 'vesper', agentId: SEEDED_AGENTS['vesper'] ?? null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
-      { slug: 'helix',  agentId: SEEDED_AGENTS['helix']  ?? null, receiptCount: 0, lastHeartbeat: null, runningForHours: null },
+      { slug: 'aurora', agentId: SEEDED_AGENTS['aurora'] ?? null, receiptCount: 0, lastHeartbeat: null },
+      { slug: 'vesper', agentId: SEEDED_AGENTS['vesper'] ?? null, receiptCount: 0, lastHeartbeat: null },
+      { slug: 'helix',  agentId: SEEDED_AGENTS['helix']  ?? null, receiptCount: 0, lastHeartbeat: null },
     ],
+    receipts: [] as ReceiptRow[],
     heatmap: Object.fromEntries(
       Array.from({ length: 14 }, (_, i) => {
         const d = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
@@ -87,84 +91,6 @@ function mergeSeededAddresses(proofs: ProofsApiResponse): ProofsApiResponse {
     })),
   };
 }
-
-// ── Agent emblems (inline SVG) ────────────────────────────────────────────────
-
-function AuroraIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <line x1="4" y1="27" x2="36" y2="27" strokeOpacity="0.5" />
-      <path d="M 7 27 A 13 13 0 0 1 33 27" />
-      <line x1="20" y1="4"  x2="20" y2="9" />
-      <line x1="30.2" y1="9.8"  x2="26.7" y2="13.3" />
-      <line x1="36"   y1="20"   x2="31"   y2="20"   />
-      <line x1="9.8"  y1="9.8"  x2="13.3" y2="13.3" />
-      <line x1="4"    y1="20"   x2="9"    y2="20"   />
-    </svg>
-  );
-}
-
-function VesperIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
-      strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M 26 9 A 13 13 0 1 0 26 31 A 11 11 0 0 1 26 9 Z"
-        fill="currentColor" fillOpacity="0.12" />
-      <circle cx="33" cy="10" r="1"    fill="currentColor" stroke="none" />
-      <circle cx="36" cy="18" r="0.7"  fill="currentColor" stroke="none" />
-      <circle cx="30" cy="5"  r="0.7"  fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function HelixIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5"
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M 8 8  C 16 8  24 32 32 32" />
-      <path d="M 8 32 C 16 32 24 8  32 8"  strokeOpacity="0.45" />
-      <line x1="12" y1="10.5" x2="12" y2="27"  strokeOpacity="0.35" />
-      <line x1="20" y1="17"   x2="20" y2="23"  strokeOpacity="0.6"  />
-      <line x1="28" y1="13"   x2="28" y2="29.5" strokeOpacity="0.35" />
-    </svg>
-  );
-}
-
-// ── Agent card metadata ───────────────────────────────────────────────────────
-
-const AGENT_META = {
-  aurora: {
-    Icon: AuroraIcon,
-    role: 'Analysis Agent',
-    capability: 'News · web.search · self-billing',
-    accent: 'text-amber-500',
-    iconBg: 'bg-amber-400/[0.08] border-amber-400/20',
-    topBar: 'from-amber-400/40 to-transparent',
-    badgeActive: 'bg-amber-400/10 text-amber-600',
-    dot: 'bg-amber-400',
-  },
-  vesper: {
-    Icon: VesperIcon,
-    role: 'Creative Agent',
-    capability: 'Media · image.generate · nft.mint',
-    accent: 'text-accent-light',
-    iconBg: 'bg-accent/[0.08] border-accent/20',
-    topBar: 'from-accent/40 to-transparent',
-    badgeActive: 'bg-accent/10 text-accent-light',
-    dot: 'bg-accent',
-  },
-  helix: {
-    Icon: HelixIcon,
-    role: 'Analytics Agent',
-    capability: 'Chain · chain.query · daily report',
-    accent: 'text-cyan-500',
-    iconBg: 'bg-cyan-400/[0.08] border-cyan-400/20',
-    topBar: 'from-cyan-400/40 to-transparent',
-    badgeActive: 'bg-cyan-400/10 text-cyan-600',
-    dot: 'bg-cyan-400',
-  },
-} as const;
 
 // ── Tab navigation ────────────────────────────────────────────────────────────
 
@@ -253,149 +179,14 @@ function ContractsTab() {
 
 // ── Overview tab ──────────────────────────────────────────────────────────────
 
-function DemoAgentCard({ slug, agentId, receiptCount, lastHeartbeat, runningForHours }: DemoAgent) {
-  const meta = AGENT_META[slug as keyof typeof AGENT_META];
-  if (!meta) return null;
-  const { Icon, role, capability, accent, iconBg, topBar, badgeActive, dot } = meta;
-  const isActive = Boolean(lastHeartbeat);
-  const hasActivity = receiptCount > 0;
-  // Status label: only claim "Awaiting" if there is genuinely zero evidence of activity.
-  const statusLabel = isActive ? 'Active' : hasActivity ? 'Running' : 'Awaiting first heartbeat';
-
-  return (
-    <div className="relative rounded-2xl border border-[var(--color-line)] bg-surface overflow-hidden flex flex-col transition-[border-color,box-shadow,transform] duration-[220ms] hover:border-[var(--color-line-accent)] hover:shadow-card hover:-translate-y-0.5">
-      <div className={`h-px w-full bg-gradient-to-r ${topBar}`} />
-
-      <div className="p-5 flex flex-col gap-5 flex-1">
-        <div className="flex items-center gap-3.5">
-          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${iconBg} ${accent}`}>
-            <Icon className="w-6 h-6" />
-          </div>
-          <div className="min-w-0">
-            <p className={`font-semibold capitalize leading-tight ${accent}`}>{slug}</p>
-            <p className="text-[11px] text-fg-muted mt-0.5">{role}</p>
-          </div>
-          <div className="ml-auto">
-            {isActive ? (
-              <span className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${dot}`} />
-                <span className="text-[10px] font-semibold text-fg-muted">Live</span>
-              </span>
-            ) : hasActivity ? (
-              <span className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-                <span className="text-[10px] font-semibold text-fg-muted">Active</span>
-              </span>
-            ) : (
-              <span className="text-[10px] text-fg-faint">Idle</span>
-            )}
-          </div>
-        </div>
-
-        <p className="text-[10px] text-fg-faint leading-relaxed -mt-2">{capability}</p>
-
-        <div className="space-y-2.5 text-xs border-t border-[var(--color-line)] pt-4">
-          <div className="flex justify-between items-center gap-2">
-            <span className="text-fg-faint shrink-0">Address</span>
-            {buildChainscanUrl({ address: agentId, kind: 'address', chainId: 16661 }) ? (
-              <a href={buildChainscanUrl({ address: agentId, kind: 'address', chainId: 16661 })!} target="_blank" rel="noreferrer"
-                className={`font-mono hover:opacity-80 truncate ${accent}`} title={agentId ?? undefined}>
-                {agentId?.slice(0, 6)}…{agentId?.slice(-4)}
-              </a>
-            ) : agentId ? <span className="font-mono text-fg-faint">{agentId}</span> : <span className="text-fg-faint">not seeded</span>}
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-fg-faint">Receipts minted</span>
-            <span className="text-fg font-semibold tabular-nums">{receiptCount}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-fg-faint">Last heartbeat</span>
-            <span className="text-fg-muted tabular-nums">
-              {lastHeartbeat ? new Date(lastHeartbeat).toLocaleTimeString() : '—'}
-            </span>
-          </div>
-          {runningForHours !== null && (
-            <div className="flex justify-between items-center">
-              <span className="text-fg-faint">Uptime</span>
-              <span className="text-success font-semibold tabular-nums">{runningForHours}h</span>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-auto pt-1">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase ${isActive || hasActivity ? badgeActive : 'bg-elevated text-fg-faint'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? dot : hasActivity ? dot : 'bg-fg-faint'}`} />
-            {statusLabel}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ActivityHeatmap({ heatmap }: { heatmap: Record<string, Record<string, number>> }) {
-  const days = Object.keys(heatmap).sort().reverse();
-  const allVals = days.flatMap(d => Object.values(heatmap[d] ?? {}).map(Number));
-  const maxVal = Math.max(1, ...allVals);
-  const intensityBg = ['bg-elevated', 'bg-accent/20', 'bg-accent/40', 'bg-accent/65', 'bg-accent/90'];
-
-  return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[680px]">
-        <div className="flex gap-0.5 mb-1.5 pl-16">
-          {Array.from({ length: 24 }, (_, h) => (
-            <div key={h} className="w-[26px] text-center text-[9px] text-fg-faint shrink-0">
-              {h % 6 === 0 ? String(h) : ''}
-            </div>
-          ))}
-        </div>
-        {days.map(day => (
-          <div key={day} className="flex items-center gap-1 mb-0.5">
-            <span className="text-[9px] text-fg-faint w-14 shrink-0 text-right pr-2">{day.slice(5)}</span>
-            <div className="flex gap-0.5">
-              {Array.from({ length: 24 }, (_, h) => {
-                const count = Number(heatmap[day]?.[String(h)] ?? 0);
-                const intensity = count === 0 ? 0 : Math.min(4, Math.ceil((count / maxVal) * 4));
-                return (
-                  <div
-                    key={h}
-                    title={`${day} ${h}:00 — ${count} receipt${count !== 1 ? 's' : ''}`}
-                    className={`w-[26px] h-4 rounded-[2px] ${intensityBg[intensity]}`}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        <div className="flex items-center gap-2 mt-3 pl-16">
-          <span className="text-[9px] text-fg-faint">Less</span>
-          {intensityBg.map((bg, i) => <div key={i} className={`w-[26px] h-4 rounded-[2px] ${bg}`} />)}
-          <span className="text-[9px] text-fg-faint">More</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function OverviewTab({ proofs }: { proofs: ProofsApiResponse }) {
   return (
-    <div className="space-y-14">
-      <div className="animate-fade-up space-y-4">
-        <h2 className="text-lg font-semibold text-fg">Demo agents</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {proofs.demoAgents.map(agent => <DemoAgentCard key={agent.slug} {...agent} />)}
-        </div>
-      </div>
-
-      <div className="animate-fade-up delay-150 space-y-4">
-        <h2 className="text-lg font-semibold text-fg">Activity — last 14 days × 24 h</h2>
-        <div className="rounded-2xl border border-[var(--color-line)] bg-surface p-5">
-          <ActivityHeatmap heatmap={proofs.heatmap} />
-        </div>
-      </div>
-
-      <ReceiptsFeed edgeUrl={EDGE_URL} />
-    </div>
+    <AgentProofOverview
+      agents={proofs.demoAgents}
+      receipts={proofs.receipts ?? []}
+      heatmap={proofs.heatmap}
+      receiptFeed={<ReceiptsFeed edgeUrl={EDGE_URL} />}
+    />
   );
 }
 
