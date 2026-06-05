@@ -44,6 +44,7 @@ type AgentDetail = {
   topBar: string;
   badgeActive: string;
   dot: string;
+  cardHover: string;
   Icon: ({ className }: { className?: string }) => JSX.Element;
 };
 
@@ -114,6 +115,7 @@ const AGENT_DETAILS: Record<AgentSlug, AgentDetail> = {
     topBar: 'from-amber-400/40 to-transparent',
     badgeActive: 'bg-amber-400/10 text-amber-600',
     dot: 'bg-amber-400',
+    cardHover: 'hover:border-amber-400/40 hover:shadow-lg hover:shadow-amber-400/20',
     Icon: AuroraIcon,
   },
   vesper: {
@@ -131,6 +133,7 @@ const AGENT_DETAILS: Record<AgentSlug, AgentDetail> = {
     topBar: 'from-accent/40 to-transparent',
     badgeActive: 'bg-accent/10 text-accent-light',
     dot: 'bg-accent',
+    cardHover: 'hover:border-accent/40 hover:shadow-lg hover:shadow-accent/20',
     Icon: VesperIcon,
   },
   helix: {
@@ -148,6 +151,7 @@ const AGENT_DETAILS: Record<AgentSlug, AgentDetail> = {
     topBar: 'from-cyan-400/40 to-transparent',
     badgeActive: 'bg-cyan-400/10 text-cyan-600',
     dot: 'bg-cyan-400',
+    cardHover: 'hover:border-cyan-400/40 hover:shadow-lg hover:shadow-cyan-400/20',
     Icon: HelixIcon,
   },
 };
@@ -245,7 +249,7 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
 
 function Section({ title, children, prominent = false }: { title: string; children: ReactNode; prominent?: boolean }) {
   return (
-    <section className={`rounded-2xl border ${prominent ? 'border-[var(--color-line-accent)] bg-elevated/80' : 'border-[var(--color-line)] bg-surface'} p-4`}>
+    <section className={`rounded-2xl border ${prominent ? 'border-[var(--color-line-accent)] bg-elevated/80' : 'border-[var(--color-line)] bg-surface [[data-theme=light]_&]:bg-elevated'} p-4`}>
       <h3 className="mb-3 text-sm font-semibold text-fg">{title}</h3>
       {children}
     </section>
@@ -262,7 +266,7 @@ function DemoAgentCard({ agent, onOpen }: { agent: DemoAgent; onOpen: () => void
     <button
       type="button"
       onClick={onOpen}
-      className="group relative flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-[var(--color-line)] bg-surface text-left transition-[border-color,box-shadow,transform] duration-[220ms] hover:-translate-y-0.5 hover:border-[var(--color-line-accent)] hover:shadow-card focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+      className={`group relative flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-[var(--color-line)] bg-surface text-left transition-[border-color,box-shadow,transform] duration-[220ms] hover:-translate-y-0.5 hover:shadow-card ${detail.cardHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`}
       aria-label={`Open ${detail.name} proof details`}
     >
       <div className={`h-px w-full bg-gradient-to-r ${detail.topBar}`} />
@@ -393,10 +397,10 @@ function AgentModal({ agent, receipts, onClose }: { agent: DemoAgent; receipts: 
         role="dialog"
         aria-modal="true"
         aria-labelledby="agent-proof-modal-title"
-        className="relative z-10 max-h-[85vh] w-full max-w-4xl overflow-y-auto overscroll-contain rounded-3xl border border-[var(--color-line-bright)] bg-bg shadow-2xl outline-none"
+        className="relative z-10 max-h-[85vh] w-full max-w-4xl overflow-y-auto overscroll-contain rounded-3xl border border-[var(--color-line-bright)] bg-bg shadow-2xl outline-none [[data-theme=light]_&]:border-[var(--color-line-bright)] [[data-theme=light]_&]:bg-surface [[data-theme=light]_&]:shadow-card-hover"
       >
         <div className={`h-px w-full bg-gradient-to-r ${detail.topBar}`} />
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--color-line)] bg-bg/95 p-5 backdrop-blur">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--color-line)] bg-bg/95 p-5 backdrop-blur [[data-theme=light]_&]:bg-surface/95">
           <div className="flex min-w-0 items-center gap-3.5">
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${detail.iconBg} ${detail.accent}`}>
               <Icon className="h-6 w-6" />
@@ -464,7 +468,7 @@ function AgentModal({ agent, receipts, onClose }: { agent: DemoAgent; receipts: 
               ) : (
                 <div className="space-y-3">
                   {agentReceipts.map((receipt) => (
-                    <article key={receipt.receiptId} className="rounded-xl border border-[var(--color-line)] bg-bg/70 p-3">
+                    <article key={receipt.receiptId} className="rounded-xl border border-[var(--color-line)] bg-bg/70 p-3 [[data-theme=light]_&]:bg-elevated">
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate font-mono text-sm text-accent-light" title={receipt.actionTag}>{receipt.actionTag}</p>
