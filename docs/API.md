@@ -342,7 +342,7 @@ List available marketplace skills with pricing and verified-live metadata. Resul
     "tier": "free",
     "pricePerCallWei": "0",
     "tags": ["ai", "compute"],
-    "live": false
+    "live": true
   }
 ]
 ```
@@ -351,7 +351,7 @@ List available marketplace skills with pricing and verified-live metadata. Resul
 
 Invoke a live 0G Compute-backed skill. The compute response is returned immediately; receipt minting happens asynchronously and failures are logged without poisoning the user response.
 
-Supported live skill ids: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `code.review`.
+Supported live skill ids: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `text.keywords`, `text.rewrite`, `text.title`, `code.review`.
 
 **Request body examples**
 ```json

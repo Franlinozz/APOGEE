@@ -117,14 +117,14 @@ const result = await fetch('/v1/skills/translate/run', {
 
 ## Slide 8 — Skills Marketplace
 
-**Headline:** 22 skills. 12 free. 10 paid via on-chain billing.
+**Headline:** Current post-submission catalog: 25 skills. 15 free. 10 paid via on-chain billing. Submitted build: 22 skills.
 
 **Two-column layout:**
 
 **Free (core):**
 `chat.completion` · `chat.embed` · `web.search` · `web.fetch` · `memory.write`
 `memory.read` · `memory.search` · `chain.query` · `chain.send` · `storage.upload`
-`audio.transcribe` · `image.generate`
+`audio.transcribe` · `image.generate` · `text.keywords` · `text.rewrite` · `text.title`
 
 **Premium (priced in 0G):**
 `news.aggregate` (0.0001 0G) · `summarize.long` (0.0002 0G) · `nft.mint` (0.001 0G)

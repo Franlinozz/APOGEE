@@ -196,7 +196,7 @@ APOGEE/
 │   ├── skills-runtime/ isolated-vm skill execution engine
 │   └── ui/           Design system (14 components)
 └── skills/
-    ├── core/         12 free skills
+    ├── core/         15 free skills (post-submission; submitted build had 12)
     └── premium/      10 paid skills
 ```
 

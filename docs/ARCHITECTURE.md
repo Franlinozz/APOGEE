@@ -57,7 +57,7 @@ sequenceDiagram
     E-->>P: agent name, action label, tx hash, storage root
 ```
 
-Production live skills are `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, and `code.review`. The modal renderer consumes canonical Edge output shapes (`output.content`, `output.summary`, `output.translation`, `output.sentiment`, `output.entities`, `output.review`) and falls back to raw JSON only for malformed outputs.
+Production live skills are `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `text.keywords`, `text.rewrite`, `text.title`, and `code.review`. The modal renderer consumes canonical Edge output shapes (`output.content`, `output.summary`, `output.translation`, `output.sentiment`, `output.entities`/`output.keywords`, `output.rewrite`, `output.title`, `output.review`) and falls back to raw JSON only for malformed outputs.
 
 
 ### 2.2 Apogee Pilot inference and receipts

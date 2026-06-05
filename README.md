@@ -34,7 +34,8 @@ _Core submission was completed on 16th May, 2026. We've continued hardening the 
 - May 18, 2026 — Live skills batch 1 shipped: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `code.review`.
 - May 18, 2026 — Skills run end-to-end on newly deployed agents (verified: text.summarize, text.translate, code.review) with receipts minted on-chain.
 - May 19, 2026 — Per-skill output rendering shipped and agent status gates hardened for recovered deployments.
-- May 25, 2026 — Published second technical long-form article on "Building an Autonomous-Agent Runtime on 0G: An Engineering Deep Dive into Apogee" 
+- May 25, 2026 — Published second technical long-form article on "Building an Autonomous-Agent Runtime on 0G: An Engineering Deep Dive into Apogee"
+- June 5, 2026 — Three post-submission text skills shipped and live: `text.keywords`, `text.rewrite`, `text.title`. Verified end-to-end on Aristotle mainnet with `text.keywords` receipt [`0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0`](https://chainscan.0g.ai/tx/0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0); all three are live in `/v1/skills`.
 
 ---
 
@@ -78,7 +79,7 @@ The result: teams spend weeks on plumbing instead of building products. Apogee e
 | 1 | **Self-custodial smart wallets** | Every agent gets an `AgentAccount` on 0G Chain with a programmable `PolicyEngine` — spending limits, allowlists, per-action caps, pause flags. No centralized custodian ever touches agent funds. |
 | 2 | **On-chain receipts** | Every billable action calls `ReceiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei)` on Aristotle mainnet. The payload is uploaded to 0G Storage first; its Merkle root is the permanent anchor. |
 | 3 | **Encrypted persistent memory** | Agent memories are AES-256-GCM encrypted, stored as Merkle blobs on 0G Storage, and indexed on-chain. The decryption key is derived from the agent's signer — no third party can read it. |
-| 4 | **Paid skills marketplace** | The catalog models 22 skills (12 free core + 10 premium); the production dashboard currently exposes six live invokable skills with receipt-backed execution. Premium skill billing uses `PaymentRouter`; `RevenueSplitter` enables creator royalties. |
+| 4 | **Paid skills marketplace** | The current post-submission catalog models 25 skills (15 free core + 10 premium); the production dashboard exposes nine live invokable skills with receipt-backed execution. Premium skill billing uses `PaymentRouter`; `RevenueSplitter` enables creator royalties. |
 | 5 | **0G Compute backbone** | `chat.completion`, `chat.embed`, `image.generate`, and `audio.transcribe` route through `@0glabs/0g-serving-broker`. Provider acknowledgement, ChatID extraction from response headers, and `processResponse()` settlement happen automatically. |
 
 ---
@@ -89,7 +90,7 @@ The result: teams spend weeks on plumbing instead of building products. Apogee e
 - User-deployable agents with NFT identity, policy, bootstrap memory, selected skill registration, and on-chain lifecycle receipts on Aristotle mainnet.
 - Three production heartbeat agents — Aurora analyze, Vesper media, and Helix report — running scheduled jobs and minting receipts.
 - Apogee Pilot chat at `/apogee-pilot`, backed by 0G Compute with `pilot.chat` receipts.
-- Six live dashboard-callable skills: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, and `code.review`.
+- Nine live dashboard-callable skills: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `text.keywords`, `text.rewrite`, `text.title`, and `code.review`.
 - Agent-scoped skill invocation with owner checks, policy enforcement, 0G Compute execution, per-skill modal output, and receipts tagged to the invoking agent.
 - `ReceiptBook` ledger visible at `/proofs`, currently indexing 1,656+ Aristotle receipts with safe Chainscan links for real transaction hashes.
 - Global dashboard metrics for Aristotle network agents, active runtime/demo agents, receipts, and indexed volume.
@@ -224,7 +225,7 @@ Three agents are live on Aristotle mainnet. Receipts are visible at [apogeeproto
 
 ## Skills Catalog
 
-### Live dashboard skills (6)
+### Live dashboard skills (9)
 
 | Skill | Description |
 |-------|-------------|
@@ -233,9 +234,12 @@ Three agents are live on Aristotle mainnet. Receipts are visible at [apogeeproto
 | `text.translate` | Translation to a requested target language. |
 | `text.sentiment` | Sentiment classification with normalized score. |
 | `text.entities` | Named entity extraction. |
+| `text.keywords` | Key term and phrase extraction. |
+| `text.rewrite` | Clearer, more formal rewrites while preserving meaning. |
+| `text.title` | Short headline/title generation. |
 | `code.review` | Concise code review via 0G Compute. |
 
-### Cataloged Free Core Skills (12)
+### Cataloged Free Core Skills (15)
 
 | Skill | Description |
 |-------|-------------|
@@ -243,6 +247,9 @@ Three agents are live on Aristotle mainnet. Receipts are visible at [apogeeproto
 | `chat.embed` | Text embeddings for semantic search |
 | `image.generate` | Image generation via 0G Compute |
 | `audio.transcribe` | Speech-to-text transcription |
+| `text.keywords` | Extract key terms and phrases |
+| `text.rewrite` | Rewrite text clearly and formally |
+| `text.title` | Generate short titles and headlines |
 | `web.search` | Web search via Tavily API |
 | `web.fetch` | HTTP fetch with egress allowlist enforcement |
 | `memory.write` | Encrypt and write agent memory to 0G Storage |

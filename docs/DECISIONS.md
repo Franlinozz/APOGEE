@@ -29,6 +29,7 @@
 
 - Francc Alpha #29 verified the five selected dashboard skills end-to-end: `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, and `code.review`.
 - `chat.completion` is covered by the Apogee Pilot path, which uses the same 0G Compute pipeline and mints indexed `pilot.chat` receipts.
+- 2026-06-05 post-submission update: `text.keywords`, `text.rewrite`, and `text.title` were added to the live catalog; `text.keywords` was verified end-to-end on new agent #38 with receipt `0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0`. The other two share the same 0G Compute + receipt path and were not re-invoked to conserve OG.
 - Each verified production path returns real UI-ready output, mints an on-chain ReceiptBook receipt, and appears on `/proofs` with the invoking agent or Pilot identity.
 - Apogee v0.1 is marked production-ready as a real protocol demo: user-deployed agents, policy-scoped skills, 0G Compute execution, and on-chain receipts all work together.
 
@@ -76,7 +77,7 @@
 
 - Implemented `@apogee/skills-runtime` with Zod skill manifests, semver/dot-case validation, `SkillRegistry`, isolated-vm-backed `SkillRunner`, UI-safe typed `SkillError` taxonomy, timeout enforcement, input/output validation, egress checks, context-only capability calls, and provenance capture for chat IDs, storage roots, tx hashes, and attestations.
 - Added isolated-vm install/runtime notes in `packages/skills-runtime/README.md`; every run creates a fresh 128 MB isolate and skills only access capabilities through `ctx.call`.
-- Added the 12 free built-in core skill folders under `skills/core`: `chat.completion`, `chat.embed`, `image.generate`, `audio.transcribe`, `web.search`, `web.fetch`, `memory.write`, `memory.read`, `memory.search`, `chain.query`, `chain.send`, and `storage.upload`, each with `manifest.ts`, `handler.ts`, marketplace README, and integration test placeholder.
+- Added the original 12 free built-in core skill folders under `skills/core`: `chat.completion`, `chat.embed`, `image.generate`, `audio.transcribe`, `web.search`, `web.fetch`, `memory.write`, `memory.read`, `memory.search`, `chain.query`, `chain.send`, and `storage.upload`, each with `manifest.ts`, `handler.ts`, marketplace README, and integration test placeholder. As of the June 5 post-submission text-skills batch, the free core catalog has 15 skills with `text.keywords`, `text.rewrite`, and `text.title` added.
 - Added `registerCoreSkills()` loader export for built-ins and runtime `loadSkills()` support for build-time scanned `skills/core` and `skills/premium` manifests.
 - Extended `@apogee/chain-client` with `query()` and `sendViaAgentAccount()` so `chain.query` and `chain.send` have a typed boundary method instead of direct ethers usage inside skills.
 - Verification gates passed locally under Node 22 with expected Node 20 engine warnings: `pnpm build`, `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm -F @apogee/skills-runtime test`, and `pnpm test:skills`.

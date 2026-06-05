@@ -76,7 +76,7 @@ React, Next.js, Web3, Ethers, Node.js, Solidity, TypeScript, 0G
 - 9 Solidity contracts deployed on Aristotle mainnet (chainId 16661)
 - Full Next.js 14 web app with SIWE auth, dashboard, agents, receipts, proofs, marketplace, and docs
 - Fastify edge API with Redis-backed receipt index and BullMQ heartbeat workers
-- 22 skills (12 free core + 10 premium) running in isolated-vm sandboxes
+- Submitted build: 22 skills (12 free core + 10 premium) running in isolated-vm sandboxes; current post-submission catalog: 25 skills after adding `text.keywords`, `text.rewrite`, and `text.title`
 - 0G Storage integration via `@0gfoundation/0g-ts-sdk` — Merkle-verified payload blobs
 - 0G Compute integration via `@0glabs/0g-serving-broker` — chat, embed, image, transcription
 
