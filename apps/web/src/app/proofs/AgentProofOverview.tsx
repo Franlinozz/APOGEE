@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CONTRACTS } from '@/lib/contracts';
 import { buildChainscanUrl } from '@/lib/chainscan';
 
@@ -324,9 +325,15 @@ function AgentModal({ agent, receipts, onClose }: { agent: DemoAgent; receipts: 
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setPortalRoot(document.body);
+  }, []);
 
   useEffect(() => {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const timer = window.setTimeout(() => closeRef.current?.focus(), 0);
 
@@ -355,7 +362,7 @@ function AgentModal({ agent, receipts, onClose }: { agent: DemoAgent; receipts: 
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
       previousFocus.current?.focus();
     };
   }, [onClose]);
@@ -366,20 +373,27 @@ function AgentModal({ agent, receipts, onClose }: { agent: DemoAgent; receipts: 
   const status = statusFor(agent);
   const agentReceipts = receipts.filter((receipt) => receipt.agentId === agent.slug).slice(0, 5);
 
-  return (
+  if (!portalRoot) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 px-4 py-6 backdrop-blur-md animate-fade-up"
+      className="fixed inset-0 z-[9999] flex h-[100dvh] w-screen items-center justify-center px-4 py-6"
       role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+      data-agent-proof-overlay="true"
     >
+      <button
+        type="button"
+        className="absolute inset-0 h-full w-full cursor-default bg-black/65 backdrop-blur-xl"
+        aria-label="Close agent proof modal backdrop"
+        data-agent-proof-backdrop="true"
+        onMouseDown={onClose}
+      />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="agent-proof-modal-title"
-        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-[var(--color-line-bright)] bg-bg shadow-2xl outline-none"
+        className="relative z-10 max-h-[85vh] w-full max-w-4xl overflow-y-auto overscroll-contain rounded-3xl border border-[var(--color-line-bright)] bg-bg shadow-2xl outline-none"
       >
         <div className={`h-px w-full bg-gradient-to-r ${detail.topBar}`} />
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--color-line)] bg-bg/95 p-5 backdrop-blur">
@@ -495,7 +509,8 @@ function AgentModal({ agent, receipts, onClose }: { agent: DemoAgent; receipts: 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    portalRoot
   );
 }
 
