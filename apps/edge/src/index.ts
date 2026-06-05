@@ -138,8 +138,8 @@ export const skillInvokeBootstrapComplete = (
 export const skillInvokeCanRunAfterBootstrap = (status: AgentRecord['status'], bootstrapComplete: boolean, deploymentStatus?: DeploymentRecord['status']): boolean =>
   status === 'active' || deploymentStatus === 'active' || ((status === 'initialized' || status === 'ready') && bootstrapComplete);
 
-const LIVE_SKILL_IDS = new Set(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']);
-const skillInvokeParamsSchema = z.object({ skillId: z.enum(['chat.completion', 'code.review', 'text.entities', 'text.sentiment', 'text.summarize', 'text.translate']) });
+const LIVE_SKILL_IDS = new Set(['chat.completion', 'code.review', 'text.entities', 'text.keywords', 'text.rewrite', 'text.sentiment', 'text.summarize', 'text.title', 'text.translate']);
+const skillInvokeParamsSchema = z.object({ skillId: z.enum(['chat.completion', 'code.review', 'text.entities', 'text.keywords', 'text.rewrite', 'text.sentiment', 'text.summarize', 'text.title', 'text.translate']) });
 const skillInvokeBodySchema = z.record(z.string(), jsonValueSchema);
 type SkillInvokeBody = z.infer<typeof skillInvokeBodySchema>;
 const stripWrappingQuotes = (value: string): string => value.trim().replace(/^(["'“”])(.+)\1$/s, '$2').trim();
@@ -229,8 +229,11 @@ const DEFAULT_SKILLS = [
   { id: 'chat.completion', name: 'Chat Completion', version: '1.0.0', description: 'LLM chat via 0G Compute', category: 'AI', tier: 'free' as const, pricePerCallWei: '0', tags: ['ai', 'compute'], live: true },
   { id: 'code.review', name: 'Code Review', version: '1.0.0', description: 'Review code for bugs, style, and clarity with 0G Compute', category: 'Code', tier: 'free' as const, pricePerCallWei: '0', tags: ['code', 'compute'], live: true },
   { id: 'text.entities', name: 'Text Entities', version: '1.0.0', description: 'Extract named entities with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
+  { id: 'text.keywords', name: 'Text Keywords', version: '1.0.0', description: 'Extract key terms and phrases with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
+  { id: 'text.rewrite', name: 'Text Rewrite', version: '1.0.0', description: 'Rewrite text clearly and formally with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
   { id: 'text.sentiment', name: 'Text Sentiment', version: '1.0.0', description: 'Classify sentiment with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
   { id: 'text.summarize', name: 'Text Summarize', version: '1.0.0', description: 'Summarize text with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
+  { id: 'text.title', name: 'Text Title', version: '1.0.0', description: 'Generate short titles with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
   { id: 'text.translate', name: 'Text Translate', version: '1.0.0', description: 'Translate text with 0G Compute', category: 'Text', tier: 'free' as const, pricePerCallWei: '0', tags: ['text', 'compute'], live: true },
   { id: 'memory.write', name: 'Memory Write', version: '1.0.0', description: 'Persist encrypted memory state to 0G Storage', category: 'Memory', tier: 'free' as const, pricePerCallWei: '0', tags: ['memory', 'storage'] },
   { id: 'memory.read', name: 'Memory Read', version: '1.0.0', description: 'Read agent memory entries', category: 'Memory', tier: 'free' as const, pricePerCallWei: '0', tags: ['memory'] },
@@ -2265,6 +2268,12 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       messages = [{ role: 'user', content: `Summarize the following in ${maxWords} words or fewer.\nReturn only the summary text, no preamble or commentary.\n\nTEXT:\n${text}` }];
       maxTokens = Math.max(SKILL_COMPLETION_TOKEN_BUDGET, Math.min(2048, maxWords * 8));
       shapeOutput = (text) => ({ summary: stripWrappingQuotes(text) });
+    } else if (skillId === 'text.title') {
+      const text = requireString('text', 10_000);
+      if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
+      messages = [{ role: 'user', content: `Generate a short, clear title or headline for the following text.\nReturn only the title, no preamble, no commentary, and no quotation marks.\n\nTEXT:\n${text}` }];
+      maxTokens = SKILL_COMPLETION_TOKEN_BUDGET;
+      shapeOutput = (text) => ({ title: stripWrappingQuotes(text) });
     } else if (skillId === 'text.translate') {
       const text = requireString('text', 10_000);
       const targetLanguage = requireString('targetLanguage', 80);
@@ -2272,6 +2281,12 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
       messages = [{ role: 'user', content: `Translate the following text to ${targetLanguage}.\nReturn only the translation, no preamble or commentary, no parenthetical notes.\n\nTEXT:\n${text}` }];
       maxTokens = SKILL_COMPLETION_TOKEN_BUDGET;
       shapeOutput = (text) => ({ translation: stripWrappingQuotes(text) });
+    } else if (skillId === 'text.rewrite') {
+      const text = requireString('text', 10_000);
+      if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
+      messages = [{ role: 'user', content: `Rewrite the following text to be clearer and more formal while preserving the original meaning.\nReturn only the rewritten text, no preamble or commentary.\n\nTEXT:\n${text}` }];
+      maxTokens = SKILL_COMPLETION_TOKEN_BUDGET;
+      shapeOutput = (text) => ({ rewrite: stripWrappingQuotes(text) });
     } else if (skillId === 'text.sentiment') {
       const text = requireString('text', 10_000);
       if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
@@ -2289,24 +2304,27 @@ export function buildEdgeServer(options: EdgeServerOptions): FastifyInstance {
           return { sentiment: 'neutral', score: 0.5 };
         }
       };
-    } else if (skillId === 'text.entities') {
+    } else if (skillId === 'text.entities' || skillId === 'text.keywords') {
       const text = requireString('text', 10_000);
       if (!text) return problem(reply, 400, 'Bad Request', 'text is required and must be 1-10000 characters');
-      messages = [{ role: 'user', content: `Extract named entities from the following text. Respond with ONLY valid JSON in this exact shape — no preamble, no markdown fences, no extra fields:\n{"entities":[{"type":"PERSON"|"PLACE"|"ORG"|"OTHER","value":"<string>"}]}\n\nIf no entities are found, return {"entities":[]}.\n\nTEXT:\n${text}` }];
+      const outputKey = skillId === 'text.keywords' ? 'keywords' : 'entities';
+      messages = skillId === 'text.keywords'
+        ? [{ role: 'user', content: `Extract the key terms and short phrases from the following text. Respond with ONLY valid JSON in this exact shape — no preamble, no markdown fences, no extra fields:\n{"keywords":[{"type":"KEYWORD"|"PHRASE","value":"<string>"}]}\n\nIf no keywords are found, return {"keywords":[]}.\n\nTEXT:\n${text}` }]
+        : [{ role: 'user', content: `Extract named entities from the following text. Respond with ONLY valid JSON in this exact shape — no preamble, no markdown fences, no extra fields:\n{"entities":[{"type":"PERSON"|"PLACE"|"ORG"|"OTHER","value":"<string>"}]}\n\nIf no entities are found, return {"entities":[]}.\n\nTEXT:\n${text}` }];
       maxTokens = SKILL_COMPLETION_TOKEN_BUDGET;
       shapeOutput = (text) => {
         try {
-          const parsed = JSON.parse(stripJsonFences(text)) as { entities?: unknown };
-          const allowed = new Set(['PERSON', 'PLACE', 'ORG', 'OTHER']);
-          const entities = Array.isArray(parsed.entities) ? parsed.entities.flatMap((entry) => {
+          const parsed = JSON.parse(stripJsonFences(text)) as { entities?: unknown; keywords?: unknown };
+          const allowed = skillId === 'text.keywords' ? new Set(['KEYWORD', 'PHRASE']) : new Set(['PERSON', 'PLACE', 'ORG', 'OTHER']);
+          const entries = Array.isArray(parsed[outputKey]) ? parsed[outputKey].flatMap((entry) => {
             const item = entry as { type?: unknown; value?: unknown };
             if (!allowed.has(String(item.type)) || typeof item.value !== 'string' || item.value.trim().length === 0) return [];
             return [{ type: String(item.type), value: item.value.trim() }];
           }) : [];
-          return { entities };
+          return skillId === 'text.keywords' ? { keywords: entries } : { entities: entries };
         } catch {
-          request.log.warn({ raw: text.slice(0, 500) }, 'text.entities.parse_fallback');
-          return { entities: [] };
+          request.log.warn({ raw: text.slice(0, 500) }, `${skillId}.parse_fallback`);
+          return skillId === 'text.keywords' ? { keywords: [] } : { entities: [] };
         }
       };
     } else {

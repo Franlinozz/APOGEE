@@ -28,10 +28,16 @@ import codeReviewManifest from '../code.review/manifest.js';
 import codeReviewHandler from '../code.review/handler.js';
 import textEntitiesManifest from '../text.entities/manifest.js';
 import textEntitiesHandler from '../text.entities/handler.js';
+import textKeywordsManifest from '../text.keywords/manifest.js';
+import textKeywordsHandler from '../text.keywords/handler.js';
 import textSentimentManifest from '../text.sentiment/manifest.js';
 import textSentimentHandler from '../text.sentiment/handler.js';
 import textSummarizeManifest from '../text.summarize/manifest.js';
 import textSummarizeHandler from '../text.summarize/handler.js';
+import textRewriteManifest from '../text.rewrite/manifest.js';
+import textRewriteHandler from '../text.rewrite/handler.js';
+import textTitleManifest from '../text.title/manifest.js';
+import textTitleHandler from '../text.title/handler.js';
 import textTranslateManifest from '../text.translate/manifest.js';
 import textTranslateHandler from '../text.translate/handler.js';
 
@@ -48,8 +54,11 @@ export const coreSkills = [
   [memoryWriteManifest, memoryWriteHandler],
   [storageUploadManifest, storageUploadHandler],
   [textEntitiesManifest, textEntitiesHandler],
+  [textKeywordsManifest, textKeywordsHandler],
   [textSentimentManifest, textSentimentHandler],
   [textSummarizeManifest, textSummarizeHandler],
+  [textRewriteManifest, textRewriteHandler],
+  [textTitleManifest, textTitleHandler],
   [textTranslateManifest, textTranslateHandler],
   [webFetchManifest, webFetchHandler],
   [webSearchManifest, webSearchHandler],

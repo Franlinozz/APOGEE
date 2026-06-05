@@ -1,4 +1,4 @@
-type EntityType = 'PERSON' | 'PLACE' | 'ORG' | 'OTHER';
+type EntityType = 'PERSON' | 'PLACE' | 'ORG' | 'OTHER' | 'KEYWORD' | 'PHRASE';
 
 export type RenderedSkillOutput =
   | { kind: 'text'; text: string; mono?: boolean }
@@ -40,9 +40,19 @@ export function normalizeSkillOutput(skillId: string, output: unknown): Rendered
     return summary ? { kind: 'text', text: summary } : unexpected(output);
   }
 
+  if (skillId === 'text.title') {
+    const title = asString(record.title);
+    return title ? { kind: 'text', text: title } : unexpected(output);
+  }
+
   if (skillId === 'text.translate') {
     const translation = asString(record.translation);
     return translation ? { kind: 'text', text: translation } : unexpected(output);
+  }
+
+  if (skillId === 'text.rewrite') {
+    const rewrite = asString(record.rewrite);
+    return rewrite ? { kind: 'text', text: rewrite } : unexpected(output);
   }
 
   if (skillId === 'code.review') {
@@ -63,12 +73,13 @@ export function normalizeSkillOutput(skillId: string, output: unknown): Rendered
     return { kind: 'sentiment', sentiment, score: Math.min(1, Math.max(0, rawScore)) };
   }
 
-  if (skillId === 'text.entities') {
-    if (!Array.isArray(record.entities)) return unexpected(output);
-    const entities = record.entities.flatMap((entry) => {
+  if (skillId === 'text.entities' || skillId === 'text.keywords') {
+    const key = skillId === 'text.keywords' ? 'keywords' : 'entities';
+    if (!Array.isArray(record[key])) return unexpected(output);
+    const entities = record[key].flatMap((entry) => {
       if (!isRecord(entry)) return [];
-      const rawType = typeof entry.type === 'string' ? entry.type.toUpperCase() : 'OTHER';
-      const type: EntityType = rawType === 'PERSON' || rawType === 'PLACE' || rawType === 'ORG' || rawType === 'OTHER' ? rawType : 'OTHER';
+      const rawType = typeof entry.type === 'string' ? entry.type.toUpperCase() : (skillId === 'text.keywords' ? 'KEYWORD' : 'OTHER');
+      const type: EntityType = rawType === 'PERSON' || rawType === 'PLACE' || rawType === 'ORG' || rawType === 'OTHER' || rawType === 'KEYWORD' || rawType === 'PHRASE' ? rawType : (skillId === 'text.keywords' ? 'KEYWORD' : 'OTHER');
       const value = asString(entry.value);
       return value ? [{ type, value }] : [];
     });
