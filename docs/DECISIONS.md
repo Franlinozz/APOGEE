@@ -29,7 +29,7 @@
 
 - Francc Alpha #29 verified the five selected dashboard skills end-to-end: `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, and `code.review`.
 - `chat.completion` is covered by the Apogee Pilot path, which uses the same 0G Compute pipeline and mints indexed `pilot.chat` receipts.
-- 2026-06-05 post-submission update: `text.keywords`, `text.rewrite`, and `text.title` were added to the live catalog; `text.keywords` was verified end-to-end on new agent #38 with receipt `0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0`. The other two share the same 0G Compute + receipt path and were not re-invoked to conserve OG.
+- 2026-06-05 post-submission update: `text.keywords`, `text.rewrite`, and `text.title` were added to the live catalog and each was verified end-to-end on Aristotle mainnet with real receipts: `text.keywords` `0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0`, `text.title` `0x058d176f000588ac8f5e7d0eebbb4687cee57b196060e2b3cf1a3f661d4da5b9`, and `text.rewrite` `0xc4e558fc466e5df90e1b06837d4731cb172bf8dc1a5f860174c30fbfcf550b8f`. This is a post-submission verification note and does not change the submitted build boundary.
 - Each verified production path returns real UI-ready output, mints an on-chain ReceiptBook receipt, and appears on `/proofs` with the invoking agent or Pilot identity.
 - Apogee v0.1 is marked production-ready as a real protocol demo: user-deployed agents, policy-scoped skills, 0G Compute execution, and on-chain receipts all work together.
 

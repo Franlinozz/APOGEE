@@ -35,7 +35,7 @@ _Core submission was completed on 16th May, 2026. We've continued hardening the 
 - May 18, 2026 — Skills run end-to-end on newly deployed agents (verified: text.summarize, text.translate, code.review) with receipts minted on-chain.
 - May 19, 2026 — Per-skill output rendering shipped and agent status gates hardened for recovered deployments.
 - May 25, 2026 — Published second technical long-form article on "Building an Autonomous-Agent Runtime on 0G: An Engineering Deep Dive into Apogee"
-- June 5, 2026 — Three post-submission text skills shipped and live: `text.keywords`, `text.rewrite`, `text.title`. Verified end-to-end on Aristotle mainnet with `text.keywords` receipt [`0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0`](https://chainscan.0g.ai/tx/0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0); all three are live in `/v1/skills`.
+- June 5, 2026: Three post-submission text skills shipped and live in `/v1/skills`: `text.keywords`, `text.rewrite`, `text.title`. Each was verified end-to-end on Aristotle mainnet with real receipts: `text.keywords` [`0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0`](https://chainscan.0g.ai/tx/0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0), `text.title` [`0x058d176f000588ac8f5e7d0eebbb4687cee57b196060e2b3cf1a3f661d4da5b9`](https://chainscan.0g.ai/tx/0x058d176f000588ac8f5e7d0eebbb4687cee57b196060e2b3cf1a3f661d4da5b9), and `text.rewrite` [`0xc4e558fc466e5df90e1b06837d4731cb172bf8dc1a5f860174c30fbfcf550b8f`](https://chainscan.0g.ai/tx/0xc4e558fc466e5df90e1b06837d4731cb172bf8dc1a5f860174c30fbfcf550b8f).
 
 ---
 
@@ -79,7 +79,7 @@ The result: teams spend weeks on plumbing instead of building products. Apogee e
 | 1 | **Self-custodial smart wallets** | Every agent gets an `AgentAccount` on 0G Chain with a programmable `PolicyEngine` — spending limits, allowlists, per-action caps, pause flags. No centralized custodian ever touches agent funds. |
 | 2 | **On-chain receipts** | Every billable action calls `ReceiptBook.emitReceipt(agentId, actionTag, payloadHash, storageRoot, valueWei)` on Aristotle mainnet. The payload is uploaded to 0G Storage first; its Merkle root is the permanent anchor. |
 | 3 | **Encrypted persistent memory** | Agent memories are AES-256-GCM encrypted, stored as Merkle blobs on 0G Storage, and indexed on-chain. The decryption key is derived from the agent's signer — no third party can read it. |
-| 4 | **Paid skills marketplace** | The current post-submission catalog models 25 skills (15 free core + 10 premium); the production dashboard exposes nine live invokable skills with receipt-backed execution. Premium skill billing uses `PaymentRouter`; `RevenueSplitter` enables creator royalties. |
+| 4 | **Paid skills marketplace** | The current post-submission catalog models 25 skills (15 free core + 10 premium); the production dashboard exposes nine live invokable skills with receipt-backed execution, including the June 5 text skill batch. Premium skill billing uses `PaymentRouter`; `RevenueSplitter` enables creator royalties. |
 | 5 | **0G Compute backbone** | `chat.completion`, `chat.embed`, `image.generate`, and `audio.transcribe` route through `@0glabs/0g-serving-broker`. Provider acknowledgement, ChatID extraction from response headers, and `processResponse()` settlement happen automatically. |
 
 ---

@@ -353,6 +353,8 @@ Invoke a live 0G Compute-backed skill. The compute response is returned immediat
 
 Supported live skill ids: `chat.completion`, `text.summarize`, `text.translate`, `text.sentiment`, `text.entities`, `text.keywords`, `text.rewrite`, `text.title`, `code.review`.
 
+June 5 post-submission text batch verification: `text.keywords` `0xcdc8916e924fcc754320c8a9f2d076a55a670a8f5019853bb537909ad966a5f0`, `text.title` `0x058d176f000588ac8f5e7d0eebbb4687cee57b196060e2b3cf1a3f661d4da5b9`, `text.rewrite` `0xc4e558fc466e5df90e1b06837d4731cb172bf8dc1a5f860174c30fbfcf550b8f`.
+
 **Request body examples**
 ```json
 { "text": "Apogee makes AI work verifiable.", "maxWords": 20 }

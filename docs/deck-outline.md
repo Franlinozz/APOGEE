@@ -126,6 +126,8 @@ const result = await fetch('/v1/skills/translate/run', {
 `memory.read` · `memory.search` · `chain.query` · `chain.send` · `storage.upload`
 `audio.transcribe` · `image.generate` · `text.keywords` · `text.rewrite` · `text.title`
 
+June 5, 2026 verification: the three text skills each minted real Aristotle receipts (`text.keywords`, `text.title`, `text.rewrite`).
+
 **Premium (priced in 0G):**
 `news.aggregate` (0.0001 0G) · `summarize.long` (0.0002 0G) · `nft.mint` (0.001 0G)
 `translate` (0.0001 0G) · `sentiment` · `ocr` · `code.review` · `data.extract`

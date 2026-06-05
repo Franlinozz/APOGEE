@@ -75,7 +75,7 @@ posts 2 and 3 are replies in the same thread.
 > 🤖 3 live agents on Aristotle mainnet
 > 📄 Every action → on-chain proof
 > 🗄️ Memory stored on @0gfoundation decentralised storage
-> ⚡ Current post-submission catalog: 25 skills, 9 contracts, 1 open-source repo
+> ⚡ Current post-submission catalog: 25 skills, 9 contracts, 1 open-source repo. June 5 text skills: text.keywords, text.rewrite, text.title, each verified with Aristotle receipts.
 >
 > apogeeprotocol.vercel.app · github.com/Franlinozz/APOGEE
 
